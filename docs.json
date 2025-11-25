@@ -57,6 +57,13 @@
             ]
           },
           {
+            "group": "认证",
+            "pages": [
+              "rattrap-api/endpoint/login",
+              "rattrap-api/endpoint/refresh-token"
+            ]
+          },
+          {
             "group": "Setup Sessions",
             "pages": [
               "rattrap-api/endpoint/create-setup-session",
@@ -142,5 +149,14 @@
   },
   "openapi": [
     "/rattrap-api/openapi.json"
-  ]
+  ],
+  "api": {
+    "auth": {
+      "method": "bearer",
+      "name": "Authorization"
+    },
+    "playground": {
+      "mode": "show"
+    }
+  }
 }

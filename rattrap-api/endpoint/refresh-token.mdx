@@ -1,0 +1,12 @@
+---
+title: '刷新 Token'
+openapi: 'POST /v1/auth/refresh'
+---
+
+## 使用说明
+
+当 access_token 过期时，使用此接口获取新的 Token，无需重新登录。
+
+<Warning>
+refresh_token 也有有效期，如果 refresh_token 过期，需要重新登录。
+</Warning>
