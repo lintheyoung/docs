@@ -1,11 +1,11 @@
 {
   "$schema": "https://mintlify.com/docs.json",
   "theme": "mint",
-  "name": "RatTrap API Documentation",
+  "name": "pestgg",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#FBFF00",
+    "light": "#FFFF4D",
+    "dark": "#C9CC00"
   },
   "favicon": "/favicon.svg",
   "navigation": {
@@ -88,26 +88,6 @@
             ]
           }
         ]
-      },
-      {
-        "tab": "Plant Store API",
-        "groups": [
-          {
-            "group": "API documentation",
-            "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
-            ]
-          }
-        ]
       }
     ],
     "global": {
@@ -161,7 +141,6 @@
     }
   },
   "openapi": [
-    "/rattrap-api/openapi.json",
-    "/api-reference/openapi.json"
+    "/rattrap-api/openapi.json"
   ]
 }
