@@ -1,0 +1,117 @@
+---
+title: '创建布防会话'
+openapi: 'POST /v1/setup-sessions'
+---
+
+<RequestExample>
+```bash cURL
+curl https://api.rattrap.ai/v1/setup-sessions \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: rattrap-setup-550e8400-e29b-41d4-a716-446655440000" \
+  -d '{
+    "source": "mobile_app",
+    "user_location_hint": {
+      "country": "TW",
+      "city": "Taipei"
+    },
+    "metadata": {
+      "started_from": "dashboard_fab"
+    }
+  }'
+```
+
+```javascript Node.js
+const res = await fetch("https://api.rattrap.ai/v1/setup-sessions", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+    "Idempotency-Key": `rattrap-setup-${crypto.randomUUID()}`
+  },
+  body: JSON.stringify({
+    source: "mobile_app",
+    user_location_hint: {
+      country: "TW",
+      city: "Taipei"
+    },
+    metadata: {
+      started_from: "dashboard_fab"
+    }
+  })
+});
+
+const session = await res.json();
+// session.id === "ss_..."
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+  "object": "setup_session",
+  "current_stage": "identification",
+  "is_completed": false,
+  "created_trap_id": null,
+  "rodent_target": null,
+  "identification_data": null,
+  "strategy_data": null,
+  "location_scout_data": null,
+  "calibration_data": null,
+  "location_media_id": null,
+  "calibration_media_id": null,
+  "metadata": {
+    "started_from": "dashboard_fab"
+  },
+  "created": 1764038400,
+  "updated": 1764038400
+}
+```
+
+```json 错误响应
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "invalid_initial_rodent_target",
+    "message": "initial_rodent_target must be one of 'rat', 'mouse', or 'unknown'.",
+    "param": "initial_rodent_target",
+    "doc_url": "https://docs.rattrap.ai/errors#invalid_initial_rodent_target"
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+每当用户在 App 内点击「＋ 新布防」时，都应该调用这个接口。一个 setup session 表示从「开始诊断家里老鼠」到「布置好一个新陷阱」的整条引导流程的状态容器。
+
+<Tip>
+  所有字段都是可选的。最常见的调用可以是一个**空 body**：`POST /v1/setup-sessions {}`
+</Tip>
+
+## 幂等性
+
+对于"点击按钮发起"的操作，如果客户端可能因为网络重试同一个请求，建议使用 `Idempotency-Key`：
+
+- 在用户每次点击「＋ 新布防」时，客户端生成一个 UUID
+- 如果同一个 key 被重复发送，并且请求体完全相同，服务器返回第一次创建的那条会话
+- 如果请求体不同，返回 409 冲突错误
+
+## Session 阶段流转
+
+```mermaid
+graph LR
+    A[identification] --> B[strategy]
+    B --> C[location]
+    C --> D[calibration]
+    D --> E[completed]
+```
+
+| 阶段 | 说明 |
+|------|------|
+| `identification` | 物种识别阶段 - 确定目标鼠种 |
+| `strategy` | 工具策略阶段 - 选择捕鼠器和诱饵 |
+| `location` | 位置侦查阶段 - AI 分析最佳放置位置 |
+| `calibration` | 校准阶段 - 验证布置是否正确 |
+| `completed` | 完成 - 陷阱已创建 |

@@ -1,0 +1,201 @@
+---
+title: '校准检查'
+openapi: 'POST /v1/calibration-checks'
+---
+
+<RequestExample>
+```bash cURL
+curl https://api.rattrap.ai/v1/calibration-checks \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: calib-check-4a5b8ff9-1b58-4402-b5e5-b2ecb0e5bb10" \
+  -d '{
+    "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+    "media_asset_id": "ma_calib_1PpTqQx2YwZv9kLb",
+    "rodent_target": "rat",
+    "trap_type": "snap_trap",
+    "bait_type": "peanut_butter",
+    "location_context": {
+      "recommended_zone_id": "zone_A",
+      "recommended_description": "冰箱右侧沿墙，距墙角约 10cm，夹子垂直于墙。",
+      "recommended_distance_to_wall_cm": 0
+    },
+    "options": {
+      "language": "zh-CN",
+      "need_annotated_image": true,
+      "tolerance": "normal"
+    }
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 布置不正确 (CALIB_FAIL)
+{
+  "object": "calibration_check",
+  "id": "calib_1SgF3zD8wQpR6NmK",
+  "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+  "media_asset_id": "ma_calib_1PpTqQx2YwZv9kLb",
+  "annotated_media_asset_id": "ma_calib_annotated_7YzXcP4v",
+  "rodent_target": "rat",
+  "trap_type": "snap_trap",
+  "bait_type": "peanut_butter",
+  "is_correct": false,
+  "confidence": 0.94,
+  "placement_match_score": 0.42,
+  "issues": [
+    {
+      "code": "too_far_from_wall",
+      "message": "The trap is placed too far away from the wall.",
+      "severity": "error",
+      "param": "distance_to_wall",
+      "metrics": {
+        "distance_to_wall_cm": 8,
+        "recommended_max_distance_cm": 1
+      },
+      "suggestion": "将陷阱继续向墙根推进，尽量贴紧墙面摆放。"
+    },
+    {
+      "code": "suboptimal_orientation",
+      "message": "The bait is not oriented towards the wall.",
+      "severity": "warning",
+      "param": "orientation",
+      "metrics": {
+        "angle_deviation_deg": 20
+      },
+      "suggestion": "调整夹子方向，让诱饵一端朝向墙角或老鼠常出的缝隙。"
+    }
+  ],
+  "advice_text": "AI 发现当前陷阱距离墙大约 8 公分，老鼠更喜欢紧贴墙根移动，这样的距离可能会被直接绕过。建议将陷阱推到紧贴墙根摆放，并把诱饵一端朝向墙角或缝隙，然后重新拍一张照片让我再次检查。",
+  "recommended_actions": [
+    {
+      "code": "move_closer_to_wall",
+      "label": "把陷阱推到紧贴墙面",
+      "details": "将陷阱整体向墙根推进，直至夹子底座完全贴紧踢脚线。",
+      "priority": 1
+    },
+    {
+      "code": "rotate_trap",
+      "label": "调整夹子方向",
+      "details": "旋转陷阱，让诱饵一端朝向墙角或鼠洞方向。",
+      "priority": 2
+    }
+  ],
+  "created": 1764039200
+}
+```
+
+```json 布置正确 (CALIB_SUCCESS)
+{
+  "object": "calibration_check",
+  "id": "calib_1SgF3zD8wQpR6NmK_ok",
+  "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+  "media_asset_id": "ma_calib_2_ok",
+  "annotated_media_asset_id": "ma_calib_2_ok_annotated",
+  "rodent_target": "rat",
+  "trap_type": "snap_trap",
+  "bait_type": "peanut_butter",
+  "is_correct": true,
+  "confidence": 0.89,
+  "placement_match_score": 0.91,
+  "issues": [],
+  "advice_text": "很好！陷阱已经紧贴墙根摆放，方向也正确，诱饵朝向墙角，这样可以最大化老鼠经过时被触发的概率。接下来只需要按 App 提醒定期检查和补充诱饵即可。",
+  "recommended_actions": [
+    {
+      "code": "set_reminder",
+      "label": "按提示定期检查陷阱",
+      "details": "建议每 2–3 天查看一次陷阱，及时处理捕获和补充诱饵。",
+      "priority": 1
+    }
+  ],
+  "created": 1764039300
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+这是「校准阶段」的核心接口。AI 会对用户拍的**已布置好的陷阱近景照片**进行校准检查：
+
+<Check>
+  AI 会**真实判断**布置是否正确，不会"故意失败"
+</Check>
+
+### 判断结果处理
+
+<Tabs>
+  <Tab title="✅ is_correct = true">
+    布置正确！
+    - UI 显示"完美部署"绿条
+    - 用户点击「完成布防」后创建 trap
+  </Tab>
+  <Tab title="❌ is_correct = false">
+    需要调整！用户有两种选择：
+    1. **「调整后重拍」** → 重新拍照 → 再次调用此接口
+    2. **「跳过，先用这样」** → 直接创建 trap（标记 calibration 不完美）
+  </Tab>
+</Tabs>
+
+## issues 结构详解
+
+每个 issue 表示一个具体的问题：
+
+<ResponseField name="issues[].code" type="string">
+  机器可读问题码，例如：
+  - `too_far_from_wall` - 距离墙太远
+  - `wrong_orientation` - 方向错误
+  - `bait_position_suboptimal` - 诱饵位置不佳
+</ResponseField>
+
+<ResponseField name="issues[].severity" type="string">
+  严重程度：`info` / `warning` / `error`
+</ResponseField>
+
+<ResponseField name="issues[].metrics" type="object">
+  定量信息，例如实际距离 vs 推荐距离
+
+  ```json
+  {
+    "distance_to_wall_cm": 8,
+    "recommended_max_distance_cm": 1
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="issues[].suggestion" type="string">
+  针对该问题的单条建议文案
+</ResponseField>
+
+## options 参数
+
+<ParamField body="options.language" type="string" default="zh-CN">
+  返回文案的语言
+</ParamField>
+
+<ParamField body="options.need_annotated_image" type="boolean" default="true">
+  是否生成标注问题点的图片
+</ParamField>
+
+<ParamField body="options.tolerance" type="string" default="normal">
+  对"完美度"的容忍度：`normal` / `strict`
+</ParamField>
+
+## location_context 参数
+
+可以传入上一阶段 `location_scout_data` 的核心内容，方便 AI 对比：
+
+```json
+{
+  "recommended_zone_id": "zone_A",
+  "recommended_description": "冰箱右侧沿墙，距墙角约 10cm，夹子垂直于墙。",
+  "recommended_distance_to_wall_cm": 0
+}
+```
+
+<Info>
+  该字段是完全可选的，如果不传，AI 仅凭当前照片来做判断。
+</Info>
+
+## 支持多次重试
+
+该接口支持**多次重试**：用户可以"调整后重拍"，每次都调用一次校验。建议在 session 的 `calibration_data.attempts` 数组中记录每次尝试。

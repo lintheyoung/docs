@@ -1,0 +1,190 @@
+---
+title: '分析放置位置'
+openapi: 'POST /v1/location-analyses'
+---
+
+<RequestExample>
+```bash cURL
+curl https://api.rattrap.ai/v1/location-analyses \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: loc-analysis-7f9b4bde-47c2-4ff0-9b0c-eed1d72ff001" \
+  -d '{
+    "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+    "media_asset_id": "ma_room_1PpTqQx2YwZv9kLb",
+    "rodent_target": "rat",
+    "trap_type": "snap_trap",
+    "bait_type": "peanut_butter",
+    "user_location": {
+      "country": "TW",
+      "city": "Taipei",
+      "environment": "apartment"
+    },
+    "options": {
+      "max_zones": 2,
+      "language": "zh-CN"
+    }
+  }'
+```
+
+```javascript Node.js
+const res = await fetch("https://api.rattrap.ai/v1/location-analyses", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+    "Idempotency-Key": `loc-analysis-${crypto.randomUUID()}`
+  },
+  body: JSON.stringify({
+    setup_session_id: sessionId,
+    media_asset_id: roomPhotoId,
+    rodent_target: "rat",
+    trap_type: "snap_trap",
+    bait_type: "peanut_butter",
+    options: {
+      max_zones: 2,
+      language: "zh-CN"
+    }
+  })
+});
+
+const analysis = await res.json();
+// 使用 analysis.placement_text 显示文字说明
+// 使用 analysis.annotated_media_asset_id 加载标注图
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "object": "location_analysis",
+  "id": "loc_1RasJr2f9hQe8KmN",
+  "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+  "media_asset_id": "ma_room_1PpTqQx2YwZv9kLb",
+  "annotated_media_asset_id": "ma_room_annotated_9DzXcP4v",
+  "rodent_target": "rat",
+  "trap_type": "snap_trap",
+  "bait_type": "peanut_butter",
+  "placement_text": "建议将老鼠夹放置在冰箱右侧沿墙根位置，距离墙角约 10 厘米，夹子垂直于墙摆放，诱饵一端朝向墙角。请确保陷阱紧贴墙面，并避免被垃圾桶或杂物挡住。",
+  "zones": [
+    {
+      "id": "zone_A",
+      "label": "推荐点位 A",
+      "priority": 1,
+      "confidence": 0.93,
+      "description": "冰箱右侧墙角附近，靠近电线和小孔洞，是老鼠常走的贴墙路线。",
+      "bounding_box": {
+        "x": 0.62,
+        "y": 0.48,
+        "width": 0.18,
+        "height": 0.20
+      },
+      "distance_to_wall_cm": 0,
+      "orientation_hint": "trap_perpendicular_to_wall_bait_towards_corner"
+    },
+    {
+      "id": "zone_B",
+      "label": "备选点位 B",
+      "priority": 2,
+      "confidence": 0.78,
+      "description": "水槽下方橱柜前的墙根位置，适合作为第二个陷阱或备用位置。",
+      "bounding_box": {
+        "x": 0.15,
+        "y": 0.60,
+        "width": 0.20,
+        "height": 0.15
+      },
+      "distance_to_wall_cm": 0,
+      "orientation_hint": "trap_parallel_to_wall"
+    }
+  ],
+  "notes": "房间整体较整洁，可优先在冰箱附近放置第一个陷阱。",
+  "created": 1764039000
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+这是「位置侦查阶段」的核心接口。AI 会对用户拍摄的房间全景照片进行视觉分析，生成：
+
+<CardGroup cols={3}>
+  <Card title="文字说明" icon="align-left">
+    详细的放置指导文案 (`placement_text`)
+  </Card>
+  <Card title="标注图片" icon="image">
+    在原图上标出推荐区域 (`annotated_media_asset_id`)
+  </Card>
+  <Card title="结构化数据" icon="code">
+    bounding boxes 供前端高级可视化 (`zones`)
+  </Card>
+</CardGroup>
+
+## 前端使用建议
+
+在 **LOC_RESULT** 页面：
+
+1. 用 `placement_text` 做主要说明文案
+2. 用 `annotated_media_asset_id` 加载那张带红框的标注图
+3. 可选：根据 `zones.bounding_box` 在客户端加动画框 / 点击交互
+
+<Info>
+  用户按照提示在现实中放置好陷阱后，点击「我放好了，去检查」进入校准阶段。
+</Info>
+
+## zones 结构详解
+
+每个 zone 代表一个候选放置区域：
+
+<ResponseField name="zones[].id" type="string">
+  区域 ID，例如 `"zone_A"`
+</ResponseField>
+
+<ResponseField name="zones[].priority" type="integer">
+  优先级，1 为最高
+</ResponseField>
+
+<ResponseField name="zones[].confidence" type="number">
+  0–1 之间，AI 对这个点位的信心
+</ResponseField>
+
+<ResponseField name="zones[].bounding_box" type="object">
+  图片中的矩形区域，用于在前端画框
+
+  ```json
+  {
+    "x": 0.62,      // 左上角 x，归一化到 0–1
+    "y": 0.48,      // 左上角 y
+    "width": 0.18,
+    "height": 0.20
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="zones[].distance_to_wall_cm" type="number">
+  建议陷阱距离墙面的距离（厘米）
+</ResponseField>
+
+<ResponseField name="zones[].orientation_hint" type="string">
+  陷阱应该如何朝向，例如 `"trap_perpendicular_to_wall_bait_towards_corner"`
+</ResponseField>
+
+## options 参数
+
+<ParamField body="options.max_zones" type="integer" default="2">
+  返回几个推荐点位，最大 5
+</ParamField>
+
+<ParamField body="options.language" type="string" default="zh-CN">
+  `placement_text` 的语言
+</ParamField>
+
+<ParamField body="options.need_heatmap" type="boolean" default="false">
+  是否返回热力图（未来扩展）
+</ParamField>
+
+## 幂等性建议
+
+建议对「同一房间照片 + 同一上下文」的分析使用相同 `Idempotency-Key`：
+- 避免重复调用 AI，节约成本
+- 用户在前端刷新 LOC_RESULT 页面时保持结果一致

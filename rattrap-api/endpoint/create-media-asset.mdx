@@ -1,0 +1,125 @@
+---
+title: '创建媒体资源'
+openapi: 'POST /v1/media-assets'
+---
+
+<RequestExample>
+```bash cURL
+curl https://api.rattrap.ai/v1/media-assets \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "purpose": "setup",
+    "content_type": "image/jpeg",
+    "metadata": {
+      "stage": "location",
+      "session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3"
+    }
+  }'
+```
+
+```javascript Node.js
+// 1. 创建媒体资源，获取上传 URL
+const res = await fetch("https://api.rattrap.ai/v1/media-assets", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    purpose: "setup",
+    content_type: "image/jpeg"
+  })
+});
+
+const mediaAsset = await res.json();
+
+// 2. 使用预签名 URL 上传图片
+await fetch(mediaAsset.upload_url, {
+  method: "PUT",
+  headers: {
+    "Content-Type": "image/jpeg"
+  },
+  body: imageBlob
+});
+
+// 3. 使用 media_asset_id 进行后续操作
+console.log(`图片已上传: ${mediaAsset.id}`);
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "id": "ma_1PpTqQx2YwZv9kLb",
+  "object": "media_asset",
+  "purpose": "setup",
+  "content_type": "image/jpeg",
+  "upload_url": "https://storage.rattrap.ai/uploads/ma_1PpTqQx2YwZv9kLb?signature=xxx&expires=1764039600",
+  "url": "https://cdn.rattrap.ai/media/ma_1PpTqQx2YwZv9kLb.jpg",
+  "status": "pending",
+  "metadata": {
+    "stage": "location",
+    "session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3"
+  },
+  "created": 1764038400
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+为用户拍的每一张照片创建媒体记录。这个接口返回：
+
+<CardGroup cols={2}>
+  <Card title="media_asset_id" icon="fingerprint">
+    用于后续 API 调用的唯一标识符
+  </Card>
+  <Card title="upload_url" icon="upload">
+    预签名的上传 URL，用于直接上传图片到存储服务
+  </Card>
+</CardGroup>
+
+## 典型使用流程
+
+<Steps>
+  <Step title="创建媒体资源">
+    调用 `POST /v1/media-assets` 获取 `upload_url` 和 `id`
+  </Step>
+  <Step title="上传图片">
+    使用 `upload_url` 直接上传图片到存储服务（PUT 请求）
+  </Step>
+  <Step title="使用 ID">
+    在后续 API（如 `trap-recommendations`、`location-analyses` 等）中使用 `media_asset_id`
+  </Step>
+</Steps>
+
+## purpose 参数说明
+
+| 值 | 说明 | 使用场景 |
+|---|---|---|
+| `setup` | 布防流程照片 | 工具照片、房间全景、校准照片等 |
+| `check` | 检查照片 | 定期检查时拍摄的照片 |
+| `evidence` | 证据照片 | 捕获证据、损坏证据等 |
+
+## 上传注意事项
+
+<Warning>
+  `upload_url` 有时效性，通常在 15 分钟内有效。请在获取后尽快完成上传。
+</Warning>
+
+<Info>
+  支持的图片格式：`image/jpeg`、`image/png`、`image/webp`
+
+  建议图片大小不超过 10MB。
+</Info>
+
+## 图片处理
+
+上传成功后，服务器会自动进行以下处理：
+- 生成缩略图
+- 进行图片压缩优化
+- 提取 EXIF 信息（如果有）
+- 更新 `status` 为 `ready`
+
+可以通过 `url` 字段访问处理后的图片。

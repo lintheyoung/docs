@@ -1,0 +1,215 @@
+---
+title: '获取诱饵推荐'
+openapi: 'POST /v1/bait-recommendations'
+---
+
+<RequestExample>
+```bash cURL - 标准推荐
+curl https://api.rattrap.ai/v1/bait-recommendations \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "standard",
+    "rodent_target": "rat",
+    "trap_type": "snap_trap",
+    "user_location": {
+      "country": "TW",
+      "city": "Taipei"
+    },
+    "preferences": {
+      "avoid_perishable": true,
+      "has_children_or_pets": true
+    },
+    "limit": 3
+  }'
+```
+
+```bash cURL - 从冰箱识别
+curl https://api.rattrap.ai/v1/bait-recommendations \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "from_fridge",
+    "rodent_target": "rat",
+    "trap_type": "snap_trap",
+    "media_asset_id": "ma_1PkAbC23xyz",
+    "user_location": {
+      "country": "TW",
+      "city": "Kaohsiung"
+    },
+    "limit": 3
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 标准推荐响应
+{
+  "object": "bait_recommendation_result",
+  "mode": "standard",
+  "rodent_target": "rat",
+  "trap_type": "snap_trap",
+  "user_location": {
+    "country": "TW",
+    "city": "Taipei"
+  },
+  "preferences": {
+    "avoid_perishable": true,
+    "has_children_or_pets": true
+  },
+  "primary_bait": {
+    "object": "bait_option",
+    "id": "bait_peanut_butter",
+    "bait_type": "peanut_butter",
+    "label": "花生酱",
+    "description": "高油脂、高香味，对大褐家鼠吸引力强，且粘性好，不易被叼走。",
+    "for_rodent": "rat",
+    "recommended_for_trap_types": ["snap_trap", "cage_trap"],
+    "suitability_score": 0.96,
+    "recommended_interval_hours": 72,
+    "spoilage_risk": "medium",
+    "safety_notes": "若家中有花生过敏者，请避免在暴露区域使用。",
+    "usage_tips": "只需米粒大小的一点，涂在踏板前缘内侧，让老鼠必须逗留啃咬。",
+    "source": "ideal"
+  },
+  "alternative_baits": [
+    {
+      "object": "bait_option",
+      "id": "bait_nuts_mixed",
+      "bait_type": "nuts",
+      "label": "混合坚果",
+      "description": "对大鼠和小鼠都具有吸引力，耐放，适合忙碌家庭。",
+      "for_rodent": "both",
+      "recommended_for_trap_types": ["snap_trap", "cage_trap"],
+      "suitability_score": 0.88,
+      "recommended_interval_hours": 168,
+      "spoilage_risk": "low",
+      "safety_notes": "注意坚果碎片不要撒得太散，避免老鼠吃到却不触发陷阱。",
+      "usage_tips": "可用一小块坚果压在踏板边缘，或用牙签扎住以防被轻易拖走。",
+      "source": "user_available"
+    }
+  ],
+  "fridge_analysis": null,
+  "created": 1764038800
+}
+```
+
+```json 从冰箱识别响应
+{
+  "object": "bait_recommendation_result",
+  "mode": "from_fridge",
+  "rodent_target": "rat",
+  "trap_type": "snap_trap",
+  "user_location": {
+    "country": "TW",
+    "city": "Kaohsiung"
+  },
+  "primary_bait": {
+    "object": "bait_option",
+    "id": "bait_bacon",
+    "bait_type": "bacon",
+    "label": "香肠 / 培根类肉制品",
+    "description": "高蛋白、高油脂，对肉食偏好的沟鼠吸引力极强。",
+    "for_rodent": "rat",
+    "recommended_for_trap_types": ["snap_trap", "cage_trap"],
+    "suitability_score": 0.95,
+    "recommended_interval_hours": 24,
+    "spoilage_risk": "high",
+    "safety_notes": "避免在高温环境放置超过 24 小时，以免腐败产生异味和卫生风险。",
+    "usage_tips": "切成小块并用细绳或牙签固定在踏板上，防止被整块拖走。",
+    "source": "from_fridge"
+  },
+  "alternative_baits": [],
+  "fridge_analysis": {
+    "object": "fridge_analysis",
+    "media_asset_id": "ma_1PkAbC23xyz",
+    "detected_foods": [
+      {
+        "id": "food_sausage_01",
+        "label": "香肠",
+        "category": "meat",
+        "confidence": 0.93
+      },
+      {
+        "id": "food_bread_01",
+        "label": "吐司面包",
+        "category": "grain",
+        "confidence": 0.81
+      }
+    ],
+    "chosen_food_id": "food_sausage_01"
+  },
+  "created": 1764038900
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+这个接口不再是固定推荐"花生酱"，而是基于多种因素**动态推荐诱饵**：
+
+<Tabs>
+  <Tab title="标准推荐 (BAIT_CHECK)">
+    当 `mode = "standard"` 时：
+    - 基于 rodent + trap + location + 偏好推荐
+    - 返回主推荐 + 候选列表
+    - 用户可以点击「我家有这个」或「帮我找替代」
+  </Tab>
+  <Tab title="从冰箱识别 (BAIT_CAM)">
+    当 `mode = "from_fridge"` 时：
+    - AI 分析用户拍摄的冰箱/储物柜照片
+    - 从中筛选最适合做诱饵的现有食物
+    - 返回识别结果和推荐
+  </Tab>
+</Tabs>
+
+## 诱饵类型说明
+
+| 类型 | 说明 | 腐败风险 | 推荐检查间隔 |
+|------|------|----------|--------------|
+| `peanut_butter` | 花生酱 | 中 | 72小时 |
+| `bacon` | 培根/肉类 | 高 | 24小时 |
+| `cheese` | 奶酪 | 高 | 24小时 |
+| `nuts` | 坚果 | 低 | 168小时 |
+| `chocolate` | 巧克力 | 低 | 168小时 |
+| `grain` | 谷物 | 低 | 168小时 |
+
+## bait_option 字段详解
+
+<ResponseField name="primary_bait.suitability_score" type="number">
+  0–1 之间的适配度评分
+</ResponseField>
+
+<ResponseField name="primary_bait.recommended_interval_hours" type="integer">
+  推荐的检查/更换间隔（小时）
+</ResponseField>
+
+<ResponseField name="primary_bait.spoilage_risk" type="string">
+  腐败/变质风险：`low` / `medium` / `high`
+</ResponseField>
+
+<ResponseField name="primary_bait.usage_tips" type="string">
+  使用技巧，如"涂抹少量在触发踏板背面"
+</ResponseField>
+
+<ResponseField name="primary_bait.source" type="string">
+  推荐来源：`ideal`（理想推荐）/ `from_fridge`（冰箱识别）/ `user_available`（用户已有）
+</ResponseField>
+
+## 用户偏好参数
+
+<ParamField body="preferences.avoid_smelly_bait" type="boolean">
+  不喜欢异味太重的诱饵
+</ParamField>
+
+<ParamField body="preferences.avoid_perishable" type="boolean">
+  不想用容易腐烂的肉类
+</ParamField>
+
+<ParamField body="preferences.has_children_or_pets" type="boolean">
+  有小孩或宠物 → 避免散落小块
+</ParamField>
+
+<ParamField body="preferences.easy_to_clean" type="boolean">
+  偏好不太黏、清理方便的诱饵
+</ParamField>

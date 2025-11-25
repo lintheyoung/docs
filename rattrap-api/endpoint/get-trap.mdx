@@ -1,0 +1,117 @@
+---
+title: '获取陷阱详情'
+openapi: 'GET /v1/traps/{id}'
+---
+
+<RequestExample>
+```bash cURL
+curl https://api.rattrap.ai/v1/traps/trap_1RasJr2f9hQe8KmN \
+  -H "Authorization: Bearer sk_test_xxx"
+```
+
+```javascript Node.js
+const res = await fetch(
+  `https://api.rattrap.ai/v1/traps/${trapId}`,
+  {
+    headers: {
+      "Authorization": `Bearer ${accessToken}`
+    }
+  }
+);
+
+const trap = await res.json();
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "id": "trap_1RasJr2f9hQe8KmN",
+  "object": "trap",
+  "name": "厨房 - 冰箱右侧",
+  "location_desc": "冰箱右侧沿墙根，距墙角约 10cm，夹子垂直于墙，诱饵朝向墙角。",
+  "trap_type": "snap_trap",
+  "bait_type": "peanut_butter",
+  "rodent_target": "rat",
+  "status": "active",
+  "deployment_media_id": "ma_calib_2_ok",
+  "last_check_media_id": "ma_check_latest",
+  "last_checked_at": 1764300000,
+  "next_check_at": 1764559200,
+  "stats_catches": 3,
+  "stats_misses": 1,
+  "metadata": {
+    "created_from_session": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+    "calibration_quality": "passed"
+  },
+  "created": 1764039300,
+  "updated": 1764300000
+}
+```
+
+```json 404 错误
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "trap_not_found",
+    "message": "No trap found with ID 'trap_xxx'.",
+    "doc_url": "https://docs.rattrap.ai/errors#trap_not_found"
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+获取单个陷阱的详细信息。通常用于陷阱详情页面。
+
+## 详情页展示建议
+
+<CardGroup cols={2}>
+  <Card title="基础信息" icon="info-circle">
+    - 名称 (`name`)
+    - 位置描述 (`location_desc`)
+    - 陷阱类型 (`trap_type`)
+    - 诱饵类型 (`bait_type`)
+  </Card>
+  <Card title="状态信息" icon="chart-line">
+    - 当前状态 (`status`)
+    - 下次检查时间 (`next_check_at`)
+    - 捕获统计 (`stats_catches`)
+  </Card>
+  <Card title="媒体文件" icon="image">
+    - 部署照片 (`deployment_media_id`)
+    - 最近检查照片 (`last_check_media_id`)
+  </Card>
+  <Card title="时间线" icon="clock">
+    - 创建时间 (`created`)
+    - 最近检查时间 (`last_checked_at`)
+    - 最近更新时间 (`updated`)
+  </Card>
+</CardGroup>
+
+## 计算「X 天后检查」
+
+```javascript
+const trap = await getTrap(trapId);
+
+const now = Math.floor(Date.now() / 1000);
+const daysUntilCheck = Math.ceil((trap.next_check_at - now) / 86400);
+
+if (daysUntilCheck > 0) {
+  console.log(`${daysUntilCheck} 天后检查`);
+} else {
+  console.log("需要立即检查！");
+}
+```
+
+## 相关接口
+
+<CardGroup cols={2}>
+  <Card title="列出所有陷阱" icon="list" href="/rattrap-api/endpoint/list-traps">
+    `GET /v1/traps`
+  </Card>
+  <Card title="创建陷阱事件" icon="plus" href="/rattrap-api/endpoint/create-trap-event">
+    `POST /v1/trap-events`
+  </Card>
+</CardGroup>

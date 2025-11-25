@@ -1,0 +1,154 @@
+---
+title: 'RatTrap API 介绍'
+description: '智能捕鼠器应用 API - 采用 Stripe 风格的 REST API'
+icon: 'webhook'
+---
+
+RatTrap API 是一个采用 **Stripe 风格** 设计的 REST API，帮助用户从诊断老鼠问题到布置陷阱的完整流程。
+
+<Note>
+  所有 API 端点使用 `snake_case` 字段命名，并以 `/v1/...` 作为前缀。
+</Note>
+
+## 基础信息
+
+<CardGroup cols={2}>
+  <Card title="Base URL" icon="globe">
+    ```
+    https://api.rattrap.ai
+    ```
+  </Card>
+  <Card title="API 版本" icon="code-branch">
+    ```
+    2024-11-22
+    ```
+  </Card>
+</CardGroup>
+
+## 认证方式
+
+所有 API 请求都需要 Bearer Token 认证：
+
+```bash
+Authorization: Bearer sk_test_xxx
+```
+
+<Warning>
+  请妥善保管你的 API 密钥，不要在客户端代码中暴露它。
+</Warning>
+
+## API 架构概览
+
+RatTrap API 分为以下几个核心模块：
+
+### 会话与流程
+
+<CardGroup cols={2}>
+  <Card title="Setup Sessions" icon="clipboard-list" href="/rattrap-api/endpoint/create-setup-session">
+    布防会话管理 - 用户从「新布防」到「布置完成」的整条引导流程状态容器
+  </Card>
+  <Card title="Media Assets" icon="image" href="/rattrap-api/endpoint/create-media-asset">
+    媒体资源管理 - 处理用户拍摄的照片上传和存储
+  </Card>
+</CardGroup>
+
+### AI 智能推荐
+
+<CardGroup cols={2}>
+  <Card title="Trap Recommendations" icon="wand-magic-sparkles" href="/rattrap-api/endpoint/trap-recommendations">
+    捕鼠器推荐 - 基于地区、鼠种、偏好推荐最适合的捕鼠器
+  </Card>
+  <Card title="Bait Recommendations" icon="cheese" href="/rattrap-api/endpoint/bait-recommendations">
+    诱饵推荐 - 动态推荐最适合的诱饵，支持扫描冰箱识别可用食物
+  </Card>
+  <Card title="Location Analyses" icon="map-pin" href="/rattrap-api/endpoint/location-analyses">
+    位置分析 - AI 分析房间全景，返回最佳放置位置的文字描述和标注图
+  </Card>
+  <Card title="Calibration Checks" icon="check-double" href="/rattrap-api/endpoint/calibration-checks">
+    校准检查 - AI 检查陷阱布置是否正确，提供调整建议
+  </Card>
+</CardGroup>
+
+### 实体与事件
+
+<CardGroup cols={2}>
+  <Card title="Traps" icon="crosshairs" href="/rattrap-api/endpoint/list-traps">
+    陷阱实体 - 管理已部署的陷阱，查看状态和统计数据
+  </Card>
+  <Card title="Trap Events" icon="clock-rotate-left" href="/rattrap-api/endpoint/create-trap-event">
+    陷阱事件 - 记录布防、检查、捕获等事件
+  </Card>
+</CardGroup>
+
+## 完整布防流程
+
+一个典型的布防流程包含以下步骤：
+
+<Steps>
+  <Step title="创建布防会话">
+    用户点击「＋新布防」，调用 `POST /v1/setup-sessions` 创建会话
+  </Step>
+  <Step title="物种识别">
+    通过问答确定目标鼠种（rat/mouse），更新会话的 `identification_data`
+  </Step>
+  <Step title="工具策略">
+    调用 `POST /v1/trap-recommendations` 识别现有工具或推荐购买
+  </Step>
+  <Step title="诱饵推荐">
+    调用 `POST /v1/bait-recommendations` 获取最适合的诱饵
+  </Step>
+  <Step title="位置侦查">
+    拍摄房间照片，调用 `POST /v1/location-analyses` 获取放置建议
+  </Step>
+  <Step title="校准检查">
+    拍摄已布置的陷阱，调用 `POST /v1/calibration-checks` 验证布置
+  </Step>
+  <Step title="完成布防">
+    调用 `POST /v1/setup-sessions/{id}/create-trap` 创建陷阱实体
+  </Step>
+</Steps>
+
+## 幂等性
+
+为防止网络重试导致的重复操作，建议在关键请求中使用 `Idempotency-Key` 头：
+
+```bash
+Idempotency-Key: rattrap-setup-550e8400-e29b-41d4-a716-446655440000
+```
+
+<Info>
+  使用相同的 `Idempotency-Key` 重复请求时，服务器会返回首次请求的结果。
+</Info>
+
+## 错误处理
+
+所有错误都返回统一的 Stripe 风格 error envelope：
+
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "invalid_rodent_target",
+    "message": "rodent_target must be one of 'rat', 'mouse', or 'unknown'.",
+    "param": "rodent_target",
+    "doc_url": "https://docs.rattrap.ai/errors#invalid_rodent_target"
+  }
+}
+```
+
+### 错误类型
+
+| 类型 | 说明 |
+|------|------|
+| `invalid_request_error` | 请求参数错误 |
+| `authentication_error` | 认证失败 |
+| `authorization_error` | 权限不足 |
+| `rate_limit_error` | 请求频率限制 |
+| `api_error` | 服务器内部错误 |
+| `idempotency_error` | 幂等性冲突 |
+
+## 开始使用
+
+<Card title="创建你的第一个布防会话" icon="rocket" href="/rattrap-api/endpoint/create-setup-session">
+  从创建 Setup Session 开始你的集成之旅
+</Card>

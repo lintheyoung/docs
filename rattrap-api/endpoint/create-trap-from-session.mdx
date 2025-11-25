@@ -1,0 +1,124 @@
+---
+title: '从会话创建陷阱'
+openapi: 'POST /v1/setup-sessions/{id}/create-trap'
+---
+
+<RequestExample>
+```bash cURL
+curl https://api.rattrap.ai/v1/setup-sessions/ss_1Qy8u8CZ7aQp98Xb5WJtR3/create-trap \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: trap-create-ss_1Qy8u8CZ7aQp98Xb5WJtR3-550e8400" \
+  -d '{
+    "name": "厨房 - 冰箱右侧",
+    "metadata": {
+      "calibration_quality": "passed"
+    }
+  }'
+```
+
+```javascript Node.js
+const res = await fetch(
+  `https://api.rattrap.ai/v1/setup-sessions/${sessionId}/create-trap`,
+  {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "Idempotency-Key": `trap-create-${sessionId}-${crypto.randomUUID()}`
+    },
+    body: JSON.stringify({
+      name: "厨房 - 冰箱右侧"
+    })
+  }
+);
+
+const trap = await res.json();
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "id": "trap_1RasJr2f9hQe8KmN",
+  "object": "trap",
+  "name": "厨房 - 冰箱右侧",
+  "location_desc": "冰箱右侧沿墙根，距墙角约 10cm，夹子垂直于墙，诱饵朝向墙角。",
+  "trap_type": "snap_trap",
+  "bait_type": "peanut_butter",
+  "rodent_target": "rat",
+  "status": "active",
+  "deployment_media_id": "ma_calib_2_ok",
+  "last_check_media_id": "ma_calib_2_ok",
+  "last_checked_at": 1764039300,
+  "next_check_at": 1764298500,
+  "stats_catches": 0,
+  "stats_misses": 0,
+  "metadata": {
+    "created_from_session": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+    "calibration_quality": "passed"
+  },
+  "created": 1764039300,
+  "updated": 1764039300
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+从一个已经走完布防流程的 setup session 中，创建一条真正的 **Trap 实体**。
+
+通常在以下场景调用：
+- **CALIB_SUCCESS**（校准成功）点击「完成布防」
+- **CALIB_FAIL**（用户选择"跳过，先用这样"）点击「完成布防」
+
+<Info>
+  大部分信息从 `setup_sessions` 派生，因此请求体非常轻量，所有字段都是**可选**的。
+</Info>
+
+## 后端内部行为
+
+调用成功时，后端会执行以下操作：
+
+<Steps>
+  <Step title="读取 Session 数据">
+    从 session 中读取 `identification_data`、`strategy_data`、`location_scout_data`、`calibration_data` 等
+  </Step>
+  <Step title="创建 Trap 记录">
+    在 `traps` 表中插入新记录，包含 `trap_type`、`bait_type`、`rodent_target`、`status` 等
+  </Step>
+  <Step title="记录部署事件">
+    在 `trap_events` 表中插入一条 "部署完成" 事件
+  </Step>
+  <Step title="更新 Session">
+    设置 `created_trap_id`、`is_completed = true`、`current_stage = "completed"`
+  </Step>
+</Steps>
+
+## 幂等性
+
+<Warning>
+  **非常关键**：防止重复创建 trap。
+</Warning>
+
+推荐策略：
+- 前端在用户点击「完成布防」时生成一个 UUID 作为 `Idempotency-Key`
+- 如果同一个 `setup_session_id` 之前已经调用成功且 `created_trap_id` 已存在，服务端返回同一条 trap 对象
+- 使用相同的 `Idempotency-Key` 但请求体不同时，返回 `409` 错误
+
+## calibration_override 选项
+
+当用户在校准失败后选择「跳过」时，可以使用此字段标记：
+
+```json
+{
+  "calibration_override": {
+    "quality": "failed_but_accepted"
+  }
+}
+```
+
+| 值 | 说明 |
+|---|---|
+| `passed` | 校准通过 |
+| `failed_but_accepted` | 校准失败但用户接受 |

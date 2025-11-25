@@ -1,0 +1,152 @@
+---
+title: '列出陷阱'
+openapi: 'GET /v1/traps'
+---
+
+<RequestExample>
+```bash cURL
+curl "https://api.rattrap.ai/v1/traps?status=active&limit=10" \
+  -H "Authorization: Bearer sk_test_xxx"
+```
+
+```javascript Node.js
+const res = await fetch(
+  "https://api.rattrap.ai/v1/traps?status=active&limit=10",
+  {
+    headers: {
+      "Authorization": `Bearer ${accessToken}`
+    }
+  }
+);
+
+const { data, has_more } = await res.json();
+// data 是 trap 对象数组
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "object": "list",
+  "url": "/v1/traps?status=active&limit=10",
+  "has_more": false,
+  "data": [
+    {
+      "id": "trap_1RasJr2f9hQe8KmN",
+      "object": "trap",
+      "name": "厨房 - 冰箱右侧",
+      "location_desc": "冰箱右侧沿墙根，距墙角约 10cm，夹子垂直于墙，诱饵朝向墙角。",
+      "trap_type": "snap_trap",
+      "bait_type": "peanut_butter",
+      "rodent_target": "rat",
+      "status": "active",
+      "deployment_media_id": "ma_calib_2_ok",
+      "last_check_media_id": "ma_calib_2_ok",
+      "last_checked_at": 1764039300,
+      "next_check_at": 1764298500,
+      "stats_catches": 3,
+      "stats_misses": 1,
+      "metadata": {
+        "created_from_session": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+        "calibration_quality": "passed"
+      },
+      "created": 1764039300,
+      "updated": 1764300000
+    }
+  ]
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+列出当前用户/租户下的所有陷阱，支持状态筛选和分页。
+
+<Info>
+  Dashboard 刷新时，只需要调用 `GET /v1/traps?status=active&limit=20`，用返回的 trap 列表渲染卡片。
+</Info>
+
+## 查询参数
+
+<ParamField query="status" type="string">
+  按状态过滤，支持逗号分隔多值：`status=active,warning`
+
+  可选值：`active` / `inactive` / `warning` / `triggered_caught`
+</ParamField>
+
+<ParamField query="limit" type="integer" default="10">
+  每页数量，最大 100
+</ParamField>
+
+<ParamField query="starting_after" type="string">
+  向后分页的游标（上一页最后一个 trap 的 ID）
+</ParamField>
+
+<ParamField query="ending_before" type="string">
+  向前分页的游标
+</ParamField>
+
+## 状态说明
+
+| 状态 | 说明 | 颜色建议 |
+|------|------|----------|
+| `active` | 正常运行中 | 绿色 |
+| `warning` | 需要注意（如诱饵过期） | 黄色 |
+| `inactive` | 已停用 | 灰色 |
+| `triggered_caught` | 已触发/已捕获 | 红色 |
+
+## 分页示例
+
+```javascript
+// 获取第一页
+const page1 = await fetch("/v1/traps?limit=10");
+const { data, has_more } = await page1.json();
+
+// 如果有更多，获取下一页
+if (has_more) {
+  const lastId = data[data.length - 1].id;
+  const page2 = await fetch(`/v1/traps?limit=10&starting_after=${lastId}`);
+}
+```
+
+## Trap 对象字段
+
+<ResponseField name="id" type="string">
+  Trap ID，前缀为 `trap_`
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  UI 中显示的名称
+</ResponseField>
+
+<ResponseField name="location_desc" type="string">
+  位置描述
+</ResponseField>
+
+<ResponseField name="trap_type" type="string">
+  陷阱类型：`snap_trap` / `glue_board` / `cage_trap` / `electronic_trap` / `other`
+</ResponseField>
+
+<ResponseField name="bait_type" type="string">
+  诱饵类型
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  当前状态
+</ResponseField>
+
+<ResponseField name="last_checked_at" type="integer">
+  上次检查时间（Unix 时间戳）
+</ResponseField>
+
+<ResponseField name="next_check_at" type="integer">
+  下次检查时间（Unix 时间戳），由规则引擎自动计算
+</ResponseField>
+
+<ResponseField name="stats_catches" type="integer">
+  捕获次数统计
+</ResponseField>
+
+<ResponseField name="stats_misses" type="integer">
+  空触发次数统计
+</ResponseField>

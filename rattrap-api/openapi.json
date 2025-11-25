@@ -1,0 +1,1215 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "RatTrap API",
+    "description": "智能捕鼠器应用 API - 采用 Stripe 风格的 REST API，帮助用户从诊断老鼠问题到布置陷阱的完整流程。",
+    "version": "2024-11-22",
+    "contact": {
+      "name": "RatTrap Support",
+      "email": "support@rattrap.ai"
+    },
+    "license": {
+      "name": "MIT"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://api.rattrap.ai",
+      "description": "Production server"
+    },
+    {
+      "url": "https://sandbox.rattrap.ai",
+      "description": "Sandbox server"
+    }
+  ],
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/v1/setup-sessions": {
+      "post": {
+        "operationId": "createSetupSession",
+        "summary": "创建布防会话",
+        "description": "创建一条新的布防会话（setup session）。每当用户在 App 内点击「＋ 新布防」时调用。",
+        "tags": ["Setup Sessions"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSetupSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功创建布防会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupSession"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/setup-sessions/{id}": {
+      "post": {
+        "operationId": "updateSetupSession",
+        "summary": "更新布防会话",
+        "description": "更新一个已有的布防会话。用于写入识别阶段、策略阶段、位置阶段、校准阶段的数据。",
+        "tags": ["Setup Sessions"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Setup session ID",
+            "schema": {
+              "type": "string",
+              "example": "ss_1Qy8u8CZ7aQp98Xb5WJtR3"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateSetupSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功更新布防会话",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupSession"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "会话不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/setup-sessions/{id}/create-trap": {
+      "post": {
+        "operationId": "createTrapFromSession",
+        "summary": "从会话创建陷阱",
+        "description": "从一个已经走完布防流程的 setup session 中，创建一条真正的 Trap 实体。",
+        "tags": ["Setup Sessions"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Setup session ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTrapFromSessionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功创建陷阱",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trap"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trap-recommendations": {
+      "post": {
+        "operationId": "createTrapRecommendation",
+        "summary": "获取捕鼠器推荐",
+        "description": "根据用户所在地区、目标鼠种、用户偏好返回推荐的捕鼠器列表。支持识别现有工具或推荐购买新工具。",
+        "tags": ["AI Recommendations"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrapRecommendationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功返回推荐结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrapRecommendationResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/bait-recommendations": {
+      "post": {
+        "operationId": "createBaitRecommendation",
+        "summary": "获取诱饵推荐",
+        "description": "根据目标鼠种、陷阱类型、用户所在地区返回适合的诱饵推荐。支持从冰箱照片中识别可用食物。",
+        "tags": ["AI Recommendations"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BaitRecommendationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功返回诱饵推荐",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaitRecommendationResult"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/location-analyses": {
+      "post": {
+        "operationId": "createLocationAnalysis",
+        "summary": "分析放置位置",
+        "description": "对用户拍摄的房间全景照片进行视觉分析，找出最佳放置陷阱的位置，并生成带标注的图片。",
+        "tags": ["AI Recommendations"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationAnalysisRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功返回位置分析",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationAnalysis"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/calibration-checks": {
+      "post": {
+        "operationId": "createCalibrationCheck",
+        "summary": "校准检查",
+        "description": "对用户拍的已布置好的陷阱近景照片进行校准检查，判断布置是否合格并给出调整建议。",
+        "tags": ["AI Recommendations"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalibrationCheckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功返回校准结果",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalibrationCheck"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/media-assets": {
+      "post": {
+        "operationId": "createMediaAsset",
+        "summary": "创建媒体资源",
+        "description": "为用户拍的每一张照片创建媒体记录，返回上传信息和 media_asset_id。",
+        "tags": ["Media"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateMediaAssetRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功创建媒体资源",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaAsset"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/traps": {
+      "get": {
+        "operationId": "listTraps",
+        "summary": "列出陷阱",
+        "description": "列出当前用户的所有陷阱，支持状态筛选和分页。",
+        "tags": ["Traps"],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "按状态过滤",
+            "schema": {
+              "type": "string",
+              "enum": ["active", "inactive", "warning", "triggered_caught"]
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "每页数量",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "starting_after",
+            "in": "query",
+            "description": "分页游标",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回陷阱列表",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrapList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/traps/{id}": {
+      "get": {
+        "operationId": "getTrap",
+        "summary": "获取陷阱详情",
+        "description": "获取单个陷阱的详细信息。",
+        "tags": ["Traps"],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Trap ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "成功返回陷阱详情",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Trap"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trap-events": {
+      "post": {
+        "operationId": "createTrapEvent",
+        "summary": "创建陷阱事件",
+        "description": "创建陷阱事件：布防完成、检查、捕获、补饵等。",
+        "tags": ["Trap Events"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTrapEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功创建事件",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrapEvent"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "使用 Bearer token 进行认证"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "description": "错误类型",
+                "enum": ["invalid_request_error", "authentication_error", "authorization_error", "rate_limit_error", "api_error", "idempotency_error"]
+              },
+              "code": {
+                "type": "string",
+                "description": "错误代码"
+              },
+              "message": {
+                "type": "string",
+                "description": "错误消息"
+              },
+              "param": {
+                "type": "string",
+                "description": "相关参数"
+              },
+              "doc_url": {
+                "type": "string",
+                "description": "文档链接"
+              }
+            }
+          }
+        }
+      },
+      "UserLocation": {
+        "type": "object",
+        "properties": {
+          "country": {
+            "type": "string",
+            "description": "国家代码",
+            "example": "TW"
+          },
+          "city": {
+            "type": "string",
+            "description": "城市",
+            "example": "Taipei"
+          },
+          "environment": {
+            "type": "string",
+            "description": "环境类型",
+            "enum": ["apartment", "house", "farm", "warehouse", "restaurant_kitchen"]
+          }
+        }
+      },
+      "CreateSetupSessionRequest": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "会话来源",
+            "example": "mobile_app"
+          },
+          "initial_rodent_target": {
+            "type": "string",
+            "description": "初始目标鼠种",
+            "enum": ["rat", "mouse", "unknown"]
+          },
+          "user_location_hint": {
+            "$ref": "#/components/schemas/UserLocation"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "自定义元数据"
+          }
+        }
+      },
+      "SetupSession": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Session ID",
+            "example": "ss_1Qy8u8CZ7aQp98Xb5WJtR3"
+          },
+          "object": {
+            "type": "string",
+            "enum": ["setup_session"]
+          },
+          "current_stage": {
+            "type": "string",
+            "description": "当前阶段",
+            "enum": ["identification", "strategy", "location", "calibration", "completed"]
+          },
+          "is_completed": {
+            "type": "boolean",
+            "description": "是否已完成"
+          },
+          "created_trap_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "创建的陷阱 ID"
+          },
+          "rodent_target": {
+            "type": "string",
+            "nullable": true,
+            "enum": ["rat", "mouse", "unknown"]
+          },
+          "identification_data": {
+            "type": "object",
+            "nullable": true
+          },
+          "strategy_data": {
+            "type": "object",
+            "nullable": true
+          },
+          "location_scout_data": {
+            "type": "object",
+            "nullable": true
+          },
+          "calibration_data": {
+            "type": "object",
+            "nullable": true
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "created": {
+            "type": "integer",
+            "description": "创建时间戳"
+          },
+          "updated": {
+            "type": "integer",
+            "description": "更新时间戳"
+          }
+        }
+      },
+      "UpdateSetupSessionRequest": {
+        "type": "object",
+        "properties": {
+          "rodent_target": {
+            "type": "string",
+            "enum": ["rat", "mouse", "unknown"]
+          },
+          "identification_data": {
+            "type": "object"
+          },
+          "strategy_data": {
+            "type": "object"
+          },
+          "location_scout_data": {
+            "type": "object"
+          },
+          "calibration_data": {
+            "type": "object"
+          },
+          "advance_to_strategy": {
+            "type": "boolean",
+            "description": "是否推进到策略阶段"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "CreateTrapFromSessionRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "陷阱名称"
+          },
+          "location_desc": {
+            "type": "string",
+            "description": "位置描述"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "warning", "inactive"]
+          },
+          "calibration_override": {
+            "type": "object",
+            "properties": {
+              "quality": {
+                "type": "string",
+                "enum": ["passed", "failed_but_accepted"]
+              }
+            }
+          }
+        }
+      },
+      "TrapRecommendationRequest": {
+        "type": "object",
+        "required": ["mode", "rodent_target"],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "description": "推荐模式",
+            "enum": ["existing_trap", "no_trap"]
+          },
+          "rodent_target": {
+            "type": "string",
+            "enum": ["rat", "mouse", "unknown"]
+          },
+          "media_asset_id": {
+            "type": "string",
+            "description": "现有工具照片 ID（mode=existing_trap 时必填）"
+          },
+          "user_location": {
+            "$ref": "#/components/schemas/UserLocation"
+          },
+          "preferences": {
+            "type": "object",
+            "properties": {
+              "avoid_killing": {
+                "type": "boolean"
+              },
+              "has_children_or_pets": {
+                "type": "boolean"
+              },
+              "budget_level": {
+                "type": "string",
+                "enum": ["low", "medium", "high"]
+              }
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "default": 3,
+            "maximum": 10
+          }
+        }
+      },
+      "TrapRecommendationResult": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["trap_recommendation_result"]
+          },
+          "mode": {
+            "type": "string"
+          },
+          "rodent_target": {
+            "type": "string"
+          },
+          "existing_trap": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "detected_type": {
+                "type": "string"
+              },
+              "is_suitable": {
+                "type": "boolean"
+              },
+              "suitability_score": {
+                "type": "number"
+              },
+              "notes": {
+                "type": "string"
+              }
+            }
+          },
+          "recommended_traps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrapProduct"
+            }
+          },
+          "created": {
+            "type": "integer"
+          }
+        }
+      },
+      "TrapProduct": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["trap_product"]
+          },
+          "id": {
+            "type": "string"
+          },
+          "trap_type": {
+            "type": "string",
+            "enum": ["snap_trap", "glue_board", "cage_trap", "electronic_trap", "other"]
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "for_rodent": {
+            "type": "string",
+            "enum": ["rat", "mouse", "both"]
+          },
+          "suitability_score": {
+            "type": "number"
+          },
+          "safety_level": {
+            "type": "string",
+            "enum": ["low", "medium", "high"]
+          },
+          "price_band": {
+            "type": "string",
+            "enum": ["low", "medium", "high"]
+          },
+          "recommended_reason": {
+            "type": "string"
+          }
+        }
+      },
+      "BaitRecommendationRequest": {
+        "type": "object",
+        "required": ["rodent_target"],
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": ["standard", "from_fridge"],
+            "default": "standard"
+          },
+          "rodent_target": {
+            "type": "string",
+            "enum": ["rat", "mouse", "unknown"]
+          },
+          "trap_type": {
+            "type": "string",
+            "enum": ["snap_trap", "glue_board", "cage_trap", "electronic_trap", "other"]
+          },
+          "media_asset_id": {
+            "type": "string",
+            "description": "冰箱照片 ID（mode=from_fridge 时必填）"
+          },
+          "user_location": {
+            "$ref": "#/components/schemas/UserLocation"
+          },
+          "limit": {
+            "type": "integer",
+            "default": 3
+          }
+        }
+      },
+      "BaitRecommendationResult": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["bait_recommendation_result"]
+          },
+          "mode": {
+            "type": "string"
+          },
+          "primary_bait": {
+            "$ref": "#/components/schemas/BaitOption"
+          },
+          "alternative_baits": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BaitOption"
+            }
+          },
+          "fridge_analysis": {
+            "type": "object",
+            "nullable": true
+          },
+          "created": {
+            "type": "integer"
+          }
+        }
+      },
+      "BaitOption": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["bait_option"]
+          },
+          "id": {
+            "type": "string"
+          },
+          "bait_type": {
+            "type": "string",
+            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "nuts", "grain", "other"]
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "suitability_score": {
+            "type": "number"
+          },
+          "spoilage_risk": {
+            "type": "string",
+            "enum": ["low", "medium", "high"]
+          },
+          "usage_tips": {
+            "type": "string"
+          }
+        }
+      },
+      "LocationAnalysisRequest": {
+        "type": "object",
+        "required": ["media_asset_id"],
+        "properties": {
+          "setup_session_id": {
+            "type": "string"
+          },
+          "media_asset_id": {
+            "type": "string",
+            "description": "房间全景照片 ID"
+          },
+          "rodent_target": {
+            "type": "string",
+            "enum": ["rat", "mouse", "unknown"]
+          },
+          "trap_type": {
+            "type": "string"
+          },
+          "bait_type": {
+            "type": "string"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "max_zones": {
+                "type": "integer",
+                "default": 2
+              },
+              "language": {
+                "type": "string",
+                "default": "zh-CN"
+              }
+            }
+          }
+        }
+      },
+      "LocationAnalysis": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["location_analysis"]
+          },
+          "id": {
+            "type": "string"
+          },
+          "media_asset_id": {
+            "type": "string"
+          },
+          "annotated_media_asset_id": {
+            "type": "string",
+            "description": "带标注的图片 ID"
+          },
+          "placement_text": {
+            "type": "string",
+            "description": "详细的放置说明"
+          },
+          "zones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlacementZone"
+            }
+          },
+          "created": {
+            "type": "integer"
+          }
+        }
+      },
+      "PlacementZone": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "priority": {
+            "type": "integer"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "description": {
+            "type": "string"
+          },
+          "bounding_box": {
+            "type": "object",
+            "properties": {
+              "x": { "type": "number" },
+              "y": { "type": "number" },
+              "width": { "type": "number" },
+              "height": { "type": "number" }
+            }
+          }
+        }
+      },
+      "CalibrationCheckRequest": {
+        "type": "object",
+        "required": ["media_asset_id"],
+        "properties": {
+          "setup_session_id": {
+            "type": "string"
+          },
+          "media_asset_id": {
+            "type": "string",
+            "description": "校准照片 ID"
+          },
+          "rodent_target": {
+            "type": "string"
+          },
+          "trap_type": {
+            "type": "string"
+          },
+          "bait_type": {
+            "type": "string"
+          },
+          "location_context": {
+            "type": "object"
+          },
+          "options": {
+            "type": "object",
+            "properties": {
+              "language": {
+                "type": "string"
+              },
+              "need_annotated_image": {
+                "type": "boolean",
+                "default": true
+              },
+              "tolerance": {
+                "type": "string",
+                "enum": ["normal", "strict"]
+              }
+            }
+          }
+        }
+      },
+      "CalibrationCheck": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["calibration_check"]
+          },
+          "id": {
+            "type": "string"
+          },
+          "media_asset_id": {
+            "type": "string"
+          },
+          "annotated_media_asset_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_correct": {
+            "type": "boolean",
+            "description": "布置是否合格"
+          },
+          "confidence": {
+            "type": "number"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalibrationIssue"
+            }
+          },
+          "advice_text": {
+            "type": "string",
+            "description": "综合建议文案"
+          },
+          "recommended_actions": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": { "type": "string" },
+                "label": { "type": "string" },
+                "details": { "type": "string" },
+                "priority": { "type": "integer" }
+              }
+            }
+          },
+          "created": {
+            "type": "integer"
+          }
+        }
+      },
+      "CalibrationIssue": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["info", "warning", "error"]
+          },
+          "suggestion": {
+            "type": "string"
+          },
+          "metrics": {
+            "type": "object"
+          }
+        }
+      },
+      "CreateMediaAssetRequest": {
+        "type": "object",
+        "properties": {
+          "purpose": {
+            "type": "string",
+            "enum": ["setup", "check", "evidence"]
+          },
+          "content_type": {
+            "type": "string",
+            "example": "image/jpeg"
+          },
+          "metadata": {
+            "type": "object"
+          }
+        }
+      },
+      "MediaAsset": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "ma_1PpTqQx2YwZv9kLb"
+          },
+          "object": {
+            "type": "string",
+            "enum": ["media_asset"]
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "upload_url": {
+            "type": "string",
+            "description": "预签名上传 URL"
+          },
+          "url": {
+            "type": "string",
+            "description": "访问 URL"
+          },
+          "created": {
+            "type": "integer"
+          }
+        }
+      },
+      "Trap": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "trap_1RasJr2f9hQe8KmN"
+          },
+          "object": {
+            "type": "string",
+            "enum": ["trap"]
+          },
+          "name": {
+            "type": "string"
+          },
+          "location_desc": {
+            "type": "string",
+            "nullable": true
+          },
+          "trap_type": {
+            "type": "string",
+            "enum": ["snap_trap", "glue_board", "cage_trap", "electronic_trap", "other"]
+          },
+          "bait_type": {
+            "type": "string"
+          },
+          "rodent_target": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["active", "warning", "inactive", "triggered_caught"]
+          },
+          "last_checked_at": {
+            "type": "integer",
+            "nullable": true
+          },
+          "next_check_at": {
+            "type": "integer",
+            "nullable": true
+          },
+          "stats_catches": {
+            "type": "integer"
+          },
+          "stats_misses": {
+            "type": "integer"
+          },
+          "metadata": {
+            "type": "object"
+          },
+          "created": {
+            "type": "integer"
+          },
+          "updated": {
+            "type": "integer"
+          }
+        }
+      },
+      "TrapList": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["list"]
+          },
+          "url": {
+            "type": "string"
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Trap"
+            }
+          }
+        }
+      },
+      "CreateTrapEventRequest": {
+        "type": "object",
+        "required": ["trap_id", "event_type"],
+        "properties": {
+          "trap_id": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string",
+            "enum": ["deployment", "maintenance", "check", "catch", "miss", "rebait"]
+          },
+          "details": {
+            "type": "object"
+          },
+          "media_id": {
+            "type": "string"
+          }
+        }
+      },
+      "TrapEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "object": {
+            "type": "string",
+            "enum": ["trap_event"]
+          },
+          "trap_id": {
+            "type": "string"
+          },
+          "event_type": {
+            "type": "string"
+          },
+          "details": {
+            "type": "object"
+          },
+          "created": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}

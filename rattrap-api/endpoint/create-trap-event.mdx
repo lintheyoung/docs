@@ -1,0 +1,160 @@
+---
+title: '创建陷阱事件'
+openapi: 'POST /v1/trap-events'
+---
+
+<RequestExample>
+```bash cURL - 检查事件
+curl https://api.rattrap.ai/v1/trap-events \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trap_id": "trap_1RasJr2f9hQe8KmN",
+    "event_type": "check",
+    "media_id": "ma_check_123",
+    "details": {
+      "result": "empty",
+      "bait_condition": "good"
+    }
+  }'
+```
+
+```bash cURL - 捕获事件
+curl https://api.rattrap.ai/v1/trap-events \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trap_id": "trap_1RasJr2f9hQe8KmN",
+    "event_type": "catch",
+    "media_id": "ma_catch_456",
+    "details": {
+      "rodent_type": "rat",
+      "disposal_method": "disposed"
+    }
+  }'
+```
+
+```bash cURL - 补饵事件
+curl https://api.rattrap.ai/v1/trap-events \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trap_id": "trap_1RasJr2f9hQe8KmN",
+    "event_type": "rebait",
+    "details": {
+      "new_bait_type": "peanut_butter",
+      "reason": "expired"
+    }
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "id": "evt_1TuVwX2y3zAb4CdE",
+  "object": "trap_event",
+  "trap_id": "trap_1RasJr2f9hQe8KmN",
+  "event_type": "check",
+  "media_id": "ma_check_123",
+  "details": {
+    "result": "empty",
+    "bait_condition": "good"
+  },
+  "created": 1764300000
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+记录陷阱相关的各种事件，用于追踪历史和更新状态。
+
+## 事件类型
+
+| 类型 | 说明 | 触发场景 |
+|------|------|----------|
+| `deployment` | 部署完成 | 首次布防完成时自动创建 |
+| `check` | 检查 | 用户定期检查陷阱 |
+| `catch` | 捕获 | 成功捕获老鼠 |
+| `miss` | 空触发 | 触发但未捕获 |
+| `rebait` | 补饵 | 更换或补充诱饵 |
+| `maintenance` | 维护 | 清洁、调整、修复等 |
+
+## 各事件类型的 details 结构
+
+<Tabs>
+  <Tab title="check">
+    ```json
+    {
+      "result": "empty",        // empty / triggered / caught
+      "bait_condition": "good", // good / degraded / gone / expired
+      "notes": "一切正常"
+    }
+    ```
+  </Tab>
+  <Tab title="catch">
+    ```json
+    {
+      "rodent_type": "rat",           // rat / mouse / unknown
+      "disposal_method": "disposed",  // disposed / released / pending
+      "notes": "在厨房捕获一只大鼠"
+    }
+    ```
+  </Tab>
+  <Tab title="rebait">
+    ```json
+    {
+      "new_bait_type": "peanut_butter",
+      "reason": "expired",  // expired / eaten / preventive
+      "notes": "更换为新鲜花生酱"
+    }
+    ```
+  </Tab>
+  <Tab title="maintenance">
+    ```json
+    {
+      "action": "cleaned",  // cleaned / adjusted / repaired / relocated
+      "notes": "清理了陷阱周围的灰尘"
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## 事件创建后的副作用
+
+创建事件后，系统会自动：
+
+<AccordionGroup>
+  <Accordion title="更新陷阱状态">
+    - `check` 事件：更新 `last_checked_at`，重新计算 `next_check_at`
+    - `catch` 事件：更新 `status` 为 `triggered_caught`，增加 `stats_catches`
+    - `miss` 事件：增加 `stats_misses`
+    - `rebait` 事件：更新 `bait_type`（如果改变了）
+  </Accordion>
+  <Accordion title="更新媒体关联">
+    如果传入了 `media_id`，会更新 `last_check_media_id`
+  </Accordion>
+  <Accordion title="触发提醒">
+    根据事件类型可能触发推送通知或邮件提醒
+  </Accordion>
+</AccordionGroup>
+
+## 建议的检查流程
+
+<Steps>
+  <Step title="拍照">
+    用户拍摄陷阱当前状态，调用 `POST /v1/media-assets` 获取 `media_id`
+  </Step>
+  <Step title="选择结果">
+    用户选择检查结果：空 / 触发 / 捕获
+  </Step>
+  <Step title="创建事件">
+    调用 `POST /v1/trap-events` 记录事件
+  </Step>
+  <Step title="处理后续">
+    - 如果是捕获：引导用户处理并可能重新布防
+    - 如果是空触发：提示可能需要调整位置
+    - 如果诱饵不佳：引导补饵
+  </Step>
+</Steps>

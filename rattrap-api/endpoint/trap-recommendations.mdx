@@ -1,0 +1,203 @@
+---
+title: '获取捕鼠器推荐'
+openapi: 'POST /v1/trap-recommendations'
+---
+
+<RequestExample>
+```bash cURL - 识别现有工具
+curl https://api.rattrap.ai/v1/trap-recommendations \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "existing_trap",
+    "rodent_target": "rat",
+    "media_asset_id": "ma_1PpTqQx2YwZv9kLb",
+    "user_location": {
+      "country": "TW",
+      "city": "Taipei",
+      "environment": "apartment"
+    },
+    "preferences": {
+      "avoid_killing": false,
+      "has_children_or_pets": true,
+      "budget_level": "medium"
+    },
+    "limit": 3
+  }'
+```
+
+```bash cURL - 无工具推荐购买
+curl https://api.rattrap.ai/v1/trap-recommendations \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "no_trap",
+    "rodent_target": "mouse",
+    "user_location": {
+      "country": "TW",
+      "city": "Taichung"
+    },
+    "preferences": {
+      "avoid_killing": true,
+      "budget_level": "high"
+    },
+    "limit": 5
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 识别现有工具 - 适合使用
+{
+  "object": "trap_recommendation_result",
+  "mode": "existing_trap",
+  "rodent_target": "rat",
+  "user_location": {
+    "country": "TW",
+    "city": "Taipei",
+    "environment": "apartment"
+  },
+  "preferences": {
+    "avoid_killing": false,
+    "has_children_or_pets": true,
+    "budget_level": "medium"
+  },
+  "existing_trap": {
+    "object": "existing_trap_analysis",
+    "media_asset_id": "ma_1PpTqQx2YwZv9kLb",
+    "detected_type": "snap_trap",
+    "is_suitable": true,
+    "suitability_score": 0.92,
+    "notes": "识别为大号弹簧老鼠夹，对成年的大褐家鼠效果良好。请注意放置位置，避免儿童和宠物接触。"
+  },
+  "recommended_traps": [
+    {
+      "object": "trap_product",
+      "id": "trp_snap_heavy_01",
+      "trap_type": "snap_trap",
+      "label": "大号强力弹簧夹",
+      "description": "适合厨房和车库，对大鼠击杀率高，成本低。",
+      "for_rodent": "rat",
+      "suitability_score": 0.95,
+      "safety_level": "medium",
+      "maintenance_level": "low",
+      "price_band": "low",
+      "recommended_reason": "与您现有工具类型一致，方便一次购买多只备用。"
+    }
+  ],
+  "created": 1764038500
+}
+```
+
+```json 无工具 - 购买推荐
+{
+  "object": "trap_recommendation_result",
+  "mode": "no_trap",
+  "rodent_target": "mouse",
+  "user_location": {
+    "country": "TW",
+    "city": "Taichung"
+  },
+  "preferences": {
+    "avoid_killing": true,
+    "budget_level": "high"
+  },
+  "existing_trap": null,
+  "recommended_traps": [
+    {
+      "object": "trap_product",
+      "id": "trp_cage_humane_01",
+      "trap_type": "cage_trap",
+      "label": "人道捕鼠笼",
+      "description": "不伤害老鼠，适合室内使用。需要将捕获的老鼠带离住宅区放生。",
+      "for_rodent": "mouse",
+      "suitability_score": 0.91,
+      "safety_level": "high",
+      "maintenance_level": "medium",
+      "price_band": "medium",
+      "recommended_reason": "符合您\"不杀生\"的偏好，并且适合台湾常见的小家鼠。",
+      "purchase_hints": {
+        "search_keywords": "捕鼠笼 人道 小号",
+        "preferred_platforms": ["online_marketplace"],
+        "estimated_price_range": "NT$300–600"
+      }
+    }
+  ],
+  "created": 1764038600
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+这是整个"工具策略阶段"的核心接口，根据用户情况提供智能推荐：
+
+<Tabs>
+  <Tab title="识别现有工具">
+    当 `mode = "existing_trap"` 时：
+    - 识别用户现有工具的类型
+    - 评估是否适合当前 rodent
+    - 如不适合，同时给出购买建议列表
+
+    **必填字段：** `mode`、`rodent_target`、`media_asset_id`
+  </Tab>
+  <Tab title="推荐购买">
+    当 `mode = "no_trap"` 时：
+    - 只基于 rodent + 地区 + 偏好推荐购买方案
+    - 返回适合的 trap 列表及购买提示
+
+    **必填字段：** `mode`、`rodent_target`
+  </Tab>
+</Tabs>
+
+## 用户偏好参数
+
+<ParamField body="preferences.avoid_killing" type="boolean">
+  `true` 表示希望人道捕捉，不杀生
+</ParamField>
+
+<ParamField body="preferences.has_children_or_pets" type="boolean">
+  家中有小孩/宠物 → 避免暴露式弹簧夹
+</ParamField>
+
+<ParamField body="preferences.budget_level" type="string">
+  预算档位：`low` / `medium` / `high`
+</ParamField>
+
+<ParamField body="preferences.noise_sensitive" type="boolean">
+  对咔哒声、电击声敏感
+</ParamField>
+
+<ParamField body="preferences.maintenance_tolerance" type="string">
+  能接受的维护频率：`low` / `medium` / `high`
+</ParamField>
+
+## 陷阱类型说明
+
+| 类型 | 说明 | 适用场景 |
+|------|------|----------|
+| `snap_trap` | 弹簧夹 | 高效击杀，成本低 |
+| `glue_board` | 粘鼠板 | 简单易用，一次性 |
+| `cage_trap` | 捕鼠笼 | 人道捕捉，可放生 |
+| `electronic_trap` | 电击捕鼠器 | 快速击杀，卫生 |
+| `other` | 其他类型 | 特殊工具 |
+
+## existing_trap 分析结果
+
+当 `mode = "existing_trap"` 时，响应中包含 `existing_trap` 对象：
+
+<ResponseField name="existing_trap.detected_type" type="string">
+  识别出的陷阱类型
+</ResponseField>
+
+<ResponseField name="existing_trap.is_suitable" type="boolean">
+  是否适合当前 rodent_target + 用户环境
+</ResponseField>
+
+<ResponseField name="existing_trap.suitability_score" type="number">
+  0–1 之间的评分，用于前端展示信心条
+</ResponseField>
+
+<ResponseField name="existing_trap.notes" type="string">
+  给用户的解释说明
+</ResponseField>

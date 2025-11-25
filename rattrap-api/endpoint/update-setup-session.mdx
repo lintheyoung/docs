@@ -1,0 +1,168 @@
+---
+title: '更新布防会话'
+openapi: 'POST /v1/setup-sessions/{id}'
+---
+
+<RequestExample>
+```bash cURL
+curl https://api.rattrap.ai/v1/setup-sessions/ss_1Qy8u8CZ7aQp98Xb5WJtR3 \
+  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: rattrap-identification-3d8cc2f0-1e9f-4c5b-90f9-dcb8a467c777" \
+  -d '{
+    "rodent_target": "rat",
+    "identification_data": {
+      "source": "shadow_and_size",
+      "answers": {
+        "saw_shadow": true,
+        "bigger_than_can": true
+      },
+      "ai_inference": {
+        "rodent_target": "rat",
+        "confidence": 0.9
+      }
+    },
+    "advance_to_strategy": true
+  }'
+```
+
+```javascript Node.js
+const res = await fetch(`https://api.rattrap.ai/v1/setup-sessions/${sessionId}`, {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    rodent_target: "rat",
+    identification_data: {
+      source: "shadow_and_size",
+      answers: {
+        saw_shadow: true,
+        bigger_than_can: true
+      },
+      ai_inference: {
+        rodent_target: "rat",
+        confidence: 0.9
+      }
+    },
+    advance_to_strategy: true
+  })
+});
+
+const session = await res.json();
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+  "object": "setup_session",
+  "current_stage": "strategy",
+  "is_completed": false,
+  "created_trap_id": null,
+  "rodent_target": "rat",
+  "identification_data": {
+    "source": "shadow_and_size",
+    "answers": {
+      "saw_shadow": true,
+      "bigger_than_can": true
+    },
+    "ai_inference": {
+      "rodent_target": "rat",
+      "confidence": 0.9
+    }
+  },
+  "strategy_data": null,
+  "location_scout_data": null,
+  "calibration_data": null,
+  "location_media_id": null,
+  "calibration_media_id": null,
+  "metadata": {
+    "started_from": "dashboard_fab",
+    "entry_flow": "shadow_size_flow"
+  },
+  "created": 1764038400,
+  "updated": 1764038455
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+这是一个**通用更新接口**，在不同阶段用于写入不同的数据：
+
+<Tabs>
+  <Tab title="物种识别阶段">
+    用于写入 `rodent_target` 和 `identification_data`，并可选择性地推进到策略阶段：
+
+    ```json
+    {
+      "rodent_target": "rat",
+      "identification_data": { ... },
+      "advance_to_strategy": true
+    }
+    ```
+  </Tab>
+  <Tab title="策略阶段">
+    用于写入工具和诱饵选择：
+
+    ```json
+    {
+      "strategy_data": {
+        "trap_type": "snap_trap",
+        "bait_type": "peanut_butter"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="位置侦查阶段">
+    用于写入位置分析结果：
+
+    ```json
+    {
+      "location_media_id": "ma_room_123",
+      "location_scout_data": {
+        "placement_text": "...",
+        "annotated_media_asset_id": "ma_room_annotated_456"
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="校准阶段">
+    用于写入校准检查结果：
+
+    ```json
+    {
+      "calibration_media_id": "ma_calib_789",
+      "calibration_data": {
+        "attempts": [...]
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## 更新规则
+
+<AccordionGroup>
+  <Accordion title="只更新传入的字段">
+    未在请求体中出现的字段一律保持不变。`identification_data` / `strategy_data` / `location_scout_data` / `calibration_data` **按字段整体替换**。
+  </Accordion>
+  <Accordion title="advance_to_strategy 行为">
+    - 如果 `advance_to_strategy = true` 且当前 `current_stage = "identification"`：后端会将 `current_stage` 更新为 `"strategy"`
+    - 如果当前 `current_stage != "identification"`：忽略该标志（不报错，但不推进阶段）
+  </Accordion>
+  <Accordion title="rodent_target 便利字段">
+    建议总是与 `identification_data.ai_inference.rodent_target` 保持一致。如果未传 `rodent_target`，后端不会尝试从 `identification_data` 自动推断。
+  </Accordion>
+</AccordionGroup>
+
+## rodent_target 取值
+
+| 值 | 说明 |
+|---|---|
+| `rat` | 大鼠（沟鼠、大褐家鼠等） |
+| `mouse` | 小家鼠 |
+| `unknown` | 尚不确定 |
