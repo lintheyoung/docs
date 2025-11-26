@@ -6,7 +6,7 @@ openapi: 'POST /v1/trap-recommendations'
 <RequestExample>
 ```bash cURL - 识别现有工具
 curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/trap-recommendations \
-  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vbHJzcHB4YXJoeHZjZmxvdWdicC5zdXBhYmFzZS5jbyIsInN1YiI6InVzZXItaWQtaGVyZSJ9.xxx" \
   -H "Content-Type: application/json" \
   -d '{
     "mode": "existing_trap",
@@ -28,7 +28,7 @@ curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/trap-recommendations 
 
 ```bash cURL - 无工具推荐购买
 curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/trap-recommendations \
-  -H "Authorization: Bearer sk_test_xxx" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vbHJzcHB4YXJoeHZjZmxvdWdicC5zdXBhYmFzZS5jbyIsInN1YiI6InVzZXItaWQtaGVyZSJ9.xxx" \
   -H "Content-Type: application/json" \
   -d '{
     "mode": "no_trap",

@@ -27,14 +27,14 @@ RatTrap API 是一个采用 **Stripe 风格** 设计的 REST API，帮助用户�
 
 ## 认证方式
 
-所有 API 请求都需要 Bearer Token 认证：
+所有 API 请求都需要使用用户的 JWT Token 进行 Bearer 认证：
 
 ```bash
-Authorization: Bearer sk_test_xxx
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vbHJzcHB4YXJoeHZjZmxvdWdicC5zdXBhYmFzZS5jbyIsInN1YiI6InVzZXItaWQtaGVyZSJ9.xxx
 ```
 
 <Warning>
-  请妥善保管你的 API 密钥，不要在客户端代码中暴露它。
+  JWT Token 可通过登录接口获取，每个 Token 都有有效期，过期后需要使用 refresh_token 刷新。
 </Warning>
 
 ## API 架构概览
