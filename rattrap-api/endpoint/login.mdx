@@ -1,12 +1,12 @@
 ---
 title: '用户登录'
-openapi: 'POST /v1/auth/login'
+openapi: 'POST /auth/v1/token'
 ---
 
 <RequestExample>
 ```bash cURL
 curl -X POST \
-  https://lrsppxarhxvxcflougbp.supabase.co/v1/auth/login \
+  'https://lrsppxarhxvxcflougbp.supabase.co/auth/v1/token?grant_type=password' \
   -H "apikey: your-supabase-anon-key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -16,7 +16,7 @@ curl -X POST \
 ```
 
 ```javascript Node.js
-const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/v1/auth/login", {
+const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/auth/v1/token?grant_type=password", {
   method: "POST",
   headers: {
     "apikey": "your-supabase-anon-key",

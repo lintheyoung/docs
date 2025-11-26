@@ -15,11 +15,19 @@
   "servers": [
     {
       "url": "https://lrsppxarhxvxcflougbp.supabase.co/functions/v1",
-      "description": "Supabase Edge Functions"
+      "description": "Supabase Edge Functions (Project 1)"
     },
     {
       "url": "https://lrsppxarhxvxcflougbp.supabase.co",
-      "description": "Supabase Auth API"
+      "description": "Supabase Auth API (Project 1)"
+    },
+    {
+      "url": "https://pmaabhwdejdxkxnwkawx.supabase.co/functions/v1",
+      "description": "Supabase Edge Functions (Project 2)"
+    },
+    {
+      "url": "https://pmaabhwdejdxkxnwkawx.supabase.co",
+      "description": "Supabase Auth API (Project 2)"
     }
   ],
   "security": [
@@ -28,17 +36,34 @@
     }
   ],
   "paths": {
-    "/v1/auth/login": {
+    "/auth/v1/token": {
       "post": {
         "operationId": "login",
         "summary": "用户登录",
-        "description": "使用邮箱和密码登录，获取 Bearer Token。Token 用于后续 API 调用的认证。",
+        "description": "使用邮箱和密码登录，获取 Bearer Token。使用 grant_type=password 参数。",
         "tags": ["Authentication"],
-        "security": [],
+        "security": [{"apiKey": []}],
         "servers": [
           {
             "url": "https://lrsppxarhxvxcflougbp.supabase.co",
-            "description": "Supabase Auth API"
+            "description": "Supabase Auth API (Project 1)"
+          },
+          {
+            "url": "https://pmaabhwdejdxkxnwkawx.supabase.co",
+            "description": "Supabase Auth API (Project 2)"
+          }
+        ],
+        "parameters": [
+          {
+            "name": "grant_type",
+            "in": "query",
+            "required": true,
+            "description": "授权类型",
+            "schema": {
+              "type": "string",
+              "enum": ["password", "refresh_token"],
+              "default": "password"
+            }
           }
         ],
         "requestBody": {
@@ -113,65 +138,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/auth/refresh": {
-      "post": {
-        "operationId": "refreshToken",
-        "summary": "刷新 Token",
-        "description": "使用 refresh_token 获取新的 access_token。",
-        "tags": ["Authentication"],
-        "security": [],
-        "servers": [
-          {
-            "url": "https://lrsppxarhxvxcflougbp.supabase.co",
-            "description": "Supabase Auth API"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": ["refresh_token"],
-                "properties": {
-                  "refresh_token": {
-                    "type": "string",
-                    "description": "刷新 Token"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "刷新成功",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "access_token": {
-                      "type": "string"
-                    },
-                    "token_type": {
-                      "type": "string",
-                      "example": "bearer"
-                    },
-                    "expires_in": {
-                      "type": "integer"
-                    },
-                    "refresh_token": {
-                      "type": "string"
-                    }
-                  }
                 }
               }
             }
@@ -580,6 +546,12 @@
         "type": "http",
         "scheme": "bearer",
         "description": "使用 Bearer token 进行认证"
+      },
+      "apiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "apikey",
+        "description": "Supabase anon key，可在 Supabase Dashboard 的项目设置中找到"
       }
     },
     "schemas": {

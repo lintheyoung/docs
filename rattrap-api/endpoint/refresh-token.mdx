@@ -1,12 +1,13 @@
 ---
 title: '刷新 Token'
-openapi: 'POST /v1/auth/refresh'
+openapi: 'POST /auth/v1/token'
 ---
 
 <RequestExample>
 ```bash cURL
 curl -X POST \
-  https://lrsppxarhxvxcflougbp.supabase.co/v1/auth/refresh \
+  'https://lrsppxarhxvxcflougbp.supabase.co/auth/v1/token?grant_type=refresh_token' \
+  -H "apikey: your-supabase-anon-key" \
   -H "Content-Type: application/json" \
   -d '{
     "refresh_token": "v1.MRjefG7..."
@@ -14,9 +15,10 @@ curl -X POST \
 ```
 
 ```javascript Node.js
-const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/v1/auth/refresh", {
+const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/auth/v1/token?grant_type=refresh_token", {
   method: "POST",
   headers: {
+    "apikey": "your-supabase-anon-key",
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
@@ -55,6 +57,11 @@ console.log("Token 已刷新");
 
 当 access_token 过期时，使用此接口获取新的 Token，无需重新登录。
 
+<Note>
+替换 `your-supabase-anon-key` 为你的 Supabase 项目的 anon key。
+</Note>
+
 <Warning>
-refresh_token 也有有效期，如果 refresh_token 过期，需要重新登录。
+- 所有 Supabase API 调用都需要 `apikey` 请求头
+- refresh_token 也有有效期，如果 refresh_token 过期，需要重新登录
 </Warning>
