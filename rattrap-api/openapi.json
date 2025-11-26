@@ -35,6 +35,12 @@
         "description": "使用邮箱和密码登录，获取 Bearer Token。Token 用于后续 API 调用的认证。",
         "tags": ["Authentication"],
         "security": [],
+        "servers": [
+          {
+            "url": "https://lrsppxarhxvxcflougbp.supabase.co",
+            "description": "Supabase Auth API"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -121,6 +127,12 @@
         "description": "使用 refresh_token 获取新的 access_token。",
         "tags": ["Authentication"],
         "security": [],
+        "servers": [
+          {
+            "url": "https://lrsppxarhxvxcflougbp.supabase.co",
+            "description": "Supabase Auth API"
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {

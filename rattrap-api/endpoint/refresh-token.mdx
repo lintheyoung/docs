@@ -3,6 +3,54 @@ title: '刷新 Token'
 openapi: 'POST /v1/auth/refresh'
 ---
 
+<RequestExample>
+```bash cURL
+curl -X POST \
+  https://lrsppxarhxvxcflougbp.supabase.co/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refresh_token": "v1.MRjefG7..."
+  }'
+```
+
+```javascript Node.js
+const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/v1/auth/refresh", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    refresh_token: "v1.MRjefG7..."
+  })
+});
+
+const { access_token, refresh_token } = await res.json();
+console.log("Token 已刷新");
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIi...",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "refresh_token": "v1.NewRefreshToken..."
+}
+```
+
+```json 错误响应
+{
+  "error": {
+    "type": "authentication_error",
+    "code": "invalid_refresh_token",
+    "message": "Refresh token is invalid or expired",
+    "doc_url": "https://docs.rattrap.ai/errors#invalid_refresh_token"
+  }
+}
+```
+</ResponseExample>
+
 ## 使用说明
 
 当 access_token 过期时，使用此接口获取新的 Token，无需重新登录。

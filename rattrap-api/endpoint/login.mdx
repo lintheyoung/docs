@@ -3,6 +3,60 @@ title: '用户登录'
 openapi: 'POST /v1/auth/login'
 ---
 
+<RequestExample>
+```bash cURL
+curl -X POST \
+  https://lrsppxarhxvxcflougbp.supabase.co/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "test1234"
+  }'
+```
+
+```javascript Node.js
+const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/v1/auth/login", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    email: "test@example.com",
+    password: "test1234"
+  })
+});
+
+const { access_token, refresh_token, user } = await res.json();
+console.log(`已登录，用户: ${user.email}`);
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIi...",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "refresh_token": "v1.MRjefG7...",
+  "user": {
+    "id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "email": "test@example.com"
+  }
+}
+```
+
+```json 错误响应
+{
+  "error": {
+    "type": "authentication_error",
+    "code": "invalid_credentials",
+    "message": "Invalid email or password",
+    "doc_url": "https://docs.rattrap.ai/errors#invalid_credentials"
+  }
+}
+```
+</ResponseExample>
+
 ## 使用说明
 
 1. 使用 **Try it** 功能输入邮箱和密码
