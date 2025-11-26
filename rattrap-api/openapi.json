@@ -28,6 +28,14 @@
     {
       "url": "https://pmaabhwdejdxkxnwkawx.supabase.co",
       "description": "Supabase Auth API (Project 2)"
+    },
+    {
+      "url": "https://stvgaevmyzlkhlkmbqxz.supabase.co/functions/v1",
+      "description": "Supabase Edge Functions (Project 3)"
+    },
+    {
+      "url": "https://stvgaevmyzlkhlkmbqxz.supabase.co",
+      "description": "Supabase Auth API (Project 3)"
     }
   ],
   "security": [
@@ -51,6 +59,10 @@
           {
             "url": "https://pmaabhwdejdxkxnwkawx.supabase.co",
             "description": "Supabase Auth API (Project 2)"
+          },
+          {
+            "url": "https://stvgaevmyzlkhlkmbqxz.supabase.co",
+            "description": "Supabase Auth API (Project 3)"
           }
         ],
         "parameters": [
@@ -145,7 +157,7 @@
         }
       }
     },
-    "/v1/setup-sessions": {
+    "/setup-sessions": {
       "post": {
         "operationId": "createSetupSession",
         "summary": "创建布防会话",
@@ -194,7 +206,7 @@
         }
       }
     },
-    "/v1/setup-sessions/{id}": {
+    "/setup-sessions/{id}": {
       "post": {
         "operationId": "updateSetupSession",
         "summary": "更新布防会话",
@@ -245,7 +257,7 @@
         }
       }
     },
-    "/v1/setup-sessions/{id}/create-trap": {
+    "/setup-sessions/{id}/create-trap": {
       "post": {
         "operationId": "createTrapFromSession",
         "summary": "从会话创建陷阱",
@@ -285,7 +297,7 @@
         }
       }
     },
-    "/v1/trap-recommendations": {
+    "/trap-recommendations": {
       "post": {
         "operationId": "createTrapRecommendation",
         "summary": "获取捕鼠器推荐",
@@ -314,7 +326,7 @@
         }
       }
     },
-    "/v1/bait-recommendations": {
+    "/bait-recommendations": {
       "post": {
         "operationId": "createBaitRecommendation",
         "summary": "获取诱饵推荐",
@@ -343,7 +355,7 @@
         }
       }
     },
-    "/v1/location-analyses": {
+    "/location-analyses": {
       "post": {
         "operationId": "createLocationAnalysis",
         "summary": "分析放置位置",
@@ -372,7 +384,7 @@
         }
       }
     },
-    "/v1/calibration-checks": {
+    "/calibration-checks": {
       "post": {
         "operationId": "createCalibrationCheck",
         "summary": "校准检查",
@@ -401,7 +413,7 @@
         }
       }
     },
-    "/v1/media-assets": {
+    "/media-assets": {
       "post": {
         "operationId": "createMediaAsset",
         "summary": "创建媒体资源",
@@ -430,7 +442,7 @@
         }
       }
     },
-    "/v1/traps": {
+    "/traps": {
       "get": {
         "operationId": "listTraps",
         "summary": "列出陷阱",
@@ -479,7 +491,7 @@
         }
       }
     },
-    "/v1/traps/{id}": {
+    "/traps/{id}": {
       "get": {
         "operationId": "getTrap",
         "summary": "获取陷阱详情",
@@ -510,7 +522,7 @@
         }
       }
     },
-    "/v1/trap-events": {
+    "/trap-events": {
       "post": {
         "operationId": "createTrapEvent",
         "summary": "创建陷阱事件",
