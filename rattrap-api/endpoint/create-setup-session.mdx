@@ -5,7 +5,7 @@ openapi: 'POST /v1/setup-sessions'
 
 <RequestExample>
 ```bash cURL
-curl https://api.rattrap.ai/v1/setup-sessions \
+curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/setup-sessions \
   -H "Authorization: Bearer sk_test_xxx" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: rattrap-setup-550e8400-e29b-41d4-a716-446655440000" \
@@ -22,7 +22,7 @@ curl https://api.rattrap.ai/v1/setup-sessions \
 ```
 
 ```javascript Node.js
-const res = await fetch("https://api.rattrap.ai/v1/setup-sessions", {
+const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/setup-sessions", {
   method: "POST",
   headers: {
     "Authorization": `Bearer ${accessToken}`,

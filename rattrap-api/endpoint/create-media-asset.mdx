@@ -5,7 +5,7 @@ openapi: 'POST /v1/media-assets'
 
 <RequestExample>
 ```bash cURL
-curl https://api.rattrap.ai/v1/media-assets \
+curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/media-assets \
   -H "Authorization: Bearer sk_test_xxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -20,7 +20,7 @@ curl https://api.rattrap.ai/v1/media-assets \
 
 ```javascript Node.js
 // 1. 创建媒体资源，获取上传 URL
-const res = await fetch("https://api.rattrap.ai/v1/media-assets", {
+const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/media-assets", {
   method: "POST",
   headers: {
     "Authorization": `Bearer ${accessToken}`,

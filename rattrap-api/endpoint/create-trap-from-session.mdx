@@ -5,7 +5,7 @@ openapi: 'POST /v1/setup-sessions/{id}/create-trap'
 
 <RequestExample>
 ```bash cURL
-curl https://api.rattrap.ai/v1/setup-sessions/ss_1Qy8u8CZ7aQp98Xb5WJtR3/create-trap \
+curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/setup-sessions/ss_1Qy8u8CZ7aQp98Xb5WJtR3/create-trap \
   -H "Authorization: Bearer sk_test_xxx" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: trap-create-ss_1Qy8u8CZ7aQp98Xb5WJtR3-550e8400" \
@@ -19,7 +19,7 @@ curl https://api.rattrap.ai/v1/setup-sessions/ss_1Qy8u8CZ7aQp98Xb5WJtR3/create-t
 
 ```javascript Node.js
 const res = await fetch(
-  `https://api.rattrap.ai/v1/setup-sessions/${sessionId}/create-trap`,
+  `https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/setup-sessions/${sessionId}/create-trap`,
   {
     method: "POST",
     headers: {

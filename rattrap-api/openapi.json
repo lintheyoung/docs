@@ -14,12 +14,12 @@
   },
   "servers": [
     {
-      "url": "https://api.rattrap.ai",
-      "description": "Production server"
+      "url": "https://lrsppxarhxvxcflougbp.supabase.co/functions/v1",
+      "description": "Supabase Edge Functions"
     },
     {
-      "url": "https://sandbox.rattrap.ai",
-      "description": "Sandbox server"
+      "url": "https://lrsppxarhxvxcflougbp.supabase.co",
+      "description": "Supabase Auth API"
     }
   ],
   "security": [
