@@ -7,6 +7,7 @@ openapi: 'POST /v1/auth/login'
 ```bash cURL
 curl -X POST \
   https://lrsppxarhxvxcflougbp.supabase.co/v1/auth/login \
+  -H "apikey: your-supabase-anon-key" \
   -H "Content-Type: application/json" \
   -d '{
     "email": "test@example.com",
@@ -18,6 +19,7 @@ curl -X POST \
 const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/v1/auth/login", {
   method: "POST",
   headers: {
+    "apikey": "your-supabase-anon-key",
     "Content-Type": "application/json"
   },
   body: JSON.stringify({
@@ -59,11 +61,16 @@ console.log(`已登录，用户: ${user.email}`);
 
 ## 使用说明
 
-1. 使用 **Try it** 功能输入邮箱和密码
-2. 点击发送请求
-3. 从响应中复制 `access_token`
-4. 在其他 API 页面的 Authorization 输入框中粘贴该 Token
+1. 替换 `your-supabase-anon-key` 为你的 Supabase 项目的 anon key
+2. 使用 **Try it** 功能输入邮箱和密码
+3. 点击发送请求
+4. 从响应中复制 `access_token`
+5. 在其他 API 页面的 Authorization 输入框中粘贴该 Token
 
 <Note>
 Token 有效期通常为 1 小时，过期后请使用 refresh_token 刷新或重新登录。
 </Note>
+
+<Warning>
+所有 Supabase API 调用都需要 `apikey` 请求头。你可以在 Supabase Dashboard 的项目设置中找到 anon key。
+</Warning>
