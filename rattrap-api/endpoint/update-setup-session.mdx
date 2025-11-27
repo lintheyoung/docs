@@ -21,8 +21,7 @@ curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/setup-sessions/ss_1Qy
         "rodent_target": "rat",
         "confidence": 0.9
       }
-    },
-    "advance_to_strategy": true
+    }
   }'
 ```
 
@@ -45,8 +44,7 @@ const res = await fetch(`https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/s
         rodent_target: "rat",
         confidence: 0.9
       }
-    },
-    advance_to_strategy: true
+    }
   })
 });
 
@@ -60,7 +58,6 @@ const session = await res.json();
   "id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
   "object": "setup_session",
   "current_stage": "strategy",
-  "is_completed": false,
   "created_trap_id": null,
   "rodent_target": "rat",
   "identification_data": {
@@ -95,15 +92,16 @@ const session = await res.json();
 
 <Tabs>
   <Tab title="物种识别阶段">
-    用于写入 `rodent_target` 和 `identification_data`，并可选择性地推进到策略阶段：
+    用于写入 `rodent_target` 和 `identification_data`：
 
     ```json
     {
       "rodent_target": "rat",
-      "identification_data": { ... },
-      "advance_to_strategy": true
+      "identification_data": { ... }
     }
     ```
+
+    当识别阶段所需信息填写完整后，系统会自动推进到策略阶段。
   </Tab>
   <Tab title="策略阶段">
     用于写入工具和诱饵选择：
@@ -116,6 +114,8 @@ const session = await res.json();
       }
     }
     ```
+
+    当策略阶段所需信息填写完整后，系统会自动推进到位置侦查阶段。
   </Tab>
   <Tab title="位置侦查阶段">
     用于写入位置分析结果：
@@ -129,6 +129,8 @@ const session = await res.json();
       }
     }
     ```
+
+    当位置侦查阶段所需信息填写完整后，系统会自动推进到校准阶段。
   </Tab>
   <Tab title="校准阶段">
     用于写入校准检查结果：
@@ -141,6 +143,8 @@ const session = await res.json();
       }
     }
     ```
+
+    当校准阶段所需信息填写完整后，系统会自动将会话标记为完成状态。
   </Tab>
 </Tabs>
 
@@ -150,9 +154,10 @@ const session = await res.json();
   <Accordion title="只更新传入的字段">
     未在请求体中出现的字段一律保持不变。`identification_data` / `strategy_data` / `location_scout_data` / `calibration_data` **按字段整体替换**。
   </Accordion>
-  <Accordion title="advance_to_strategy 行为">
-    - 如果 `advance_to_strategy = true` 且当前 `current_stage = "identification"`：后端会将 `current_stage` 更新为 `"strategy"`
-    - 如果当前 `current_stage != "identification"`：忽略该标志（不报错，但不推进阶段）
+  <Accordion title="自动阶段推进">
+    - 当某个阶段所需的信息填写完整后，后端会自动将 `current_stage` 更新为下一阶段
+    - 阶段推进顺序：`identification` → `strategy` → `location` → `calibration` → `completed`
+    - 所处后续阶段时，若前面的阶段发来更新数据消息，则以最新数据为准更新数据库，但不会回退阶段
   </Accordion>
   <Accordion title="rodent_target 便利字段">
     建议总是与 `identification_data.ai_inference.rodent_target` 保持一致。如果未传 `rodent_target`，后端不会尝试从 `identification_data` 自动推断。

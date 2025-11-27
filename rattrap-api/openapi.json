@@ -657,10 +657,6 @@
             "description": "当前阶段",
             "enum": ["identification", "strategy", "location", "calibration", "completed"]
           },
-          "is_completed": {
-            "type": "boolean",
-            "description": "是否已完成"
-          },
           "created_trap_id": {
             "type": "string",
             "nullable": true,
@@ -718,10 +714,6 @@
           },
           "calibration_data": {
             "type": "object"
-          },
-          "advance_to_strategy": {
-            "type": "boolean",
-            "description": "是否推进到策略阶段"
           },
           "metadata": {
             "type": "object"
