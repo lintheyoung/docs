@@ -261,7 +261,7 @@
       "post": {
         "operationId": "createTrapFromSession",
         "summary": "从会话创建陷阱",
-        "description": "从一个已经走完布防流程的 setup session 中，创建一条真正的 Trap 实体。",
+        "description": "从一个已完成的 setup session 创建 Trap 实体。要求 current_stage 为 completed，且所有核心字段（name, location_desc, trap_type, bait_type, rodent_target）必须由用户提供。支持幂等性：如果 session 已创建过陷阱，直接返回已存在的陷阱。",
         "tags": ["Setup Sessions"],
         "parameters": [
           {
@@ -275,6 +275,7 @@
           }
         ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
@@ -285,11 +286,41 @@
         },
         "responses": {
           "200": {
-            "description": "成功创建陷阱",
+            "description": "成功创建陷阱（或返回已存在的陷阱）",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Trap"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求错误（SESSION_NOT_COMPLETED 或 MISSING_REQUIRED_FIELD）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session 不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "幂等键冲突",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -732,30 +763,54 @@
       },
       "CreateTrapFromSessionRequest": {
         "type": "object",
+        "description": "从会话创建陷阱的请求。所有核心字段都必须由用户提供。Session 的 current_stage 必须为 completed。",
+        "required": ["name", "location_desc", "trap_type", "bait_type", "rodent_target"],
         "properties": {
           "name": {
             "type": "string",
-            "description": "陷阱名称"
+            "description": "陷阱名称",
+            "example": "厨房 - 冰箱右侧"
           },
           "location_desc": {
             "type": "string",
-            "description": "位置描述"
+            "description": "位置描述",
+            "example": "冰箱右侧沿墙根，距墙角约 10cm"
           },
-          "metadata": {
-            "type": "object"
+          "trap_type": {
+            "type": "string",
+            "description": "陷阱类型",
+            "enum": ["snap_trap", "glue_board", "cage_trap", "electronic_trap", "other"]
+          },
+          "bait_type": {
+            "type": "string",
+            "description": "诱饵类型",
+            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "nuts", "grain", "other"]
+          },
+          "rodent_target": {
+            "type": "string",
+            "description": "目标鼠种",
+            "enum": ["rat", "mouse", "unknown"]
           },
           "status": {
             "type": "string",
-            "enum": ["active", "warning", "inactive"]
+            "description": "陷阱状态，默认为 active",
+            "enum": ["active", "inactive"],
+            "default": "active"
           },
           "calibration_override": {
             "type": "object",
+            "description": "校准覆盖选项，用于标记校准失败但用户接受的情况",
             "properties": {
               "quality": {
                 "type": "string",
+                "description": "校准质量",
                 "enum": ["passed", "failed_but_accepted"]
               }
             }
+          },
+          "metadata": {
+            "type": "object",
+            "description": "自定义元数据"
           }
         }
       },

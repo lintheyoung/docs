@@ -11,8 +11,16 @@ curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/setup-sessions/ss_1Qy
   -H "Idempotency-Key: trap-create-ss_1Qy8u8CZ7aQp98Xb5WJtR3-550e8400" \
   -d '{
     "name": "厨房 - 冰箱右侧",
+    "location_desc": "冰箱右侧沿墙根，距墙角约 10cm",
+    "trap_type": "snap_trap",
+    "bait_type": "peanut_butter",
+    "rodent_target": "rat",
+    "status": "active",
+    "calibration_override": {
+      "quality": "passed"
+    },
     "metadata": {
-      "calibration_quality": "passed"
+      "user_notes": "晚上听到这里有动静"
     }
   }'
 ```
@@ -28,7 +36,11 @@ const res = await fetch(
       "Idempotency-Key": `trap-create-${sessionId}-${crypto.randomUUID()}`
     },
     body: JSON.stringify({
-      name: "厨房 - 冰箱右侧"
+      name: "厨房 - 冰箱右侧",
+      location_desc: "冰箱右侧沿墙根，距墙角约 10cm",
+      trap_type: "snap_trap",
+      bait_type: "peanut_butter",
+      rodent_target: "rat"
     })
   }
 );
@@ -43,7 +55,7 @@ const trap = await res.json();
   "id": "trap_1RasJr2f9hQe8KmN",
   "object": "trap",
   "name": "厨房 - 冰箱右侧",
-  "location_desc": "冰箱右侧沿墙根，距墙角约 10cm，夹子垂直于墙，诱饵朝向墙角。",
+  "location_desc": "冰箱右侧沿墙根，距墙角约 10cm",
   "trap_type": "snap_trap",
   "bait_type": "peanut_butter",
   "rodent_target": "rat",
@@ -56,10 +68,33 @@ const trap = await res.json();
   "stats_misses": 0,
   "metadata": {
     "created_from_session": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
-    "calibration_quality": "passed"
+    "calibration_quality": "passed",
+    "user_notes": "晚上听到这里有动静"
   },
   "created": 1764039300,
   "updated": 1764039300
+}
+```
+
+```json 错误响应 - 会话未完成
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "SESSION_NOT_COMPLETED",
+    "message": "Setup session must be completed before creating a trap. Current stage: calibration",
+    "param": "id"
+  }
+}
+```
+
+```json 错误响应 - 缺少必填字段
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "MISSING_REQUIRED_FIELD",
+    "message": "name is required",
+    "param": "name"
+  }
 }
 ```
 </ResponseExample>
@@ -68,43 +103,90 @@ const trap = await res.json();
 
 从一个已经走完布防流程的 setup session 中，创建一条真正的 **Trap 实体**。
 
+<Warning>
+**前置条件：** Session 的 `current_stage` 必须为 `"completed"`，否则返回 400 错误。
+</Warning>
+
 通常在以下场景调用：
 - **CALIB_SUCCESS**（校准成功）点击「完成布防」
 - **CALIB_FAIL**（用户选择"跳过，先用这样"）点击「完成布防」
 
-<Info>
-  大部分信息从 `setup_sessions` 派生，因此请求体非常轻量，所有字段都是**可选**的。
-</Info>
+## 必填字段
+
+<Note>
+所有陷阱核心信息都需要由用户在请求中提供。
+</Note>
+
+| 字段 | 类型 | 必须 | 说明 |
+|-----|------|-----|------|
+| `name` | string | ✅ | 陷阱名称，如 "厨房 - 冰箱右侧" |
+| `location_desc` | string | ✅ | 位置描述，如 "冰箱右侧沿墙根，距墙角约 10cm" |
+| `trap_type` | string | ✅ | 陷阱类型：`snap_trap` / `glue_board` / `cage_trap` / `electronic_trap` / `other` |
+| `bait_type` | string | ✅ | 诱饵类型：`peanut_butter` / `cheese` / `bacon` / `chocolate` / `nuts` / `grain` / `other` |
+| `rodent_target` | string | ✅ | 目标鼠种：`rat` / `mouse` / `unknown` |
+| `status` | string | ❌ | 陷阱状态，默认 `"active"`，可选 `"inactive"` |
+| `calibration_override` | object | ❌ | 校准覆盖选项 |
+| `metadata` | object | ❌ | 自定义元数据 |
 
 ## 后端内部行为
 
 调用成功时，后端会执行以下操作：
 
 <Steps>
-  <Step title="读取 Session 数据">
-    从 session 中读取 `identification_data`、`strategy_data`、`location_scout_data`、`calibration_data` 等
+  <Step title="验证 Session 状态">
+    检查 `current_stage === "completed"`，否则返回 400 错误
+  </Step>
+  <Step title="检查幂等性">
+    如果 `created_trap_id` 已存在，直接返回已创建的陷阱（不会重复创建）
+  </Step>
+  <Step title="验证必填字段">
+    检查 `name`、`location_desc`、`trap_type`、`bait_type`、`rodent_target` 是否都已提供
   </Step>
   <Step title="创建 Trap 记录">
-    在 `traps` 表中插入新记录，包含 `trap_type`、`bait_type`、`rodent_target`、`status` 等
+    在 `traps` 表中插入新记录
   </Step>
   <Step title="记录部署事件">
-    在 `trap_events` 表中插入一条 "部署完成" 事件
+    在 `trap_events` 表中插入一条 `"deployment"` 事件
   </Step>
   <Step title="更新 Session">
-    设置 `created_trap_id`、`current_stage = "completed"`
+    设置 `created_trap_id` 为新创建的陷阱 ID
   </Step>
 </Steps>
 
 ## 幂等性
 
 <Warning>
-  **非常关键**：防止重复创建 trap。
+**非常关键**：防止重复创建 trap。
 </Warning>
+
+**两层幂等保护：**
+
+### 1. Session 级别幂等（内置）
+
+如果该 session 的 `created_trap_id` 已存在，直接返回已创建的陷阱，**不会重复创建**。
+
+```
+第一次调用: 创建陷阱 trap_xxx，返回 200
+第二次调用: 检测到 created_trap_id 已存在，返回已存在的 trap_xxx，200
+```
+
+### 2. 请求级别幂等（Idempotency-Key）
 
 推荐策略：
 - 前端在用户点击「完成布防」时生成一个 UUID 作为 `Idempotency-Key`
-- 如果同一个 `setup_session_id` 之前已经调用成功且 `created_trap_id` 已存在，服务端返回同一条 trap 对象
-- 使用相同的 `Idempotency-Key` 但请求体不同时，返回 `409` 错误
+- 相同 key + 相同 body → 返回相同结果
+- 相同 key + 不同 body → 返回 `409` 冲突错误
+
+## status 字段
+
+| 值 | 说明 |
+|---|---|
+| `active` | 活跃状态（默认值） |
+| `inactive` | 非活跃状态 |
+
+<Tip>
+用户可以直接创建 `inactive` 状态的陷阱，比如想先准备好但暂不启用。
+</Tip>
 
 ## calibration_override 选项
 
@@ -122,3 +204,23 @@ const trap = await res.json();
 |---|---|
 | `passed` | 校准通过 |
 | `failed_but_accepted` | 校准失败但用户接受 |
+
+此信息会存储在 `trap.metadata.calibration_quality` 中。
+
+## 错误响应
+
+| 场景 | HTTP 状态码 | Error Code |
+|-----|------------|------------|
+| Session 不存在 | 404 | `SESSION_NOT_FOUND` |
+| Session 未完成 | 400 | `SESSION_NOT_COMPLETED` |
+| 缺少必填字段 | 400 | `MISSING_REQUIRED_FIELD` |
+| 幂等键冲突 | 409 | `IDEMPOTENCY_ERROR` |
+
+## 时间字段初始化
+
+| 字段 | 初始值 |
+|-----|-------|
+| `last_checked_at` | 创建时间（部署即首次检查） |
+| `next_check_at` | 创建时间 + 3 天 |
+| `stats_catches` | 0 |
+| `stats_misses` | 0 |
