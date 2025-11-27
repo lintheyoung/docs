@@ -109,6 +109,40 @@ const session = await res.json();
 
 **重要：** `rodent_target` 在数据库中实际存储在 `identification_data.rodent_target`，响应时才提取到顶层方便前端使用。
 
+### initial_rodent_target 验证规则
+
+<Warning>
+`initial_rodent_target` 有严格的验证规则，不符合规则会返回 400 错误。
+</Warning>
+
+**有效值：**
+| 值 | 说明 |
+|---|---|
+| `"rat"` | 大鼠 |
+| `"mouse"` | 小家鼠 |
+| `"unknown"` | 尚不确定 |
+| `null` | 不指定（等同于不传该字段） |
+| 不传该字段 | 完全不提供该字段 |
+
+**无效值（会返回 400 错误）：**
+| 值 | 说明 |
+|---|---|
+| `""` | 空字符串 |
+| `" "` | 空白字符串 |
+| `"dog"` | 无效的枚举值 |
+
+**错误响应示例：**
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "VALIDATION_ERROR",
+    "message": "initial_rodent_target cannot be empty string",
+    "param": "initial_rodent_target"
+  }
+}
+```
+
 ## 幂等性
 
 对于"点击按钮发起"的操作，如果客户端可能因为网络重试同一个请求，建议使用 `Idempotency-Key`：

@@ -285,3 +285,41 @@ POST /setup-sessions/ss_xxx
 | `rat` | 大鼠（沟鼠、大褐家鼠等） |
 | `mouse` | 小家鼠 |
 | `unknown` | 尚不确定 |
+
+## rodent_target 验证规则
+
+<Warning>
+`rodent_target` 有严格的验证规则，不符合规则会返回 400 错误。
+</Warning>
+
+**有效值：**
+| 值 | 说明 |
+|---|---|
+| `"rat"` | 大鼠 |
+| `"mouse"` | 小家鼠 |
+| `"unknown"` | 尚不确定 |
+| `null` | 不指定（等同于不传该字段） |
+| 不传该字段 | 完全不提供该字段 |
+
+**无效值（会返回 400 错误）：**
+| 值 | 说明 |
+|---|---|
+| `""` | 空字符串 |
+| `" "` | 空白字符串 |
+| `"dog"` | 无效的枚举值 |
+
+**错误响应示例：**
+```json
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "VALIDATION_ERROR",
+    "message": "rodent_target cannot be empty string",
+    "param": "rodent_target"
+  }
+}
+```
+
+<Note>
+同样的验证规则也适用于 `identification_data.rodent_target`。
+</Note>

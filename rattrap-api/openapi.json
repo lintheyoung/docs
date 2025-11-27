@@ -628,7 +628,7 @@
           },
           "initial_rodent_target": {
             "type": "string",
-            "description": "初始目标鼠种",
+            "description": "初始目标鼠种。有效值：rat, mouse, unknown。不接受空字符串，空字符串会返回 400 VALIDATION_ERROR。",
             "enum": ["rat", "mouse", "unknown"]
           },
           "user_location_hint": {
@@ -705,7 +705,7 @@
         "properties": {
           "rodent_target": {
             "type": "string",
-            "description": "目标鼠种（会自动合并到 identification_data.rodent_target）",
+            "description": "目标鼠种（会自动合并到 identification_data.rodent_target）。有效值：rat, mouse, unknown。不接受空字符串，空字符串会返回 400 VALIDATION_ERROR。",
             "enum": ["rat", "mouse", "unknown"]
           },
           "identification_data": {
