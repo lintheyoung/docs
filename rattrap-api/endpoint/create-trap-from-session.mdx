@@ -60,19 +60,29 @@ const trap = await res.json();
   "bait_type": "peanut_butter",
   "rodent_target": "rat",
   "status": "active",
-  "deployment_media_id": "ma_calib_2_ok",
-  "last_check_media_id": "ma_calib_2_ok",
-  "last_checked_at": 1764039300,
-  "next_check_at": 1764298500,
+  "last_checked_at": null,
+  "next_check_at": 1733219200,
   "stats_catches": 0,
   "stats_misses": 0,
   "metadata": {
-    "created_from_session": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+    "source_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
     "calibration_quality": "passed",
     "user_notes": "晚上听到这里有动静"
   },
-  "created": 1764039300,
-  "updated": 1764039300
+  "created": 1732614400,
+  "updated": 1732614400
+}
+```
+
+```json 错误响应 - Session 不存在
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "SESSION_NOT_FOUND",
+    "message": "Setup session not found",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/setup-sessions"
+  }
 }
 ```
 
@@ -80,9 +90,10 @@ const trap = await res.json();
 {
   "error": {
     "type": "invalid_request_error",
-    "code": "SESSION_NOT_COMPLETED",
-    "message": "Setup session must be completed before creating a trap. Current stage: calibration",
-    "param": "id"
+    "code": "VALIDATION_ERROR",
+    "message": "Session must be completed before creating trap. Current stage: strategy",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/setup-sessions"
   }
 }
 ```
@@ -91,9 +102,22 @@ const trap = await res.json();
 {
   "error": {
     "type": "invalid_request_error",
-    "code": "MISSING_REQUIRED_FIELD",
-    "message": "name is required",
-    "param": "name"
+    "code": "VALIDATION_ERROR",
+    "message": "Missing required fields: name, location_desc",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/setup-sessions"
+  }
+}
+```
+
+```json 错误响应 - 无效枚举值
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "INVALID_TRAP_TYPE",
+    "message": "Invalid trap_type. Must be one of: snap_trap, glue_board, cage_trap, electronic_trap, other",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/setup-sessions"
   }
 }
 ```
@@ -104,46 +128,92 @@ const trap = await res.json();
 从一个已经走完布防流程的 setup session 中，创建一条真正的 **Trap 实体**。
 
 <Warning>
-**前置条件：** Session 的 `current_stage` 必须为 `"completed"`，否则返回 400 错误。
+**前置条件：**
+- Session 必须存在且属于当前用户
+- Session 的 `current_stage` 必须为 `"completed"`
+- 如果 Session 已经创建过陷阱（`created_trap_id` 不为空），会直接返回已存在的陷阱（幂等性）
 </Warning>
 
 通常在以下场景调用：
 - **CALIB_SUCCESS**（校准成功）点击「完成布防」
 - **CALIB_FAIL**（用户选择"跳过，先用这样"）点击「完成布防」
 
-## 必填字段
+## 请求参数
+
+### 必填字段
 
 <Note>
-所有陷阱核心信息都需要由用户在请求中提供。
+以下 5 个字段都是**必填**的，缺少任何一个都会返回 400 错误。
 </Note>
 
-| 字段 | 类型 | 必须 | 说明 |
-|-----|------|-----|------|
-| `name` | string | ✅ | 陷阱名称，如 "厨房 - 冰箱右侧" |
-| `location_desc` | string | ✅ | 位置描述，如 "冰箱右侧沿墙根，距墙角约 10cm" |
-| `trap_type` | string | ✅ | 陷阱类型：`snap_trap` / `glue_board` / `cage_trap` / `electronic_trap` / `other` |
-| `bait_type` | string | ✅ | 诱饵类型：`peanut_butter` / `cheese` / `bacon` / `chocolate` / `nuts` / `grain` / `other` |
-| `rodent_target` | string | ✅ | 目标鼠种：`rat` / `mouse` / `unknown` |
-| `status` | string | ❌ | 陷阱状态，默认 `"active"`，可选 `"inactive"` |
-| `calibration_override` | object | ❌ | 校准覆盖选项 |
-| `metadata` | object | ❌ | 自定义元数据 |
+| 字段 | 类型 | 说明 | 枚举值 |
+|-----|------|------|--------|
+| `name` | string | 陷阱名称 | - |
+| `location_desc` | string | 位置描述 | - |
+| `trap_type` | string | 陷阱类型 | `snap_trap`, `glue_board`, `cage_trap`, `electronic_trap`, `other` |
+| `bait_type` | string | 诱饵类型 | `peanut_butter`, `cheese`, `bacon`, `chocolate`, `nuts`, `grain`, `other` |
+| `rodent_target` | string | 目标鼠种 | `rat`, `mouse`, `unknown` |
+
+### 可选字段
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-----|------|--------|------|
+| `status` | string | `"active"` | 陷阱状态：`active` 或 `inactive` |
+| `calibration_override` | object | - | 校准覆盖选项 |
+| `calibration_override.quality` | string | - | 校准质量：`passed` 或 `failed_but_accepted` |
+| `metadata` | object | `{}` | 自定义元数据 |
+
+## 响应字段
+
+### Trap 对象
+
+| 字段 | 类型 | 说明 |
+|-----|------|------|
+| `id` | string | Trap ID，格式：`trap_xxx` |
+| `object` | string | 固定值 `"trap"` |
+| `name` | string | 陷阱名称 |
+| `location_desc` | string \| null | 位置描述 |
+| `trap_type` | string | 陷阱类型 |
+| `bait_type` | string | 诱饵类型 |
+| `rodent_target` | string | 目标鼠种 |
+| `status` | string | 陷阱状态 |
+| `last_checked_at` | integer \| null | 最后检查时间（初始为 null） |
+| `next_check_at` | integer \| null | 下次检查时间（创建时间 + 7 天） |
+| `stats_catches` | integer | 捕获次数统计（初始为 0） |
+| `stats_misses` | integer | 未捕获次数统计（初始为 0） |
+| `metadata` | object | 元数据 |
+| `created` | integer | 创建时间戳（秒） |
+| `updated` | integer | 更新时间戳（秒） |
+
+### metadata 结构
+
+```json
+{
+  "source_session_id": "ss_xxx",        // 来源 Session ID（自动添加）
+  "calibration_quality": "passed",       // 校准质量（自动添加）
+  ...customMetadata                      // 用户传入的自定义 metadata
+}
+```
 
 ## 后端内部行为
 
 调用成功时，后端会执行以下操作：
 
 <Steps>
-  <Step title="验证 Session 状态">
-    检查 `current_stage === "completed"`，否则返回 400 错误
+  <Step title="验证 Session 存在性">
+    检查 Session 是否存在且属于当前用户，否则返回 404 错误
   </Step>
   <Step title="检查幂等性">
     如果 `created_trap_id` 已存在，直接返回已创建的陷阱（不会重复创建）
+  </Step>
+  <Step title="验证 Session 状态">
+    检查 `current_stage === "completed"`，否则返回 400 错误
   </Step>
   <Step title="验证必填字段">
     检查 `name`、`location_desc`、`trap_type`、`bait_type`、`rodent_target` 是否都已提供
   </Step>
   <Step title="创建 Trap 记录">
-    在 `traps` 表中插入新记录
+    在 `traps` 表中插入新记录，自动初始化统计字段和时间字段
   </Step>
   <Step title="记录部署事件">
     在 `trap_events` 表中插入一条 `"deployment"` 事件
@@ -169,6 +239,10 @@ const trap = await res.json();
 第一次调用: 创建陷阱 trap_xxx，返回 200
 第二次调用: 检测到 created_trap_id 已存在，返回已存在的 trap_xxx，200
 ```
+
+<Note>
+幂等性行为会**忽略本次请求的参数**，直接返回已存在的陷阱。
+</Note>
 
 ### 2. 请求级别幂等（Idempotency-Key）
 
@@ -212,15 +286,50 @@ const trap = await res.json();
 | 场景 | HTTP 状态码 | Error Code |
 |-----|------------|------------|
 | Session 不存在 | 404 | `SESSION_NOT_FOUND` |
-| Session 未完成 | 400 | `SESSION_NOT_COMPLETED` |
-| 缺少必填字段 | 400 | `MISSING_REQUIRED_FIELD` |
+| Session 未完成 | 400 | `VALIDATION_ERROR` |
+| 缺少必填字段 | 400 | `VALIDATION_ERROR` |
+| 无效枚举值 | 400 | `INVALID_TRAP_TYPE` / `INVALID_BAIT_TYPE` / `INVALID_RODENT_TARGET` |
 | 幂等键冲突 | 409 | `IDEMPOTENCY_ERROR` |
 
-## 时间字段初始化
+## 自动初始化的字段
 
-| 字段 | 初始值 |
-|-----|-------|
-| `last_checked_at` | 创建时间（部署即首次检查） |
-| `next_check_at` | 创建时间 + 3 天 |
-| `stats_catches` | 0 |
-| `stats_misses` | 0 |
+以下字段由后端自动设置，前端无需提供：
+
+| 字段 | 初始值 | 说明 |
+|-----|-------|------|
+| `id` | 自动生成 | Trap ID，格式：`trap_xxx` |
+| `object` | `"trap"` | 对象类型标识 |
+| `last_checked_at` | `null` | 最后检查时间（还未检查） |
+| `next_check_at` | 创建时间 + 7 天 | 下次检查时间 |
+| `stats_catches` | `0` | 捕获次数统计 |
+| `stats_misses` | `0` | 未捕获次数统计 |
+| `created` | 创建时间戳 | Unix 时间戳（秒） |
+| `updated` | 更新时间戳 | Unix 时间戳（秒） |
+
+## 常见问题
+
+<AccordionGroup>
+  <Accordion title="为什么所有字段都必须由用户提供？">
+    为了确保数据准确性和用户确认。虽然 Session 中可能包含建议值，但最终的陷阱配置应该由用户明确确认后提供。
+  </Accordion>
+
+  <Accordion title="如果多次调用这个接口会怎样？">
+    支持幂等性。如果 Session 已经创建过陷阱，会直接返回已存在的陷阱，不会创建重复的。
+  </Accordion>
+
+  <Accordion title="next_check_at 为什么是 7 天后？">
+    这是一个建议值，表示陷阱应该在 7 天内检查一次。前端可以根据这个值提醒用户。
+  </Accordion>
+
+  <Accordion title="calibration_override 的作用是什么？">
+    用于标记校准失败但用户仍然接受的情况。这个信息会保存在 `trap.metadata.calibration_quality` 中。
+  </Accordion>
+
+  <Accordion title="创建陷阱后，Session 还能修改吗？">
+    可以。即使创建了陷阱，Session 仍然可以更新。但已创建的陷阱不会自动更新。
+  </Accordion>
+
+  <Accordion title="如果 Session 的 current_stage 不是 completed 怎么办？">
+    会返回 400 错误，提示 "Session must be completed before creating trap"。
+  </Accordion>
+</AccordionGroup>
