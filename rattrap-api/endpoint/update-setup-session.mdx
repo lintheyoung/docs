@@ -88,81 +88,195 @@ const session = await res.json();
 
 ## 使用说明
 
-这是一个**通用更新接口**，在不同阶段用于写入不同的数据：
+这是一个**通用更新接口**，用于更新布防会话的各个阶段数据。
+
+### 核心机制
+
+#### 1. rodent_target 存储方式
+
+**重要：** `rodent_target` 实际存储在 `identification_data.rodent_target` 中，数据库没有独立的 `rodent_target` 字段。
+
+前端可以用两种方式提供：
+- **方式一（推荐）：** 单独传 `rodent_target` 字段，后端会自动合并到 `identification_data.rodent_target`
+- **方式二：** 直接在 `identification_data` 中提供 `rodent_target`
+
+API 响应时，后端会自动从 `identification_data.rodent_target` 提取到顶层的 `rodent_target` 字段，方便前端使用。
+
+#### 2. 阶段推进逻辑
+
+**关键规则：提交哪个阶段的数据，就推进到下一个阶段。**
+
+- 提交 `identification_data` 或 `rodent_target` → 推进到 `strategy`
+- 提交 `strategy_data` → 推进到 `location`
+- 提交 `location_scout_data` → 推进到 `calibration`
+- 提交 `calibration_data` → 推进到 `completed`
+
+**特殊场景：**
+- 可以更新旧阶段的数据，但 `current_stage` 不会回退
+- 可以同时提交多个阶段的数据，会推进到优先级最高的阶段
+- 只更新 `metadata` 不会改变 `current_stage`
 
 <Tabs>
-  <Tab title="物种识别阶段">
-    用于写入 `rodent_target` 和 `identification_data`：
-
+  <Tab title="识别阶段 → Strategy">
+    **方式一：单独传 rodent_target（推荐）**
     ```json
     {
-      "rodent_target": "rat",
-      "identification_data": { ... }
+      "rodent_target": "rat"
     }
     ```
 
-    当识别阶段所需信息填写完整后，系统会自动推进到策略阶段。
+    **方式二：完整的 identification_data**
+    ```json
+    {
+      "identification_data": {
+        "rodent_target": "mouse",
+        "confidence": 0.95,
+        "detected_features": ["长尾巴", "小耳朵"],
+        "photo_url": "https://..."
+      }
+    }
+    ```
+
+    提交后 `current_stage` 会从 `"identification"` 推进到 `"strategy"`。
   </Tab>
-  <Tab title="策略阶段">
+
+  <Tab title="策略阶段 → Location">
     用于写入工具和诱饵选择：
 
     ```json
     {
       "strategy_data": {
         "trap_type": "snap_trap",
-        "bait_type": "peanut_butter"
+        "bait_type": "peanut_butter",
+        "alternative_baits": ["cheese", "bacon"],
+        "recommended_quantity": 3
       }
     }
     ```
 
-    当策略阶段所需信息填写完整后，系统会自动推进到位置侦查阶段。
+    提交后 `current_stage` 会从 `"strategy"` 推进到 `"location"`。
   </Tab>
-  <Tab title="位置侦查阶段">
+
+  <Tab title="位置侦查阶段 → Calibration">
     用于写入位置分析结果：
 
     ```json
     {
-      "location_media_id": "ma_room_123",
       "location_scout_data": {
-        "placement_text": "...",
-        "annotated_media_asset_id": "ma_room_annotated_456"
+        "location_description": "厨房角落",
+        "heatmap_url": "https://...",
+        "activity_level": "high",
+        "recommended_positions": [
+          { "x": 100, "y": 200, "confidence": 0.9 }
+        ]
       }
     }
     ```
 
-    当位置侦查阶段所需信息填写完整后，系统会自动推进到校准阶段。
+    提交后 `current_stage` 会从 `"location"` 推进到 `"calibration"`。
   </Tab>
-  <Tab title="校准阶段">
+
+  <Tab title="校准阶段 → Completed">
     用于写入校准检查结果：
 
     ```json
     {
-      "calibration_media_id": "ma_calib_789",
       "calibration_data": {
-        "attempts": [...]
+        "sensitivity": 0.8,
+        "trigger_threshold": 50,
+        "calibration_photo_url": "https://...",
+        "is_ready": true
       }
     }
     ```
 
-    当校准阶段所需信息填写完整后，系统会自动将会话标记为完成状态。
+    提交后 `current_stage` 会从 `"calibration"` 推进到 `"completed"`。
   </Tab>
 </Tabs>
 
 ## 更新规则
 
 <AccordionGroup>
-  <Accordion title="只更新传入的字段">
-    未在请求体中出现的字段一律保持不变。`identification_data` / `strategy_data` / `location_scout_data` / `calibration_data` **按字段整体替换**。
+  <Accordion title="字段更新规则">
+    - 未在请求体中出现的字段一律保持不变
+    - `identification_data` / `strategy_data` / `location_scout_data` / `calibration_data` **按字段整体替换**（不是增量合并）
+    - `metadata` 字段会与现有数据**合并**
   </Accordion>
-  <Accordion title="自动阶段推进">
-    - 当某个阶段所需的信息填写完整后，后端会自动将 `current_stage` 更新为下一阶段
-    - 阶段推进顺序：`identification` → `strategy` → `location` → `calibration` → `completed`
-    - 所处后续阶段时，若前面的阶段发来更新数据消息，则以最新数据为准更新数据库，但不会回退阶段
+
+  <Accordion title="阶段推进规则">
+    **核心：提交哪个阶段的数据，就推进到下一个阶段**
+
+    - 提交 `identification_data` 或 `rodent_target` → 推进到 `strategy`
+    - 提交 `strategy_data` → 推进到 `location`
+    - 提交 `location_scout_data` → 推进到 `calibration`
+    - 提交 `calibration_data` → 推进到 `completed`
+
+    **特殊情况：**
+    - 已在后续阶段时更新旧阶段数据：数据会更新，但阶段不会回退
+    - 同时提交多个阶段数据：推进到优先级最高的阶段
+    - 只提交 `metadata`：阶段不变
   </Accordion>
-  <Accordion title="rodent_target 便利字段">
-    建议总是与 `identification_data.ai_inference.rodent_target` 保持一致。如果未传 `rodent_target`，后端不会尝试从 `identification_data` 自动推断。
+
+  <Accordion title="rodent_target 管理">
+    **存储位置：** `identification_data.rodent_target`（数据库中没有独立的 `rodent_target` 字段）
+
+    **提交方式：**
+    - 方式一：`{"rodent_target": "rat"}` → 后端自动合并到 `identification_data.rodent_target`
+    - 方式二：`{"identification_data": {"rodent_target": "rat", ...}}` → 直接存储
+
+    **响应处理：** API 响应时自动从 `identification_data.rodent_target` 提取到顶层的 `rodent_target` 字段
   </Accordion>
 </AccordionGroup>
+
+## 特殊场景示例
+
+### 场景1：更新旧阶段数据
+```json
+// 当前在 strategy 阶段，想修改之前的 identification_data
+POST /setup-sessions/ss_xxx
+{
+  "identification_data": {
+    "rodent_target": "mouse",
+    "notes": "重新确认是老鼠"
+  }
+}
+
+// 结果：
+// - identification_data 被更新
+// - current_stage 保持不变（仍然是 "strategy"）
+// - rodent_target 响应字段会显示新值 "mouse"
+```
+
+### 场景2：同时更新多个阶段
+```json
+POST /setup-sessions/ss_xxx
+{
+  "identification_data": {
+    "rodent_target": "rat"
+  },
+  "strategy_data": {
+    "trap_type": "snap_trap"
+  }
+}
+
+// 结果：
+// - 两个字段都会更新
+// - current_stage 推进到优先级最高的阶段（strategy → location）
+```
+
+### 场景3：只更新 metadata
+```json
+POST /setup-sessions/ss_xxx
+{
+  "metadata": {
+    "user_notes": "这是一个测试"
+  }
+}
+
+// 结果：
+// - metadata 会与现有数据合并
+// - current_stage 不变
+```
 
 ## rodent_target 取值
 

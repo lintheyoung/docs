@@ -11,9 +11,11 @@ curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/setup-sessions \
   -H "Idempotency-Key: rattrap-setup-550e8400-e29b-41d4-a716-446655440000" \
   -d '{
     "source": "mobile_app",
+    "initial_rodent_target": "rat",
     "user_location_hint": {
       "country": "TW",
-      "city": "Taipei"
+      "city": "Taipei",
+      "environment": "apartment"
     },
     "metadata": {
       "started_from": "dashboard_fab"
@@ -31,9 +33,11 @@ const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/s
   },
   body: JSON.stringify({
     source: "mobile_app",
+    initial_rodent_target: "rat",
     user_location_hint: {
       country: "TW",
-      city: "Taipei"
+      city: "Taipei",
+      environment: "apartment"
     },
     metadata: {
       started_from: "dashboard_fab"
@@ -52,16 +56,22 @@ const session = await res.json();
   "id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
   "object": "setup_session",
   "current_stage": "identification",
-  "is_completed": false,
   "created_trap_id": null,
-  "rodent_target": null,
-  "identification_data": null,
+  "rodent_target": "rat",
+  "identification_data": {
+    "rodent_target": "rat",
+    "source": "user_hint"
+  },
   "strategy_data": null,
   "location_scout_data": null,
   "calibration_data": null,
-  "location_media_id": null,
-  "calibration_media_id": null,
   "metadata": {
+    "source": "mobile_app",
+    "user_location_hint": {
+      "country": "TW",
+      "city": "Taipei",
+      "environment": "apartment"
+    },
     "started_from": "dashboard_fab"
   },
   "created": 1764038400,
@@ -89,6 +99,15 @@ const session = await res.json();
 <Tip>
   所有字段都是可选的。最常见的调用可以是一个**空 body**：`POST /v1/setup-sessions {}`
 </Tip>
+
+### initial_rodent_target 说明
+
+如果在创建时提供了 `initial_rodent_target`（如 `"rat"` 或 `"mouse"`），后端会：
+1. 将其存储在 `identification_data.rodent_target` 中
+2. 同时设置 `identification_data.source = "user_hint"`
+3. API 响应时自动提取到顶层的 `rodent_target` 字段
+
+**重要：** `rodent_target` 在数据库中实际存储在 `identification_data.rodent_target`，响应时才提取到顶层方便前端使用。
 
 ## 幂等性
 

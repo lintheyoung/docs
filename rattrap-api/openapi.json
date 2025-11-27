@@ -210,7 +210,7 @@
       "post": {
         "operationId": "updateSetupSession",
         "summary": "更新布防会话",
-        "description": "更新一个已有的布防会话。用于写入识别阶段、策略阶段、位置阶段、校准阶段的数据。",
+        "description": "更新一个已有的布防会话。提交哪个阶段的数据，就推进到下一个阶段。rodent_target 实际存储在 identification_data.rodent_target 中。",
         "tags": ["Setup Sessions"],
         "parameters": [
           {
@@ -642,6 +642,7 @@
       },
       "SetupSession": {
         "type": "object",
+        "description": "布防会话对象。rodent_target 从 identification_data.rodent_target 提取到顶层方便使用。",
         "properties": {
           "id": {
             "type": "string",
@@ -665,11 +666,13 @@
           "rodent_target": {
             "type": "string",
             "nullable": true,
+            "description": "目标鼠种（从 identification_data.rodent_target 提取）",
             "enum": ["rat", "mouse", "unknown"]
           },
           "identification_data": {
             "type": "object",
-            "nullable": true
+            "nullable": true,
+            "description": "识别阶段数据（rodent_target 实际存储在这里）"
           },
           "strategy_data": {
             "type": "object",
@@ -698,25 +701,32 @@
       },
       "UpdateSetupSessionRequest": {
         "type": "object",
+        "description": "更新布防会话的请求。rodent_target 会自动合并到 identification_data.rodent_target。提交哪个阶段的数据就推进到下一阶段。",
         "properties": {
           "rodent_target": {
             "type": "string",
+            "description": "目标鼠种（会自动合并到 identification_data.rodent_target）",
             "enum": ["rat", "mouse", "unknown"]
           },
           "identification_data": {
-            "type": "object"
+            "type": "object",
+            "description": "识别阶段数据（提交后推进到 strategy 阶段）"
           },
           "strategy_data": {
-            "type": "object"
+            "type": "object",
+            "description": "策略阶段数据（提交后推进到 location 阶段）"
           },
           "location_scout_data": {
-            "type": "object"
+            "type": "object",
+            "description": "位置侦查阶段数据（提交后推进到 calibration 阶段）"
           },
           "calibration_data": {
-            "type": "object"
+            "type": "object",
+            "description": "校准阶段数据（提交后推进到 completed 阶段）"
           },
           "metadata": {
-            "type": "object"
+            "type": "object",
+            "description": "自定义元数据（会与现有数据合并，不影响阶段推进）"
           }
         }
       },
