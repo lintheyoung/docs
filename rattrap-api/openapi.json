@@ -257,7 +257,7 @@
         }
       }
     },
-    "/setup-sessions/{id}/create-trap": {
+    "/create-trap-from-session": {
       "post": {
         "operationId": "createTrapFromSession",
         "summary": "从会话创建陷阱",
@@ -265,8 +265,8 @@
         "tags": ["Setup Sessions"],
         "parameters": [
           {
-            "name": "id",
-            "in": "path",
+            "name": "session_id",
+            "in": "query",
             "required": true,
             "description": "Setup session ID",
             "schema": {

@@ -1,11 +1,12 @@
 ---
 title: '从会话创建陷阱'
-openapi: 'POST /setup-sessions/{id}/create-trap'
+openapi: 'POST /create-trap-from-session'
 ---
 
 <RequestExample>
 ```bash cURL
-curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/setup-sessions/ss_1Qy8u8CZ7aQp98Xb5WJtR3/create-trap \
+curl "https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/create-trap-from-session?session_id=ss_1Qy8u8CZ7aQp98Xb5WJtR3" \
+  -X POST \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vbHJzcHB4YXJoeHZjZmxvdWdicC5zdXBhYmFzZS5jbyIsInN1YiI6InVzZXItaWQtaGVyZSJ9.xxx" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: trap-create-ss_1Qy8u8CZ7aQp98Xb5WJtR3-550e8400" \
@@ -26,8 +27,9 @@ curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/setup-sessions/ss_1Qy
 ```
 
 ```javascript Node.js
+const sessionId = "ss_1Qy8u8CZ7aQp98Xb5WJtR3";
 const res = await fetch(
-  `https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/setup-sessions/${sessionId}/create-trap`,
+  `https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/create-trap-from-session?session_id=${sessionId}`,
   {
     method: "POST",
     headers: {
