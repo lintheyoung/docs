@@ -329,6 +329,26 @@
                 }
               }
             }
+          },
+          "400": {
+            "description": "请求参数错误（包括 rodent_target=unknown 时返回 UNKNOWN_RODENT_NOT_SUPPORTED）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -801,7 +821,8 @@
           },
           "rodent_target": {
             "type": "string",
-            "enum": ["rat", "mouse", "unknown"]
+            "description": "目标鼠种。只接受 rat 或 mouse，不支持 unknown（unknown 会返回 400 UNKNOWN_RODENT_NOT_SUPPORTED 错误）",
+            "enum": ["rat", "mouse"]
           },
           "media_asset_id": {
             "type": "string",

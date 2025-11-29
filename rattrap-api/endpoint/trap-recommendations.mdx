@@ -180,7 +180,19 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations 
   "error": {
     "type": "invalid_request_error",
     "code": "INVALID_RODENT_TARGET",
-    "message": "Invalid rodent_target. Must be one of: rat, mouse, unknown",
+    "message": "Invalid rodent_target. Must be one of: rat, mouse",
+    "param": "rodent_target",
+    "doc_url": "https://docs.rattrap.ai/api/trap-recommendations"
+  }
+}
+```
+
+```json 错误 - 无法推荐（rodent_target=unknown）
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "UNKNOWN_RODENT_NOT_SUPPORTED",
+    "message": "Cannot provide recommendations when rodent_target is 'unknown'. Please identify the rodent type first (rat or mouse) before requesting recommendations.",
     "param": "rodent_target",
     "doc_url": "https://docs.rattrap.ai/api/trap-recommendations"
   }
@@ -193,6 +205,18 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations 
     "type": "api_error",
     "code": "REQUEST_TIMEOUT",
     "message": "The recommendation generation took too long. Please try again.",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/trap-recommendations"
+  }
+}
+```
+
+```json 错误 - LLM 余额不足
+{
+  "error": {
+    "type": "api_error",
+    "code": "LLM_QUOTA_EXCEEDED",
+    "message": "LLM service quota exceeded. Please contact support or try again later.",
     "param": null,
     "doc_url": "https://docs.rattrap.ai/api/trap-recommendations"
   }
@@ -221,6 +245,15 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations 
     **必填字段：** `mode`、`rodent_target`
   </Tab>
 </Tabs>
+
+<Warning>
+**重要：rodent_target 必须明确**
+
+- `rodent_target` 只接受 `"rat"` 或 `"mouse"`
+- **不支持 `"unknown"`**：当老鼠种类未知时，LLM 无法做出有效的推荐
+- 如果传入 `"unknown"`，API 会返回 `400 UNKNOWN_RODENT_NOT_SUPPORTED` 错误
+- **建议流程**：先使用识别接口（如拍照上传）确定老鼠种类，再调用推荐接口
+</Warning>
 
 ## 用户偏好参数
 
@@ -414,9 +447,9 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations 
 
 | 字段 | 值 |
 |------|-----|
-| Email | `test@rattrap.ai` |
-| Password | `test123456` |
-| User ID | `00000000-0000-0000-0000-000000000001` |
+| Email | `test@example.com` |
+| Password | `test1234` |
+| User ID | 动态生成（每个 PR 环境独立） |
 
 #### 2. 测试 Media Asset IDs（可直接使用）
 
@@ -444,8 +477,8 @@ curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/auth/v1/token?grant_type=
   -H "apikey: YOUR_ANON_KEY" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "test@rattrap.ai",
-    "password": "test123456"
+    "email": "test@example.com",
+    "password": "test1234"
   }'
 ```
 
@@ -457,8 +490,8 @@ curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/auth/v1/token?grant_type=
   "expires_in": 3600,
   "refresh_token": "...",
   "user": {
-    "id": "00000000-0000-0000-0000-000000000001",
-    "email": "test@rattrap.ai"
+    "id": "dynamic-user-id",
+    "email": "test@example.com"
   }
 }
 ```
@@ -518,8 +551,8 @@ login_response = requests.post(
         "Content-Type": "application/json"
     },
     json={
-        "email": "test@rattrap.ai",
-        "password": "test123456"
+        "email": "test@example.com",
+        "password": "test1234"
     }
 )
 
