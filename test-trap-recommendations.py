@@ -146,6 +146,28 @@ def api_call(
     try:
         response_json = response.json()
         print(json.dumps(response_json, indent=2, ensure_ascii=False))
+
+        # 检查是否为 LLM_QUOTA_EXCEEDED 错误
+        if response.status_code in [429, 503]:
+            error_code = response_json.get('error', {}).get('code')
+            if error_code == 'LLM_QUOTA_EXCEEDED':
+                print()
+                print(f"{Colors.RED}{'=' * 70}{Colors.NC}")
+                print(f"{Colors.RED}❌ 致命错误: LLM 服务配额已用尽{Colors.NC}")
+                print(f"{Colors.RED}{'=' * 70}{Colors.NC}")
+                print()
+                print(f"{Colors.YELLOW}错误信息:{Colors.NC}")
+                print(f"  {response_json.get('error', {}).get('message', 'LLM quota exceeded')}")
+                print()
+                print(f"{Colors.YELLOW}建议操作:{Colors.NC}")
+                print(f"  1. 检查 OpenRouter 账户余额")
+                print(f"  2. 充值账户（建议至少 $50）")
+                print(f"  3. 联系运维团队处理")
+                print()
+                print(f"{Colors.YELLOW}测试已中止，避免继续消耗无效请求{Colors.NC}")
+                print()
+                sys.exit(1)
+
     except:
         print(response.text)
     print(f"{Colors.CYAN}{'━' * 70}{Colors.NC}")
