@@ -5,9 +5,9 @@ openapi: 'POST /create-trap-from-session'
 
 <RequestExample>
 ```bash cURL
-curl "https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/create-trap-from-session?session_id=ss_1Qy8u8CZ7aQp98Xb5WJtR3" \
+curl "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/create-trap-from-session?session_id=ss_1Qy8u8CZ7aQp98Xb5WJtR3" \
   -X POST \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vbHJzcHB4YXJoeHZjZmxvdWdicC5zdXBhYmFzZS5jbyIsInN1YiI6InVzZXItaWQtaGVyZSJ9.xxx" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: trap-create-ss_1Qy8u8CZ7aQp98Xb5WJtR3-550e8400" \
   -d '{
@@ -29,7 +29,7 @@ curl "https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/create-trap-from-ses
 ```javascript Node.js
 const sessionId = "ss_1Qy8u8CZ7aQp98Xb5WJtR3";
 const res = await fetch(
-  `https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/create-trap-from-session?session_id=${sessionId}`,
+  `https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/create-trap-from-session?session_id=${sessionId}`,
   {
     method: "POST",
     headers: {

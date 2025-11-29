@@ -5,8 +5,8 @@ openapi: 'POST /media-assets'
 
 <RequestExample>
 ```bash cURL
-curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/media-assets \
-  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vbHJzcHB4YXJoeHZjZmxvdWdicC5zdXBhYmFzZS5jbyIsInN1YiI6InVzZXItaWQtaGVyZSJ9.xxx" \
+curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
   -H "Content-Type: application/json" \
   -d '{
     "purpose": "setup",
@@ -20,7 +20,7 @@ curl https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/media-assets \
 
 ```javascript Node.js
 // 1. 创建媒体资源，获取上传 URL
-const res = await fetch("https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/media-assets", {
+const res = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets", {
   method: "POST",
   headers: {
     "Authorization": `Bearer ${accessToken}`,

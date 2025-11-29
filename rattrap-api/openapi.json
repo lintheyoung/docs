@@ -14,28 +14,12 @@
   },
   "servers": [
     {
-      "url": "https://lrsppxarhxvxcflougbp.supabase.co/functions/v1",
-      "description": "Supabase Edge Functions (Project 1)"
+      "url": "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1",
+      "description": "Supabase Edge Functions"
     },
     {
-      "url": "https://lrsppxarhxvxcflougbp.supabase.co",
-      "description": "Supabase Auth API (Project 1)"
-    },
-    {
-      "url": "https://pmaabhwdejdxkxnwkawx.supabase.co/functions/v1",
-      "description": "Supabase Edge Functions (Project 2)"
-    },
-    {
-      "url": "https://pmaabhwdejdxkxnwkawx.supabase.co",
-      "description": "Supabase Auth API (Project 2)"
-    },
-    {
-      "url": "https://stvgaevmyzlkhlkmbqxz.supabase.co/functions/v1",
-      "description": "Supabase Edge Functions (Project 3)"
-    },
-    {
-      "url": "https://stvgaevmyzlkhlkmbqxz.supabase.co",
-      "description": "Supabase Auth API (Project 3)"
+      "url": "https://vwinvkxxheuexvpvzibt.supabase.co",
+      "description": "Supabase Auth API"
     }
   ],
   "security": [
@@ -53,16 +37,8 @@
         "security": [{"apiKey": []}],
         "servers": [
           {
-            "url": "https://lrsppxarhxvxcflougbp.supabase.co",
-            "description": "Supabase Auth API (Project 1)"
-          },
-          {
-            "url": "https://pmaabhwdejdxkxnwkawx.supabase.co",
-            "description": "Supabase Auth API (Project 2)"
-          },
-          {
-            "url": "https://stvgaevmyzlkhlkmbqxz.supabase.co",
-            "description": "Supabase Auth API (Project 3)"
+            "url": "https://vwinvkxxheuexvpvzibt.supabase.co",
+            "description": "Supabase Auth API"
           }
         ],
         "parameters": [
