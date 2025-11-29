@@ -402,12 +402,199 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations 
 
 ## 测试资源
 
-### existing_trap 模式测试图片
-
-为了方便测试 `existing_trap` 模式（图片识别捕鼠器），我们提供了测试用的捕鼠器照片。
+### Preview 环境测试数据（推荐使用）
 
 <Note>
-**测试图片信息**
+**自动化测试数据 - 开箱即用**
+
+后端已在 Preview 环境配置好测试数据，每次创建或重新打开 PR 时会自动初始化。无需手动上传图片，可以直接使用以下固定的测试资源。
+</Note>
+
+#### 1. 测试用户账号
+
+| 字段 | 值 |
+|------|-----|
+| Email | `test@rattrap.ai` |
+| Password | `test123456` |
+| User ID | `00000000-0000-0000-0000-000000000001` |
+
+#### 2. 测试 Media Asset IDs（可直接使用）
+
+以下三个 ID 都指向后端预置的测试图片，已自动插入到 Preview 环境数据库：
+
+- `ma_test_trap_image_001`
+- `ma_test_trap_image_002`
+- `ma_test_trap_image_003`
+
+<Info>
+**测试图片内容**: 老鼠夹实拍照片（lockable_binder_mouse_trap.png）
+- **陷阱类型**: 弹簧夹或粘鼠板
+- **适用目标**: `mouse` (小鼠)
+- **存储位置**: 后端自动管理，无需手动上传
+</Info>
+
+---
+
+### 快速测试流程（Preview 环境）
+
+#### 步骤 1: 登录获取 JWT Token
+
+```bash
+curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/auth/v1/token?grant_type=password" \
+  -H "apikey: YOUR_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@rattrap.ai",
+    "password": "test123456"
+  }'
+```
+
+**响应示例**:
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "token_type": "bearer",
+  "expires_in": 3600,
+  "refresh_token": "...",
+  "user": {
+    "id": "00000000-0000-0000-0000-000000000001",
+    "email": "test@rattrap.ai"
+  }
+}
+```
+
+保存 `access_token` 用于后续 API 调用。
+
+#### 步骤 2: 测试 existing_trap 模式（使用预置 media_asset_id）
+
+```bash
+curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "existing_trap",
+    "rodent_target": "mouse",
+    "media_asset_id": "ma_test_trap_image_001"
+  }'
+```
+
+<Check>
+**无需上传图片** - 直接使用 `ma_test_trap_image_001`、`ma_test_trap_image_002` 或 `ma_test_trap_image_003` 即可测试
+</Check>
+
+#### 步骤 3: 测试 no_trap 模式
+
+```bash
+curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "no_trap",
+    "rodent_target": "rat",
+    "preferences": {
+      "avoid_killing": true,
+      "has_children_or_pets": true,
+      "budget_level": "medium"
+    }
+  }'
+```
+
+---
+
+### Python 自动化测试示例（Preview 环境）
+
+```python
+import requests
+
+# Preview 环境配置
+BASE_URL = "https://vwinvkxxheuexvpvzibt.supabase.co"
+ANON_KEY = "your_anon_key_here"
+
+# 1. 登录获取 token
+login_response = requests.post(
+    f"{BASE_URL}/auth/v1/token?grant_type=password",
+    headers={
+        "apikey": ANON_KEY,
+        "Content-Type": "application/json"
+    },
+    json={
+        "email": "test@rattrap.ai",
+        "password": "test123456"
+    }
+)
+
+token = login_response.json()["access_token"]
+print(f"✅ 登录成功，Token: {token[:20]}...")
+
+# 2. 测试 existing_trap 模式（使用预置的 media_asset_id）
+existing_trap_response = requests.post(
+    f"{BASE_URL}/functions/v1/trap-recommendations",
+    headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    },
+    json={
+        "mode": "existing_trap",
+        "rodent_target": "mouse",
+        "media_asset_id": "ma_test_trap_image_001"  # 固定的测试 ID
+    }
+)
+
+result = existing_trap_response.json()
+print(f"✅ 识别结果: {result['existing_trap']['detected_type']}")
+print(f"✅ 适配评分: {result['existing_trap']['suitability_score']}")
+
+# 3. 测试 no_trap 模式
+no_trap_response = requests.post(
+    f"{BASE_URL}/functions/v1/trap-recommendations",
+    headers={
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    },
+    json={
+        "mode": "no_trap",
+        "rodent_target": "rat",
+        "preferences": {
+            "avoid_killing": True,
+            "budget_level": "medium"
+        }
+    }
+)
+
+recommendations = no_trap_response.json()
+print(f"✅ 推荐数量: {len(recommendations['recommended_traps'])}")
+```
+
+---
+
+### 测试环境重点说明
+
+<Warning>
+**重要提示**
+
+1. **自动初始化**: 每次 PR 首次部署时，测试数据会自动插入，无需手动创建
+2. **固定 IDs**: 测试 media_asset_id 是固定的，可以直接写在测试脚本中
+3. **独立环境**: 每个 PR 都有独立的 Preview Branch，互不干扰
+4. **仅限测试**: 这些测试数据只在 Preview 环境有效，**生产环境不可用**
+5. **无需上传**: 不需要手动调用 create-media-asset API 上传图片
+</Warning>
+
+#### 可用的测试 Media Asset IDs
+
+| ID | 用途 | 状态 |
+|----|------|------|
+| `ma_test_trap_image_001` | existing_trap 模式测试 | ✅ 可用 |
+| `ma_test_trap_image_002` | existing_trap 模式测试 | ✅ 可用 |
+| `ma_test_trap_image_003` | existing_trap 模式测试 | ✅ 可用 |
+
+---
+
+### 本地测试图片（备用方案）
+
+如果需要测试图片上传流程，我们也提供了测试图片文件：
+
+<Note>
+**本地测试图片信息**
 - **文件名**: rat_tape.png
 - **图片内容**: 粘鼠板捕鼠器实拍照片
 - **文件大小**: 160 KB
@@ -416,7 +603,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations 
 - **适用目标**: `rat` (大鼠)
 </Note>
 
-### 测试流程
+### 完整测试流程（含图片上传）
 
 #### 步骤 1: 获取测试图片
 
