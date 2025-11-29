@@ -397,3 +397,171 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations 
 - `MEDIA_NOT_FOUND`: 提示用户重新上传照片
 - `VALIDATION_ERROR`: 根据 `param` 字段高亮对应的输入框
 </Warning>
+
+---
+
+## 测试资源
+
+### existing_trap 模式测试图片
+
+为了方便测试 `existing_trap` 模式（图片识别捕鼠器），我们提供了测试用的捕鼠器照片。
+
+<Note>
+**测试图片信息**
+- **文件名**: rat_tape.png
+- **图片内容**: 粘鼠板捕鼠器实拍照片
+- **文件大小**: 160 KB
+- **存放位置**: `rattrap-api/test-assets/rat_tape.png`
+- **陷阱类型**: `glue_board` (粘鼠板)
+- **适用目标**: `rat` (大鼠)
+</Note>
+
+### 测试流程
+
+#### 步骤 1: 获取测试图片
+
+从文档仓库获取测试图片：
+
+```bash
+# 方式 1: 从本地文档仓库复制
+cp rattrap-api/test-assets/rat_tape.png ./test_trap_image.png
+
+# 方式 2: 从 GitHub 下载（假设文档已发布）
+curl -O https://raw.githubusercontent.com/your-org/docs/main/rattrap-api/test-assets/rat_tape.png
+```
+
+#### 步骤 2: 上传图片获取 media_asset_id
+
+首先需要通过 [create-media-asset](/api/create-media-asset) 接口上传图片：
+
+```bash
+# 上传测试图片
+curl -X POST https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -F "file=@rat_tape.png" \
+  -F "asset_type=trap_image"
+```
+
+响应示例：
+```json
+{
+  "id": "ma_abc123xyz456",
+  "asset_type": "trap_image",
+  "storage_url": "https://...",
+  "created_at": 1764403600
+}
+```
+
+#### 步骤 3: 使用 media_asset_id 测试推荐接口
+
+使用获取到的 `media_asset_id` 测试捕鼠器识别：
+
+```bash
+curl -X POST https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "existing_trap",
+    "rodent_target": "rat",
+    "media_asset_id": "ma_abc123xyz456"
+  }'
+```
+
+**预期响应**：
+
+API 应该识别出这是一个 `glue_board`（粘鼠板），并给出适配性分析和推荐：
+
+```json
+{
+  "object": "trap_recommendation_result",
+  "mode": "existing_trap",
+  "rodent_target": "rat",
+  "existing_trap": {
+    "object": "existing_trap_analysis",
+    "media_asset_id": "ma_abc123xyz456",
+    "detected_type": "glue_board",
+    "is_suitable": true,
+    "suitability_score": 0.75,
+    "notes": "识别为粘鼠板。对大鼠有一定效果，但建议使用更大号的粘板或配合使用弹簧夹。"
+  },
+  "recommended_traps": [
+    {
+      "object": "trap_product",
+      "id": "trp_glue_large_01",
+      "trap_type": "glue_board",
+      "label": "加大号强力粘鼠板",
+      "description": "专为大鼠设计的超大粘板，粘性更强...",
+      "for_rodent": "rat",
+      "suitability_score": 0.90,
+      "recommended_reason": "比您现有的粘板面积更大，粘性更强，对大鼠捕获率更高"
+    }
+  ]
+}
+```
+
+### 测试注意事项
+
+<Warning>
+**重要提示**
+
+1. **media_asset_id 是一次性的**: 每次上传图片都会生成新的 ID，不能重复使用固定 ID
+2. **测试数据隔离**: 测试环境和生产环境的 media assets 是分开的
+3. **认证要求**: 测试时需要使用有效的 JWT Token
+4. **图片要求**:
+   - 格式：PNG, JPG, JPEG
+   - 大小：最大 5 MB
+   - 内容：必须包含清晰的捕鼠器图像
+</Warning>
+
+### 自动化测试示例
+
+如果你使用 Python 进行自动化测试，可以参考以下代码：
+
+```python
+import requests
+
+BASE_URL = "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1"
+AUTH_TOKEN = "your_jwt_token_here"
+
+# 1. 上传测试图片
+with open("rattrap-api/test-assets/rat_tape.png", "rb") as f:
+    upload_response = requests.post(
+        f"{BASE_URL}/media-assets",
+        files={"file": f},
+        data={"asset_type": "trap_image"},
+        headers={"Authorization": f"Bearer {AUTH_TOKEN}"}
+    )
+
+media_asset_id = upload_response.json()["id"]
+print(f"✅ 上传成功，media_asset_id: {media_asset_id}")
+
+# 2. 测试捕鼠器识别
+recommendation_response = requests.post(
+    f"{BASE_URL}/trap-recommendations",
+    json={
+        "mode": "existing_trap",
+        "rodent_target": "rat",
+        "media_asset_id": media_asset_id
+    },
+    headers={
+        "Authorization": f"Bearer {AUTH_TOKEN}",
+        "Content-Type": "application/json"
+    }
+)
+
+result = recommendation_response.json()
+print(f"✅ 识别结果：{result['existing_trap']['detected_type']}")
+print(f"✅ 适配评分：{result['existing_trap']['suitability_score']}")
+```
+
+### 测试图片预览
+
+测试图片内容如下（粘鼠板实拍）：
+
+![测试用粘鼠板图片](../test-assets/rat_tape.png)
+
+**图片说明**：
+- 捕鼠器类型：粘鼠板 (glue_board)
+- 拍摄角度：俯视 45 度角
+- 背景：室内地面
+- 用途：测试 existing_trap 模式的图片识别功能
