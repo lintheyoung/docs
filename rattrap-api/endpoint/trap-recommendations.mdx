@@ -438,33 +438,23 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations 
 ### Preview 环境测试数据（推荐使用）
 
 <Note>
-**自动化测试数据 - 开箱即用**
+**图片上传说明 - existing_trap 模式的图片来源**
 
-后端已在 Preview 环境配置好测试数据，每次创建或重新打开 PR 时会自动初始化。无需手动上传图片，可以直接使用以下固定的测试资源。
+`existing_trap` 模式需要提供现有捕鼠器的照片，支持以下两种方式上传图片：
+
+1. **通过 [media-assets 接口](/api/create-media-asset) 上传**（推荐）
+2. **直接在 HTTP 请求中包含图片数据**（Base64 编码）
+
+⚠️ **重要**: 后端不再预先准备测试图片，所有图片必须通过以上两种方式上传。
 </Note>
 
-#### 1. 测试用户账号
+#### 测试用户账号
 
 | 字段 | 值 |
 |------|-----|
 | Email | `test@example.com` |
 | Password | `test1234` |
 | User ID | 动态生成（每个 PR 环境独立） |
-
-#### 2. 测试 Media Asset IDs（可直接使用）
-
-以下三个 ID 都指向后端预置的测试图片，已自动插入到 Preview 环境数据库：
-
-- `ma_test_trap_image_001`
-- `ma_test_trap_image_002`
-- `ma_test_trap_image_003`
-
-<Info>
-**测试图片内容**: 老鼠夹实拍照片（lockable_binder_mouse_trap.png）
-- **陷阱类型**: 弹簧夹或粘鼠板
-- **适用目标**: `mouse` (小鼠)
-- **存储位置**: 后端自动管理，无需手动上传
-</Info>
 
 ---
 
@@ -498,7 +488,37 @@ curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/auth/v1/token?grant_type=
 
 保存 `access_token` 用于后续 API 调用。
 
-#### 步骤 2: 测试 existing_trap 模式（使用预置 media_asset_id）
+#### 步骤 2: 上传测试图片（使用 media-assets 接口）
+
+```bash
+# 2.1 创建媒体资源获取上传 URL
+MEDIA_RESPONSE=$(curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "purpose": "setup",
+    "content_type": "image/png",
+    "metadata": {}
+  }')
+
+# 提取 upload_url 和 media_asset_id
+UPLOAD_URL=$(echo $MEDIA_RESPONSE | jq -r '.upload_url')
+MEDIA_ID=$(echo $MEDIA_RESPONSE | jq -r '.id')
+
+# 2.2 上传图片文件
+curl -X PUT "$UPLOAD_URL" \
+  -H "Content-Type: image/png" \
+  --data-binary "@path/to/your/trap-image.png"
+
+# 2.3 记录 MEDIA_ID 用于后续步骤
+echo "media_asset_id: $MEDIA_ID"
+```
+
+<Check>
+**推荐使用 media-assets 接口** - 支持多种图片格式（JPEG/PNG/WebP），自动生成预签名 URL，安全可靠
+</Check>
+
+#### 步骤 3: 测试 existing_trap 模式（使用上传的 media_asset_id）
 
 ```bash
 curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations" \
@@ -507,15 +527,11 @@ curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recomme
   -d '{
     "mode": "existing_trap",
     "rodent_target": "mouse",
-    "media_asset_id": "ma_test_trap_image_001"
+    "media_asset_id": "'"$MEDIA_ID"'"
   }'
 ```
 
-<Check>
-**无需上传图片** - 直接使用 `ma_test_trap_image_001`、`ma_test_trap_image_002` 或 `ma_test_trap_image_003` 即可测试
-</Check>
-
-#### 步骤 3: 测试 no_trap 模式
+#### 步骤 4: 测试 no_trap 模式
 
 ```bash
 curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommendations" \
@@ -600,34 +616,12 @@ print(f"✅ 推荐数量: {len(recommendations['recommended_traps'])}")
 
 ---
 
-### 测试环境重点说明
-
-<Warning>
-**重要提示**
-
-1. **自动初始化**: 每次 PR 首次部署时，测试数据会自动插入，无需手动创建
-2. **固定 IDs**: 测试 media_asset_id 是固定的，可以直接写在测试脚本中
-3. **独立环境**: 每个 PR 都有独立的 Preview Branch，互不干扰
-4. **仅限测试**: 这些测试数据只在 Preview 环境有效，**生产环境不可用**
-5. **无需上传**: 不需要手动调用 create-media-asset API 上传图片
-</Warning>
-
-#### 可用的测试 Media Asset IDs
-
-| ID | 用途 | 状态 |
-|----|------|------|
-| `ma_test_trap_image_001` | existing_trap 模式测试 | ✅ 可用 |
-| `ma_test_trap_image_002` | existing_trap 模式测试 | ✅ 可用 |
-| `ma_test_trap_image_003` | existing_trap 模式测试 | ✅ 可用 |
-
 ---
 
-### 本地测试图片（备用方案）
-
-如果需要测试图片上传流程，我们也提供了测试图片文件：
+### 本地测试图片
 
 <Note>
-**本地测试图片信息**
+**测试图片信息**
 - **文件名**: rat_tape.png
 - **图片内容**: 粘鼠板捕鼠器实拍照片
 - **文件大小**: 160 KB
@@ -638,7 +632,21 @@ print(f"✅ 推荐数量: {len(recommendations['recommended_traps'])}")
 
 ### 完整测试流程（含图片上传）
 
-#### 步骤 1: 获取测试图片
+#### 步骤 1: 登录获取 JWT Token
+
+```bash
+curl -X POST "https://vwinvkxxheuexvpvzibt.supabase.co/auth/v1/token?grant_type=password" \
+  -H "apikey: YOUR_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "password": "test1234"
+  }'
+```
+
+保存返回的 `access_token` 用于后续步骤。
+
+#### 步骤 2: 获取测试图片
 
 从文档仓库获取测试图片：
 
@@ -650,29 +658,47 @@ cp rattrap-api/test-assets/rat_tape.png ./test_trap_image.png
 curl -O https://raw.githubusercontent.com/your-org/docs/main/rattrap-api/test-assets/rat_tape.png
 ```
 
-#### 步骤 2: 上传图片获取 media_asset_id
+#### 步骤 3: 上传图片获取 media_asset_id
 
-首先需要通过 [create-media-asset](/api/create-media-asset) 接口上传图片：
+通过 [create-media-asset](/api/create-media-asset) 接口上传图片：
 
 ```bash
-# 上传测试图片
-curl -X POST https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets \
+# 3.1 创建媒体资源，获取上传 URL
+MEDIA_RESPONSE=$(curl -X POST https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -F "file=@rat_tape.png" \
-  -F "asset_type=trap_image"
+  -H "Content-Type: application/json" \
+  -d '{
+    "purpose": "setup",
+    "content_type": "image/png",
+    "metadata": {"test": true}
+  }')
+
+# 3.2 提取 upload_url 和 media_asset_id
+UPLOAD_URL=$(echo $MEDIA_RESPONSE | jq -r '.upload_url')
+MEDIA_ID=$(echo $MEDIA_RESPONSE | jq -r '.id')
+
+# 3.3 上传图片文件到预签名 URL
+curl -X PUT "$UPLOAD_URL" \
+  -H "Content-Type: image/png" \
+  --data-binary "@rat_tape.png"
+
+# 3.4 确认上传成功
+echo "✅ media_asset_id: $MEDIA_ID"
 ```
 
-响应示例：
+响应示例（步骤 3.1）：
 ```json
 {
-  "id": "ma_abc123xyz456",
-  "asset_type": "trap_image",
-  "storage_url": "https://...",
-  "created_at": 1764403600
+  "id": "e6931f9d-63dd-4664-a914-930bb0c98e4f",
+  "object": "media_asset",
+  "purpose": "setup",
+  "upload_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/upload/sign/trap-media/...",
+  "url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/trap-media/...",
+  "created": 1764489204
 }
 ```
 
-#### 步骤 3: 使用 media_asset_id 测试推荐接口
+#### 步骤 4: 使用 media_asset_id 测试推荐接口
 
 使用获取到的 `media_asset_id` 测试捕鼠器识别：
 
@@ -683,7 +709,7 @@ curl -X POST https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-recommen
   -d '{
     "mode": "existing_trap",
     "rodent_target": "rat",
-    "media_asset_id": "ma_abc123xyz456"
+    "media_asset_id": "'"$MEDIA_ID"'"
   }'
 ```
 
