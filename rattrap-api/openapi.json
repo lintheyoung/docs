@@ -1237,17 +1237,22 @@
       },
       "CreateMediaAssetRequest": {
         "type": "object",
+        "required": ["purpose", "content_type", "metadata"],
         "properties": {
           "purpose": {
             "type": "string",
+            "description": "媒体用途",
             "enum": ["setup", "check", "evidence"]
           },
           "content_type": {
             "type": "string",
+            "description": "内容类型，支持的格式: image/jpeg, image/png, image/webp",
+            "enum": ["image/jpeg", "image/png", "image/webp"],
             "example": "image/jpeg"
           },
           "metadata": {
-            "type": "object"
+            "type": "object",
+            "description": "自定义元数据（如 stage, session_id 等）"
           }
         }
       },
@@ -1256,6 +1261,7 @@
         "properties": {
           "id": {
             "type": "string",
+            "description": "媒体资源 ID，格式: ma_xxx",
             "example": "ma_1PpTqQx2YwZv9kLb"
           },
           "object": {
@@ -1263,18 +1269,34 @@
             "enum": ["media_asset"]
           },
           "purpose": {
-            "type": "string"
+            "type": "string",
+            "description": "媒体用途"
+          },
+          "content_type": {
+            "type": "string",
+            "description": "内容类型"
           },
           "upload_url": {
             "type": "string",
-            "description": "预签名上传 URL"
+            "description": "预签名上传 URL（15分钟有效期）"
           },
           "url": {
             "type": "string",
             "description": "访问 URL"
           },
+          "status": {
+            "type": "string",
+            "description": "状态：pending（待上传）、ready（已就绪）",
+            "enum": ["pending", "ready"],
+            "example": "pending"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "自定义元数据"
+          },
           "created": {
-            "type": "integer"
+            "type": "integer",
+            "description": "创建时间戳（Unix timestamp）"
           }
         }
       },

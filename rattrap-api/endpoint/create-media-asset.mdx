@@ -65,6 +65,30 @@ console.log(`图片已上传: ${mediaAsset.id}`);
   "created": 1764038400
 }
 ```
+
+```json 错误响应 - 缺少必填字段
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "MISSING_REQUIRED_FIELD",
+    "message": "purpose is required",
+    "param": "purpose",
+    "doc_url": "https://docs.rattrap.ai/errors#missing_required_field"
+  }
+}
+```
+
+```json 错误响应 - 不支持的文件格式
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "UNSUPPORTED_FORMAT",
+    "message": "content_type must be one of: image/jpeg, image/png, image/webp",
+    "param": "content_type",
+    "doc_url": "https://docs.rattrap.ai/errors#unsupported_format"
+  }
+}
+```
 </ResponseExample>
 
 ## 使用说明
@@ -80,6 +104,18 @@ console.log(`图片已上传: ${mediaAsset.id}`);
   </Card>
 </CardGroup>
 
+## 请求参数
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `purpose` | string | ✅ | 媒体用途：`setup`（布防流程）/ `check`（检查）/ `evidence`（证据） |
+| `content_type` | string | ✅ | 内容类型：`image/jpeg` / `image/png` / `image/webp` |
+| `metadata` | object | ✅ | 自定义元数据（可以是空对象 `{}`） |
+
+<Warning>
+**所有字段都是必填的**。如果缺少任何字段，将返回 400 错误。`metadata` 可以传空对象 `{}`，但不能省略。
+</Warning>
+
 ## 典型使用流程
 
 <Steps>
@@ -94,6 +130,20 @@ console.log(`图片已上传: ${mediaAsset.id}`);
   </Step>
 </Steps>
 
+## 响应字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 媒体资源 ID，格式: `ma_xxx` |
+| `object` | string | 固定值 `"media_asset"` |
+| `purpose` | string | 媒体用途 |
+| `content_type` | string | 内容类型 |
+| `upload_url` | string | 预签名上传 URL（15分钟有效期） |
+| `url` | string | 访问 URL（处理后的图片地址） |
+| `status` | string | 状态：`pending`（待上传）/ `ready`（已就绪） |
+| `metadata` | object | 自定义元数据 |
+| `created` | integer | 创建时间戳（Unix timestamp） |
+
 ## purpose 参数说明
 
 | 值 | 说明 | 使用场景 |
@@ -102,16 +152,41 @@ console.log(`图片已上传: ${mediaAsset.id}`);
 | `check` | 检查照片 | 定期检查时拍摄的照片 |
 | `evidence` | 证据照片 | 捕获证据、损坏证据等 |
 
+## 支持的图片格式
+
+<CardGroup cols={3}>
+  <Card title="JPEG" icon="image">
+    `image/jpeg`
+
+    最常用格式，适合照片
+  </Card>
+  <Card title="PNG" icon="image">
+    `image/png`
+
+    支持透明背景
+  </Card>
+  <Card title="WebP" icon="image">
+    `image/webp`
+
+    现代格式，体积小
+  </Card>
+</CardGroup>
+
+<Warning>
+**不支持的格式**：`image/gif`、`image/svg+xml` 等其他格式会返回 400 错误。
+</Warning>
+
 ## 上传注意事项
 
 <Warning>
-  `upload_url` 有时效性，通常在 15 分钟内有效。请在获取后尽快完成上传。
+  `upload_url` 有时效性，通常在 **15 分钟**内有效。请在获取后尽快完成上传。
 </Warning>
 
 <Info>
-  支持的图片格式：`image/jpeg`、`image/png`、`image/webp`
-
-  建议图片大小不超过 10MB。
+  - **文件大小限制**：建议不超过 10MB
+  - **上传方法**：使用 `PUT` 请求上传到 `upload_url`
+  - **Content-Type**：必须与创建时指定的 `content_type` 一致
+  - **状态变化**：上传成功后，`status` 会从 `pending` 变为 `ready`
 </Info>
 
 ## 图片处理
