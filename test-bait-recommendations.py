@@ -644,10 +644,10 @@ def test_from_fridge_mode():
         check_field(data, "mode", "from_fridge", "模式")
         check_field_exists(data, "fridge_analysis", "冰箱分析结果")
 
-        # 检查 fridge_analysis 结构
+        # 检查 fridge_analysis 结构（后端返回的字段结构）
         if data.get("fridge_analysis"):
-            check_field_exists(data, "fridge_analysis.media_asset_id", "media_asset_id")
-            check_field_exists(data, "fridge_analysis.detected_foods", "detected_foods")
+            check_field_exists(data, "fridge_analysis.identified_foods", "identified_foods")
+            check_field_exists(data, "fridge_analysis.suitable_for_bait", "suitable_for_bait")
 
     # 测试 30: from_fridge 带 user_location
     print_test("from_fridge 带 user_location")

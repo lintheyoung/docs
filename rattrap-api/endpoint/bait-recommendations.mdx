@@ -121,23 +121,24 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/bait-recommendations 
   },
   "alternative_baits": [],
   "fridge_analysis": {
-    "object": "fridge_analysis",
-    "media_asset_id": "ma_1PkAbC23xyz",
-    "detected_foods": [
-      {
-        "id": "food_sausage_01",
-        "label": "香肠",
-        "category": "meat",
-        "confidence": 0.93
-      },
-      {
-        "id": "food_bread_01",
-        "label": "吐司面包",
-        "category": "grain",
-        "confidence": 0.81
-      }
+    "identified_foods": [
+      "香肠",
+      "培根",
+      "奶酪",
+      "吐司面包",
+      "鸡蛋",
+      "牛奶"
     ],
-    "chosen_food_id": "food_sausage_01"
+    "suitable_for_bait": [
+      "香肠",
+      "培根",
+      "奶酪"
+    ],
+    "not_recommended": [
+      "吐司面包（容易发霉）",
+      "鸡蛋（易碎且不吸引老鼠）",
+      "牛奶（液体不适合）"
+    ]
   },
   "created": 1764038900
 }
