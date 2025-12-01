@@ -424,3 +424,48 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/bait-recommendations 
 - 冰箱识别（含图片分析）可能需要 5-10 秒
 - 超过 30 秒会返回 `REQUEST_TIMEOUT` 错误
 </Note>
+
+---
+
+## 测试资源
+
+### 冰箱照片示例
+
+用于测试 `from_fridge` 模式的示例图片：
+
+<Frame>
+  <img src="/test-assets/fridge.jpg" alt="测试用冰箱照片" />
+</Frame>
+
+**使用方法**：
+1. 下载此图片到本地
+2. 通过 `POST /media-assets` 接口上传（`purpose: "bait"`）
+3. 使用返回的 `media_asset_id` 调用本接口
+
+**测试脚本示例**：
+```python
+# 1. 创建媒体资源
+response = requests.post(
+    f"{BASE_URL}/media-assets",
+    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    json={"purpose": "bait", "content_type": "image/jpeg", "metadata": {}}
+)
+media_id = response.json()['id']
+upload_url = response.json()['upload_url']
+
+# 2. 上传图片
+with open('fridge.jpg', 'rb') as f:
+    requests.put(upload_url, headers={"Content-Type": "image/jpeg"}, data=f)
+
+# 3. 调用诱饵推荐接口
+response = requests.post(
+    f"{BASE_URL}/bait-recommendations",
+    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    json={
+        "mode": "from_fridge",
+        "rodent_target": "rat",
+        "trap_type": "snap_trap",
+        "media_asset_id": media_id
+    }
+)
+```
