@@ -253,9 +253,11 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/bait-recommendations 
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        purpose: "bait",  // 用于诱饵推荐
+        purpose: "check",  // 使用 check 类型（诱饵推荐属于检查场景）
         content_type: "image/jpeg",
-        metadata: {}
+        metadata: {
+          usage: "bait_recommendation"
+        }
       })
     });
     const mediaAsset = await res.json();
@@ -439,7 +441,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/bait-recommendations 
 
 **使用方法**：
 1. 下载此图片到本地
-2. 通过 `POST /media-assets` 接口上传（`purpose: "bait"`）
+2. 通过 `POST /media-assets` 接口上传（`purpose: "check"`）
 3. 使用返回的 `media_asset_id` 调用本接口
 
 **测试脚本示例**：
@@ -448,7 +450,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/bait-recommendations 
 response = requests.post(
     f"{BASE_URL}/media-assets",
     headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    json={"purpose": "bait", "content_type": "image/jpeg", "metadata": {}}
+    json={"purpose": "check", "content_type": "image/jpeg", "metadata": {"usage": "bait_recommendation"}}
 )
 media_id = response.json()['id']
 upload_url = response.json()['upload_url']
