@@ -451,3 +451,48 @@ const analysis = await res.json();
 
 这样同一个 setup session 中对同一张照片的多次分析会复用结果。
 </Tip>
+
+---
+
+## 测试资源
+
+### 房间照片示例
+
+用于测试位置分析的示例图片：
+
+<Frame>
+  <img src="/test-assets/room.jpg" alt="测试用房间照片" />
+</Frame>
+
+**使用方法**：
+1. 下载此图片到本地
+2. 通过 `POST /media-assets` 接口上传（`purpose: "setup"`）
+3. 使用返回的 `media_asset_id` 调用本接口
+
+**测试脚本示例**：
+```python
+# 1. 创建媒体资源
+response = requests.post(
+    f"{BASE_URL}/media-assets",
+    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    json={"purpose": "setup", "content_type": "image/jpeg", "metadata": {"usage": "location_analysis"}}
+)
+media_id = response.json()['id']
+upload_url = response.json()['upload_url']
+
+# 2. 上传图片
+with open('room.jpg', 'rb') as f:
+    requests.put(upload_url, headers={"Content-Type": "image/jpeg"}, data=f)
+
+# 3. 调用位置分析接口
+response = requests.post(
+    f"{BASE_URL}/location-analyses",
+    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    json={
+        "media_asset_id": media_id,
+        "rodent_target": "rat",
+        "trap_type": "snap_trap",
+        "options": {"max_zones": 2, "language": "zh-CN"}
+    }
+)
+```
