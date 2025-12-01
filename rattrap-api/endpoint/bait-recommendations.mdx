@@ -142,6 +142,78 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/bait-recommendations 
   "created": 1764038900
 }
 ```
+
+```json 错误 - 缺少必填字段
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "VALIDATION_ERROR",
+    "message": "Missing required field: media_asset_id is required when mode=from_fridge",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/bait-recommendations"
+  }
+}
+```
+
+```json 错误 - 无效枚举值
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "INVALID_RODENT_TARGET",
+    "message": "Invalid rodent_target. Must be one of: rat, mouse, unknown",
+    "param": "rodent_target",
+    "doc_url": "https://docs.rattrap.ai/api/bait-recommendations"
+  }
+}
+```
+
+```json 错误 - LLM 服务失败
+{
+  "error": {
+    "type": "api_error",
+    "code": "LLM_SERVICE_ERROR",
+    "message": "Failed to generate bait recommendations. Please try again.",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/bait-recommendations"
+  }
+}
+```
+
+```json 错误 - 冰箱照片无法识别
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "FRIDGE_RECOGNITION_FAILED",
+    "message": "Unable to identify suitable food items from the provided image. Please provide a clearer photo of your fridge or food storage.",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/bait-recommendations"
+  }
+}
+```
+
+```json 错误 - Media Asset 不存在
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "MEDIA_NOT_FOUND",
+    "message": "The specified media_asset_id does not exist or does not belong to the current user",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/bait-recommendations"
+  }
+}
+```
+
+```json 错误 - LLM 余额不足
+{
+  "error": {
+    "type": "api_error",
+    "code": "LLM_QUOTA_EXCEEDED",
+    "message": "LLM service quota exceeded. Please contact support or try again later.",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/bait-recommendations"
+  }
+}
+```
 </ResponseExample>
 
 ## 使用说明
@@ -162,6 +234,96 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/bait-recommendations 
     - 返回识别结果和推荐
   </Tab>
 </Tabs>
+
+---
+
+## 图片上传流程（from_fridge 模式）
+
+当使用 `mode = "from_fridge"` 时，需要先上传冰箱照片：
+
+<Steps>
+  <Step title="创建媒体资源">
+    调用 `POST /media-assets` 创建媒体资源并获取 `upload_url`
+
+    ```javascript
+    const res = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        purpose: "bait",  // 用于诱饵推荐
+        content_type: "image/jpeg",
+        metadata: {}
+      })
+    });
+    const mediaAsset = await res.json();
+    ```
+  </Step>
+
+  <Step title="上传图片到预签名 URL">
+    使用返回的 `upload_url` 上传图片
+
+    ```javascript
+    await fetch(mediaAsset.upload_url, {
+      method: "PUT",
+      headers: { "Content-Type": "image/jpeg" },
+      body: imageBlob
+    });
+    ```
+  </Step>
+
+  <Step title="调用诱饵推荐接口">
+    使用 `media_asset_id` 调用本接口
+
+    ```javascript
+    const baitRes = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/bait-recommendations", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        mode: "from_fridge",
+        rodent_target: "rat",
+        trap_type: "snap_trap",
+        media_asset_id: mediaAsset.id,  // 使用上传的图片 ID
+        limit: 3
+      })
+    });
+    ```
+  </Step>
+</Steps>
+
+<Note>
+**关于图片上传的重要说明**
+
+1. **必须先创建 media asset**：不能直接传 media_asset_id，必须先通过 `POST /media-assets` 接口创建资源
+2. **预签名 URL 有效期**：upload_url 有 15 分钟有效期，需要在创建后及时上传
+3. **认证要求**：media asset 和用户绑定，只能使用自己上传的图片
+</Note>
+
+---
+
+## 必填字段说明
+
+<Warning>
+**不同模式的必填字段要求**
+
+### standard 模式
+- ✅ `mode` = "standard"
+- ✅ `rodent_target` (rat / mouse / unknown)
+- ✅ `trap_type` (snap_trap / glue_board / cage_trap / electronic_trap / other)
+
+### from_fridge 模式
+- ✅ `mode` = "from_fridge"
+- ✅ `rodent_target`
+- ✅ `trap_type`
+- ✅ `media_asset_id` **（from_fridge 模式时必填）**
+
+缺少必填字段会返回 `400 VALIDATION_ERROR`
+</Warning>
 
 ## 诱饵类型说明
 
@@ -213,3 +375,52 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/bait-recommendations 
 <ParamField body="preferences.easy_to_clean" type="boolean">
   偏好不太黏、清理方便的诱饵
 </ParamField>
+
+---
+
+## 错误响应
+
+| 场景 | HTTP 状态码 | Error Code | 说明 |
+|-----|------------|------------|------|
+| LLM 服务失败 | 503 | `LLM_SERVICE_ERROR` | AI 推荐服务暂时不可用，请稍后重试 |
+| LLM 余额不足 | 503 | `LLM_QUOTA_EXCEEDED` | AI 服务配额已用尽，请联系技术支持 |
+| 冰箱照片无法识别 | 400 | `FRIDGE_RECOGNITION_FAILED` | 无法从照片中识别适合的食物，建议重新拍摄更清晰的照片 |
+| Media Asset 不存在 | 404 | `MEDIA_NOT_FOUND` | 照片不存在或不属于当前用户 |
+| 缺少必填字段 | 400 | `VALIDATION_ERROR` | 请求参数不完整 |
+| 无效枚举值 | 400 | `INVALID_RODENT_TARGET` 等 | 参数值不在允许的枚举范围内 |
+| 请求超时 | 504 | `REQUEST_TIMEOUT` | AI 处理超时，请简化请求或稍后重试 |
+| 未授权访问 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
+
+<Warning>
+**前端错误处理建议：**
+- `LLM_SERVICE_ERROR` / `LLM_QUOTA_EXCEEDED` / `REQUEST_TIMEOUT`: 显示"服务繁忙，请稍后重试"，提供重试按钮
+- `FRIDGE_RECOGNITION_FAILED`: 提示用户"照片不清晰，请重新拍摄冰箱照片"，返回拍照界面
+- `MEDIA_NOT_FOUND`: 提示用户重新上传照片
+- `VALIDATION_ERROR`: 根据 `param` 字段高亮对应的输入框
+- `UNAUTHORIZED`: 引导用户重新登录
+</Warning>
+
+---
+
+## AI 推荐逻辑说明
+
+<Note>
+**本接口使用 LLM（大语言模型）生成推荐**
+
+### 推荐考虑因素
+1. **目标鼠种** (rodent_target)：rat / mouse 有不同的食物偏好
+2. **陷阱类型** (trap_type)：不同陷阱适合不同诱饵形态（液体、固体、粘性等）
+3. **地理位置** (user_location)：考虑当地气候和食物可获得性
+4. **用户偏好** (preferences)：避免异味、腐败风险、清洁难度等
+5. **冰箱内容** (from_fridge 模式)：从用户现有食材中推荐
+
+### 推荐质量
+- 每个诱饵都有 `suitability_score`（0-1 适配度评分）
+- 考虑 `spoilage_risk`（腐败风险）和 `recommended_interval_hours`（检查间隔）
+- 提供详细的 `usage_tips`（使用技巧）和 `safety_notes`（安全提示）
+
+### 性能说明
+- 标准推荐通常在 2-5 秒内返回
+- 冰箱识别（含图片分析）可能需要 5-10 秒
+- 超过 30 秒会返回 `REQUEST_TIMEOUT` 错误
+</Note>
