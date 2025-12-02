@@ -402,6 +402,32 @@ const check = await res.json();
 
 ---
 
+## 响应字段详解
+
+### annotated_media_asset_id
+
+<ResponseField name="annotated_media_asset_id" type="string | null">
+  标注问题点后的图片资源 ID。
+
+  - **有标注图片时**：返回新生成的 media asset ID，可通过存储 URL 访问
+  - **无标注图片时**：返回 `null`（当 `need_annotated_image: false` 或标注生成失败时）
+
+  **标注内容包括：**
+  - 🔲 **边界框**：框出陷阱位置和问题区域
+  - ➡️ **箭头**：指示正确的调整方向
+  - 📝 **文字说明**：简短的问题描述（如"距墙太远"）
+
+  **获取标注图片 URL：**
+  ```javascript
+  if (check.annotated_media_asset_id) {
+    const annotatedUrl = `https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/${check.annotated_media_asset_id}`;
+    showAnnotatedImage(annotatedUrl);
+  }
+  ```
+</ResponseField>
+
+---
+
 ## issues 结构详解
 
 每个 issue 表示一个具体的问题：
@@ -425,14 +451,43 @@ const check = await res.json();
 </ResponseField>
 
 <ResponseField name="issues[].metrics" type="object">
-  定量信息，例如实际距离 vs 推荐距离
+  定量信息，结构根据 issue code 不同而变化。以下是各类问题的 metrics 示例：
 
+  **距离问题 (`too_far_from_wall`)：**
   ```json
   {
     "distance_to_wall_cm": 8,
     "recommended_max_distance_cm": 1
   }
   ```
+
+  **方向问题 (`wrong_orientation`, `suboptimal_orientation`)：**
+  ```json
+  {
+    "angle_deviation_deg": 20,
+    "recommended_orientation": "perpendicular_to_wall"
+  }
+  ```
+
+  **诱饵问题 (`bait_position_suboptimal`)：**
+  ```json
+  {
+    "bait_visibility_score": 0.3,
+    "recommended_position": "center_of_trigger"
+  }
+  ```
+
+  **障碍物问题 (`obstruction_detected`)：**
+  ```json
+  {
+    "obstruction_type": "furniture",
+    "clearance_needed_cm": 15
+  }
+  ```
+
+  <Info>
+    `metrics` 是动态结构，前端应优雅处理未知字段。建议以 `message` 和 `suggestion` 为主要展示内容。
+  </Info>
 </ResponseField>
 
 <ResponseField name="issues[].suggestion" type="string">
@@ -471,7 +526,10 @@ const check = await res.json();
 </ParamField>
 
 <ParamField body="options.need_annotated_image" type="boolean" default="true">
-  是否生成标注问题点的图片
+  是否生成标注问题点的图片。
+
+  - 设为 `true`：AI 会在原图上绘制标注（边界框、箭头、文字说明），结果存储在 `annotated_media_asset_id`
+  - 设为 `false`：不生成标注图片，`annotated_media_asset_id` 返回 `null`，可节省处理时间
 </ParamField>
 
 <ParamField body="options.tolerance" type="string" default="normal">
@@ -482,18 +540,34 @@ const check = await res.json();
 
 ## location_context 参数
 
-可以传入上一阶段 `location_scout_data` 的核心内容，方便 AI 对比：
+可以传入上一阶段 `location_scout_data` 的核心内容，方便 AI 对比实际布置与推荐位置：
+
+<ResponseField name="location_context.recommended_zone_id" type="string">
+  上一阶段推荐的区域 ID，例如 `zone_A`
+</ResponseField>
+
+<ResponseField name="location_context.recommended_description" type="string">
+  推荐位置的文字描述，例如 "冰箱右侧沿墙，距墙角约 10cm，夹子垂直于墙。"
+</ResponseField>
+
+<ResponseField name="location_context.recommended_distance_to_wall_cm" type="number">
+  推荐的距墙距离（厘米），通常为 0（贴墙）
+</ResponseField>
+
+**请求示例：**
 
 ```json
 {
-  "recommended_zone_id": "zone_A",
-  "recommended_description": "冰箱右侧沿墙，距墙角约 10cm，夹子垂直于墙。",
-  "recommended_distance_to_wall_cm": 0
+  "location_context": {
+    "recommended_zone_id": "zone_A",
+    "recommended_description": "冰箱右侧沿墙，距墙角约 10cm，夹子垂直于墙。",
+    "recommended_distance_to_wall_cm": 0
+  }
 }
 ```
 
 <Info>
-  该字段是完全可选的，如果不传，AI 仅凭当前照片来做判断。传入后 AI 可以对比推荐位置和实际位置。
+  该字段是完全可选的，如果不传，AI 仅凭当前照片来做判断。传入后 AI 可以对比推荐位置和实际位置，提供更精确的反馈。
 </Info>
 
 ---

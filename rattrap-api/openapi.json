@@ -1127,37 +1127,64 @@
         "required": ["media_asset_id"],
         "properties": {
           "setup_session_id": {
-            "type": "string"
+            "type": "string",
+            "description": "关联的布防会话 ID，便于后续追踪"
           },
           "media_asset_id": {
             "type": "string",
-            "description": "校准照片 ID"
+            "description": "校准照片 ID（必填），必须先通过 POST /media-assets 上传"
           },
           "rodent_target": {
-            "type": "string"
+            "type": "string",
+            "description": "目标鼠种（推荐），帮助 AI 判断陷阱大小是否合适",
+            "enum": ["rat", "mouse", "unknown"]
           },
           "trap_type": {
-            "type": "string"
+            "type": "string",
+            "description": "陷阱类型（推荐），帮助 AI 进行针对性检查",
+            "enum": ["snap_trap", "glue_board", "cage_trap", "electronic_trap", "other"]
           },
           "bait_type": {
-            "type": "string"
+            "type": "string",
+            "description": "诱饵类型（推荐），帮助 AI 检查诱饵位置和状态",
+            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "seeds", "other", "none"]
           },
           "location_context": {
-            "type": "object"
+            "type": "object",
+            "description": "上一阶段的推荐位置信息，帮助 AI 对比实际布置",
+            "properties": {
+              "recommended_zone_id": {
+                "type": "string",
+                "description": "推荐区域 ID"
+              },
+              "recommended_description": {
+                "type": "string",
+                "description": "推荐位置描述"
+              },
+              "recommended_distance_to_wall_cm": {
+                "type": "number",
+                "description": "推荐距墙距离（厘米）"
+              }
+            }
           },
           "options": {
             "type": "object",
             "properties": {
               "language": {
-                "type": "string"
+                "type": "string",
+                "description": "返回文案的语言",
+                "default": "zh-CN"
               },
               "need_annotated_image": {
                 "type": "boolean",
+                "description": "是否生成标注问题点的图片。设为 false 时 annotated_media_asset_id 返回 null",
                 "default": true
               },
               "tolerance": {
                 "type": "string",
-                "enum": ["normal", "strict"]
+                "description": "对布置完美度的容忍度。normal 允许轻微偏差，strict 要求精确布置",
+                "enum": ["normal", "strict"],
+                "default": "normal"
               }
             }
           }
@@ -1171,67 +1198,100 @@
             "enum": ["calibration_check"]
           },
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "校准检查 ID，格式: calib_xxx"
           },
           "media_asset_id": {
-            "type": "string"
+            "type": "string",
+            "description": "原始校准照片 ID"
           },
           "annotated_media_asset_id": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "标注问题点后的图片 ID。当 need_annotated_image=false 或标注生成失败时为 null"
           },
           "is_correct": {
             "type": "boolean",
             "description": "布置是否合格"
           },
           "confidence": {
-            "type": "number"
+            "type": "number",
+            "description": "AI 对判断结果的置信度（0-1）",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "placement_match_score": {
+            "type": "number",
+            "description": "布置与最佳实践的匹配分数（0-1）",
+            "minimum": 0,
+            "maximum": 1
           },
           "issues": {
             "type": "array",
+            "description": "检测到的问题列表",
             "items": {
               "$ref": "#/components/schemas/CalibrationIssue"
             }
           },
           "advice_text": {
             "type": "string",
-            "description": "综合建议文案"
+            "description": "综合建议文案，适合直接显示给用户"
           },
           "recommended_actions": {
             "type": "array",
+            "description": "推荐操作列表，可映射到 UI 按钮",
             "items": {
               "type": "object",
               "properties": {
-                "code": { "type": "string" },
-                "label": { "type": "string" },
-                "details": { "type": "string" },
-                "priority": { "type": "integer" }
+                "code": {
+                  "type": "string",
+                  "description": "操作代码，如 move_closer_to_wall, rotate_trap, add_bait 等"
+                },
+                "label": {
+                  "type": "string",
+                  "description": "操作的简短标签，适合用作按钮文案"
+                },
+                "details": {
+                  "type": "string",
+                  "description": "详细说明文案"
+                },
+                "priority": {
+                  "type": "integer",
+                  "description": "优先级，1 为最高"
+                }
               }
             }
           },
           "created": {
-            "type": "integer"
+            "type": "integer",
+            "description": "创建时间（Unix 时间戳）"
           }
         }
       },
       "CalibrationIssue": {
         "type": "object",
+        "description": "校准检查发现的单个问题",
         "properties": {
           "code": {
-            "type": "string"
+            "type": "string",
+            "description": "问题代码，如 too_far_from_wall, wrong_orientation, bait_missing 等"
           },
           "message": {
-            "type": "string"
+            "type": "string",
+            "description": "问题的简短描述（英文）"
           },
           "severity": {
             "type": "string",
+            "description": "严重程度：error=必须修正, warning=建议优化, info=可忽略",
             "enum": ["info", "warning", "error"]
           },
           "suggestion": {
-            "type": "string"
+            "type": "string",
+            "description": "针对该问题的修正建议（本地化语言）"
           },
           "metrics": {
-            "type": "object"
+            "type": "object",
+            "description": "定量信息，结构根据问题类型变化。如距离问题包含 distance_to_wall_cm，方向问题包含 angle_deviation_deg"
           }
         }
       },
