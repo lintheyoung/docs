@@ -412,10 +412,8 @@ const check = await res.json();
   - **有标注图片时**：返回新生成的 media asset ID，可通过存储 URL 访问
   - **无标注图片时**：返回 `null`（当 `need_annotated_image: false` 或标注生成失败时）
 
-  **标注内容包括：**
+  **标注内容：**
   - 🔲 **边界框**：框出陷阱位置和问题区域
-  - ➡️ **箭头**：指示正确的调整方向
-  - 📝 **文字说明**：简短的问题描述（如"距墙太远"）
 
   **获取标注图片 URL：**
   ```javascript
@@ -528,7 +526,7 @@ const check = await res.json();
 <ParamField body="options.need_annotated_image" type="boolean" default="true">
   是否生成标注问题点的图片。
 
-  - 设为 `true`：AI 会在原图上绘制标注（边界框、箭头、文字说明），结果存储在 `annotated_media_asset_id`
+  - 设为 `true`：AI 会在原图上绘制边界框标注问题区域，结果存储在 `annotated_media_asset_id`
   - 设为 `false`：不生成标注图片，`annotated_media_asset_id` 返回 `null`，可节省处理时间
 </ParamField>
 
