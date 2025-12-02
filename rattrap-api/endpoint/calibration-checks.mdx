@@ -27,6 +27,38 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/calibration-checks \
     }
   }'
 ```
+
+```javascript Node.js
+const res = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/calibration-checks", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+    "Idempotency-Key": `calib-check-${crypto.randomUUID()}`
+  },
+  body: JSON.stringify({
+    setup_session_id: sessionId,
+    media_asset_id: trapPhotoId,
+    rodent_target: "rat",
+    trap_type: "snap_trap",
+    bait_type: "peanut_butter",
+    location_context: {
+      recommended_zone_id: "zone_A",
+      recommended_description: "冰箱右侧沿墙，距墙角约 10cm"
+    },
+    options: {
+      language: "zh-CN",
+      need_annotated_image: true,
+      tolerance: "normal"
+    }
+  })
+});
+
+const check = await res.json();
+// check.is_correct 判断布置是否合格
+// check.issues 查看具体问题
+// check.advice_text 显示综合建议文案
+```
 </RequestExample>
 
 <ResponseExample>
@@ -111,30 +143,264 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/calibration-checks \
   "created": 1764039300
 }
 ```
+
+```json 错误 - 缺少必填字段
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "VALIDATION_ERROR",
+    "message": "media_asset_id is required",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/calibration-checks"
+  }
+}
+```
+
+```json 错误 - Media Asset 不存在
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "MEDIA_NOT_FOUND",
+    "message": "The specified media_asset_id does not exist or does not belong to the current user",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/calibration-checks"
+  }
+}
+```
+
+```json 错误 - 无法识别陷阱
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "TRAP_RECOGNITION_FAILED",
+    "message": "Unable to identify a trap in the provided photo. Please provide a clearer close-up photo of the trap placement.",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/calibration-checks"
+  }
+}
+```
+
+```json 错误 - 照片模糊或不清晰
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "IMAGE_QUALITY_INSUFFICIENT",
+    "message": "The photo quality is too low for accurate calibration. Please provide a clearer, well-lit photo.",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/calibration-checks"
+  }
+}
+```
+
+```json 错误 - LLM 服务失败
+{
+  "error": {
+    "type": "api_error",
+    "code": "LLM_SERVICE_ERROR",
+    "message": "Failed to perform calibration check. Please try again.",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/calibration-checks"
+  }
+}
+```
+
+```json 错误 - LLM 余额不足
+{
+  "error": {
+    "type": "api_error",
+    "code": "LLM_QUOTA_EXCEEDED",
+    "message": "LLM service quota exceeded. Please contact support or try again later.",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/calibration-checks"
+  }
+}
+```
+
+```json 错误 - 图片标注失败
+{
+  "error": {
+    "type": "api_error",
+    "code": "IMAGE_ANNOTATION_FAILED",
+    "message": "Calibration check completed but failed to generate annotated image. Returning text-only result.",
+    "param": "annotated_media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/calibration-checks"
+  }
+}
+```
+
+```json 错误 - 无效枚举值
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "VALIDATION_ERROR",
+    "message": "tolerance must be one of: normal, strict",
+    "param": "options.tolerance",
+    "doc_url": "https://docs.rattrap.ai/api/calibration-checks"
+  }
+}
+```
 </ResponseExample>
 
 ## 使用说明
 
 这是「校准阶段」的核心接口。AI 会对用户拍的**已布置好的陷阱近景照片**进行校准检查：
 
+<CardGroup cols={3}>
+  <Card title="合格判断" icon="check-circle">
+    判断布置是否正确 (`is_correct`)
+  </Card>
+  <Card title="问题分析" icon="magnifying-glass">
+    列出具体问题和建议 (`issues`)
+  </Card>
+  <Card title="标注图片" icon="image">
+    在原图上标注问题点 (`annotated_media_asset_id`)
+  </Card>
+</CardGroup>
+
 <Check>
   AI 会**真实判断**布置是否正确，不会"故意失败"
 </Check>
 
-### 判断结果处理
+---
+
+## 图片上传流程
+
+使用本接口前，需要先上传陷阱近景照片：
+
+<Steps>
+  <Step title="创建媒体资源">
+    调用 `POST /media-assets` 创建媒体资源并获取 `upload_url`
+
+    ```javascript
+    const res = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        purpose: "setup",  // 校准检查属于 setup 阶段
+        content_type: "image/jpeg",
+        metadata: {
+          usage: "calibration_check",
+          trap_type: "snap_trap"  // 可选：标注陷阱类型
+        }
+      })
+    });
+    const mediaAsset = await res.json();
+    ```
+  </Step>
+
+  <Step title="上传图片到预签名 URL">
+    使用返回的 `upload_url` 上传图片
+
+    ```javascript
+    await fetch(mediaAsset.upload_url, {
+      method: "PUT",
+      headers: { "Content-Type": "image/jpeg" },
+      body: imageBlob
+    });
+    ```
+  </Step>
+
+  <Step title="调用校准检查接口">
+    使用 `media_asset_id` 调用本接口
+
+    ```javascript
+    const checkRes = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/calibration-checks", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "Idempotency-Key": `calib-check-${crypto.randomUUID()}`
+      },
+      body: JSON.stringify({
+        media_asset_id: mediaAsset.id,
+        rodent_target: "rat",
+        trap_type: "snap_trap",
+        bait_type: "peanut_butter",
+        options: {
+          language: "zh-CN",
+          need_annotated_image: true,
+          tolerance: "normal"
+        }
+      })
+    });
+    ```
+  </Step>
+
+  <Step title="处理检查结果">
+    根据 `is_correct` 判断是否需要调整
+
+    ```javascript
+    const check = await checkRes.json();
+
+    if (check.is_correct) {
+      // 布置正确，显示成功界面
+      showSuccess(check.advice_text);
+    } else {
+      // 需要调整，显示问题和建议
+      showIssues(check.issues);
+      showAdvice(check.advice_text);
+
+      // 如果有标注图片，显示问题点
+      if (check.annotated_media_asset_id) {
+        const annotatedUrl = `https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/${check.annotated_media_asset_id}`;
+        showAnnotatedImage(annotatedUrl);
+      }
+    }
+    ```
+  </Step>
+</Steps>
+
+<Note>
+**关于图片上传的重要说明**
+
+1. **必须先创建 media asset**：不能直接传 media_asset_id，必须先通过 `POST /media-assets` 接口创建资源
+2. **预签名 URL 有效期**：upload_url 有 15 分钟有效期，需要在创建后及时上传
+3. **认证要求**：media asset 和用户绑定，只能使用自己上传的图片
+4. **图片要求**：建议近距离拍摄，确保陷阱和周围环境清晰可见，避免过暗或模糊
+</Note>
+
+---
+
+## 必填字段说明
+
+<Warning>
+**必填字段**
+
+- ✅ `media_asset_id` - 陷阱近景照片 ID（必须先通过 `/media-assets` 上传）
+
+**可选但推荐的字段**
+
+- `rodent_target` - 目标鼠种 (rat / mouse / unknown)，帮助 AI 判断陷阱大小是否合适
+- `trap_type` - 陷阱类型，帮助 AI 进行针对性检查
+- `bait_type` - 诱饵类型，帮助 AI 检查诱饵位置和状态
+- `setup_session_id` - 关联到布防会话，便于后续追踪
+- `location_context` - 上一阶段的推荐位置信息，帮助 AI 对比实际布置
+
+缺少必填字段会返回 `400 VALIDATION_ERROR`
+</Warning>
+
+---
+
+## 判断结果处理
 
 <Tabs>
   <Tab title="✅ is_correct = true">
     布置正确！
     - UI 显示"完美部署"绿条
+    - 显示 `advice_text` 中的鼓励文案
     - 用户点击「完成布防」后创建 trap
   </Tab>
   <Tab title="❌ is_correct = false">
     需要调整！用户有两种选择：
-    1. **「调整后重拍」** → 重新拍照 → 再次调用此接口
+    1. **「调整后重拍」** → 根据 `issues` 和 `recommended_actions` 调整 → 重新拍照 → 再次调用此接口
     2. **「跳过，先用这样」** → 直接创建 trap（标记 calibration 不完美）
   </Tab>
 </Tabs>
+
+---
 
 ## issues 结构详解
 
@@ -145,10 +411,17 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/calibration-checks \
   - `too_far_from_wall` - 距离墙太远
   - `wrong_orientation` - 方向错误
   - `bait_position_suboptimal` - 诱饵位置不佳
+  - `bait_missing` - 未检测到诱饵
+  - `trap_not_armed` - 陷阱未设置好（弹簧夹未拉开等）
+  - `obstruction_detected` - 有障碍物挡住陷阱
+  - `lighting_insufficient` - 光线不足，无法准确判断
 </ResponseField>
 
 <ResponseField name="issues[].severity" type="string">
-  严重程度：`info` / `warning` / `error`
+  严重程度：
+  - `error` - 严重问题，强烈建议修正
+  - `warning` - 次要问题，建议优化
+  - `info` - 提示信息，可忽略
 </ResponseField>
 
 <ResponseField name="issues[].metrics" type="object">
@@ -166,6 +439,31 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/calibration-checks \
   针对该问题的单条建议文案
 </ResponseField>
 
+## recommended_actions 结构详解
+
+<ResponseField name="recommended_actions[].code" type="string">
+  操作代码，可用于前端按钮映射：
+  - `move_closer_to_wall` - 靠近墙面
+  - `rotate_trap` - 旋转陷阱
+  - `add_bait` - 添加诱饵
+  - `arm_trap` - 设置陷阱
+  - `remove_obstruction` - 移除障碍物
+  - `retake_photo` - 重新拍照（光线问题）
+  - `set_reminder` - 设置检查提醒
+</ResponseField>
+
+<ResponseField name="recommended_actions[].priority" type="integer">
+  优先级，1 为最高优先级
+</ResponseField>
+
+<ResponseField name="recommended_actions[].label" type="string">
+  操作的简短标签，适合用作按钮文案
+</ResponseField>
+
+<ResponseField name="recommended_actions[].details" type="string">
+  详细说明文案
+</ResponseField>
+
 ## options 参数
 
 <ParamField body="options.language" type="string" default="zh-CN">
@@ -177,7 +475,9 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/calibration-checks \
 </ParamField>
 
 <ParamField body="options.tolerance" type="string" default="normal">
-  对"完美度"的容忍度：`normal` / `strict`
+  对"完美度"的容忍度：
+  - `normal` - 正常标准，允许轻微偏差
+  - `strict` - 严格标准，要求精确布置
 </ParamField>
 
 ## location_context 参数
@@ -193,9 +493,163 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/calibration-checks \
 ```
 
 <Info>
-  该字段是完全可选的，如果不传，AI 仅凭当前照片来做判断。
+  该字段是完全可选的，如果不传，AI 仅凭当前照片来做判断。传入后 AI 可以对比推荐位置和实际位置。
 </Info>
+
+---
+
+## 错误响应
+
+| 场景 | HTTP 状态码 | Error Code | 说明 |
+|-----|------------|------------|------|
+| LLM 服务失败 | 503 | `LLM_SERVICE_ERROR` | AI 校准服务暂时不可用，请稍后重试 |
+| LLM 余额不足 | 503 | `LLM_QUOTA_EXCEEDED` | AI 服务配额已用尽，请联系技术支持 |
+| 无法识别陷阱 | 400 | `TRAP_RECOGNITION_FAILED` | 照片中未能识别到陷阱，建议重新拍摄清晰的近景照片 |
+| 照片质量不足 | 400 | `IMAGE_QUALITY_INSUFFICIENT` | 照片模糊或光线不足，建议在光线充足的环境下重新拍摄 |
+| 图片标注失败 | 500 | `IMAGE_ANNOTATION_FAILED` | 校准检查完成但标注图片生成失败，仅返回文字结果 |
+| Media Asset 不存在 | 404 | `MEDIA_NOT_FOUND` | 照片不存在或不属于当前用户 |
+| 缺少必填字段 | 400 | `VALIDATION_ERROR` | 请求参数不完整 |
+| 无效枚举值 | 400 | `VALIDATION_ERROR` | 参数值不在允许的枚举范围内 |
+| 请求超时 | 504 | `REQUEST_TIMEOUT` | AI 处理超时，请简化图片或稍后重试 |
+| 未授权访问 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
+
+<Warning>
+**前端错误处理建议：**
+- `LLM_SERVICE_ERROR` / `LLM_QUOTA_EXCEEDED` / `REQUEST_TIMEOUT`: 显示"服务繁忙，请稍后重试"，提供重试按钮
+- `TRAP_RECOGNITION_FAILED` / `IMAGE_QUALITY_INSUFFICIENT`: 提示用户"照片不清晰或未识别到陷阱，请重新拍摄近景照片"，返回拍照界面
+- `IMAGE_ANNOTATION_FAILED`: 显示文字说明和 issues，隐藏标注图片（部分降级）
+- `MEDIA_NOT_FOUND`: 提示用户重新上传照片
+- `VALIDATION_ERROR`: 根据 `param` 字段高亮对应的输入框
+- `UNAUTHORIZED`: 引导用户重新登录
+</Warning>
+
+---
+
+## AI 分析逻辑说明
+
+<Note>
+**本接口使用 LLM（大语言模型）+ 计算机视觉进行分析**
+
+### 检查考虑因素
+1. **陷阱识别**：识别照片中的陷阱类型是否与声明一致
+2. **位置判断**：判断陷阱是否靠近墙根（老鼠沿墙移动的习性）
+3. **方向判断**：判断陷阱朝向是否正确（诱饵端朝向预期路径）
+4. **诱饵状态**：检查是否有诱饵、诱饵位置是否正确
+5. **障碍物检测**：检查周围是否有可能阻挡老鼠的障碍物
+6. **陷阱状态**：检查陷阱是否已正确设置（弹簧夹是否拉开等）
+
+### 输出内容
+1. **is_correct**：布尔值，判断布置是否合格
+2. **confidence**：AI 对判断结果的置信度（0-1）
+3. **placement_match_score**：布置与最佳实践的匹配分数（0-1）
+4. **issues**：具体问题列表，每个问题包含代码、严重程度、建议
+5. **advice_text**：综合建议文案，适合直接显示给用户
+6. **recommended_actions**：推荐操作列表，可映射到 UI 按钮
+7. **annotated_media_asset_id**：标注问题点的图片
+
+### 性能说明
+- 图片分析 + 标注生成通常需要 5-15 秒
+- 复杂场景（多个问题点）可能需要 15-25 秒
+- 超过 45 秒会返回 `REQUEST_TIMEOUT` 错误
+
+### 质量保证
+- `confidence` 评分低于 0.6 时，AI 会在 `advice_text` 中说明不确定因素
+- `tolerance=strict` 模式下，轻微偏差也会被标记为问题
+- 如果照片质量太差，会返回 `IMAGE_QUALITY_INSUFFICIENT` 错误
+</Note>
+
+---
 
 ## 支持多次重试
 
 该接口支持**多次重试**：用户可以"调整后重拍"，每次都调用一次校验。建议在 session 的 `calibration_data.attempts` 数组中记录每次尝试。
+
+<Tip>
+**推荐的幂等键格式**：`calib-check-${setupSessionId}-${attemptNumber}`
+
+这样可以追踪同一个 setup session 中的多次校准尝试。
+</Tip>
+
+---
+
+## 前端使用建议
+
+在 **CALIB_RESULT** 页面：
+
+1. 用 `is_correct` 决定显示成功还是需要调整的 UI
+2. 用 `advice_text` 做主要说明文案
+3. 用 `annotated_media_asset_id` 加载带标注的图片（显示问题点）
+4. 用 `issues` 列表显示具体问题（可折叠展开）
+5. 用 `recommended_actions` 渲染操作按钮
+
+```javascript
+// 示例：渲染推荐操作按钮
+check.recommended_actions.forEach(action => {
+  const button = document.createElement('button');
+  button.textContent = action.label;
+  button.title = action.details;
+  button.onclick = () => handleAction(action.code);
+  actionsContainer.appendChild(button);
+});
+```
+
+---
+
+## 测试资源
+
+### 测试用户账号
+
+| 字段 | 值 |
+|------|-----|
+| Email | `test@example.com` |
+| Password | `test1234` |
+
+### 测试流程
+
+```python
+import requests
+
+BASE_URL = "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1"
+AUTH_URL = "https://vwinvkxxheuexvpvzibt.supabase.co/auth/v1/token?grant_type=password"
+ANON_KEY = "your_anon_key_here"
+
+# 1. 登录获取 token
+login_response = requests.post(
+    AUTH_URL,
+    headers={"apikey": ANON_KEY, "Content-Type": "application/json"},
+    json={"email": "test@example.com", "password": "test1234"}
+)
+token = login_response.json()["access_token"]
+
+# 2. 创建媒体资源
+media_response = requests.post(
+    f"{BASE_URL}/media-assets",
+    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    json={"purpose": "setup", "content_type": "image/jpeg", "metadata": {"usage": "calibration_check"}}
+)
+media_id = media_response.json()['id']
+upload_url = media_response.json()['upload_url']
+
+# 3. 上传图片
+with open('trap_photo.jpg', 'rb') as f:
+    requests.put(upload_url, headers={"Content-Type": "image/jpeg"}, data=f)
+
+# 4. 调用校准检查接口
+response = requests.post(
+    f"{BASE_URL}/calibration-checks",
+    headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    json={
+        "media_asset_id": media_id,
+        "rodent_target": "rat",
+        "trap_type": "snap_trap",
+        "bait_type": "peanut_butter",
+        "options": {"language": "zh-CN", "need_annotated_image": True, "tolerance": "normal"}
+    }
+)
+
+result = response.json()
+print(f"布置是否正确: {result['is_correct']}")
+print(f"置信度: {result['confidence']}")
+print(f"问题数量: {len(result['issues'])}")
+print(f"建议: {result['advice_text']}")
+```
