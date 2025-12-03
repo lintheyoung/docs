@@ -479,7 +479,7 @@
           {
             "name": "status",
             "in": "query",
-            "description": "按状态过滤",
+            "description": "按状态过滤，支持逗号分隔多值（如 status=active,warning）",
             "schema": {
               "type": "string",
               "enum": ["active", "inactive", "warning", "triggered_caught"]
@@ -498,7 +498,15 @@
           {
             "name": "starting_after",
             "in": "query",
-            "description": "分页游标",
+            "description": "向后分页的游标（上一页最后一个 trap 的 ID）",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "ending_before",
+            "in": "query",
+            "description": "向前分页的游标（下一页第一个 trap 的 ID），用于反向分页回到上一页",
             "schema": {
               "type": "string"
             }
@@ -522,16 +530,17 @@
       "get": {
         "operationId": "getTrap",
         "summary": "获取陷阱详情",
-        "description": "获取单个陷阱的详细信息。",
+        "description": "获取单个陷阱的详细信息。只能获取当前用户拥有的陷阱，访问其他用户的陷阱会返回 404。",
         "tags": ["Traps"],
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "Trap ID",
+            "description": "Trap ID（UUID 格式）",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -542,6 +551,36 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Trap"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（无效 ID 格式）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "认证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "陷阱不存在或不属于当前用户",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -780,7 +819,7 @@
           "bait_type": {
             "type": "string",
             "description": "诱饵类型",
-            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "nuts", "grain", "other"]
+            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "nuts", "grain", "other", "none"]
           },
           "rodent_target": {
             "type": "string",
@@ -1005,7 +1044,7 @@
           },
           "bait_type": {
             "type": "string",
-            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "nuts", "grain", "other"]
+            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "nuts", "grain", "other", "none"]
           },
           "label": {
             "type": "string"
@@ -1147,7 +1186,7 @@
           "bait_type": {
             "type": "string",
             "description": "诱饵类型（推荐），帮助 AI 检查诱饵位置和状态",
-            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "seeds", "other", "none"]
+            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "nuts", "grain", "other", "none"]
           },
           "location_context": {
             "type": "object",
@@ -1365,7 +1404,9 @@
         "properties": {
           "id": {
             "type": "string",
-            "example": "trap_1RasJr2f9hQe8KmN"
+            "format": "uuid",
+            "description": "Trap ID（UUID 格式）",
+            "example": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7"
           },
           "object": {
             "type": "string",
@@ -1383,22 +1424,39 @@
             "enum": ["snap_trap", "glue_board", "cage_trap", "electronic_trap", "other"]
           },
           "bait_type": {
-            "type": "string"
+            "type": "string",
+            "description": "诱饵类型",
+            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "nuts", "grain", "other", "none"]
           },
           "rodent_target": {
-            "type": "string"
+            "type": "string",
+            "description": "目标鼠种",
+            "enum": ["rat", "mouse", "unknown"]
           },
           "status": {
             "type": "string",
-            "enum": ["active", "warning", "inactive", "triggered_caught"]
+            "description": "陷阱状态。active/inactive 可由用户设置，warning/triggered_caught 由系统自动设置",
+            "enum": ["active", "inactive", "warning", "triggered_caught"]
+          },
+          "deployment_media_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "部署时的图片 ID，由后端在创建陷阱时自动记录"
+          },
+          "last_check_media_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "最近一次检查的图片 ID，由后端在每次检查时自动更新"
           },
           "last_checked_at": {
             "type": "integer",
-            "nullable": true
+            "nullable": true,
+            "description": "上次检查时间（Unix 时间戳），初始为 null"
           },
           "next_check_at": {
             "type": "integer",
-            "nullable": true
+            "nullable": true,
+            "description": "下次检查时间（Unix 时间戳），通常不会为 null"
           },
           "stats_catches": {
             "type": "integer"

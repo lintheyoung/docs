@@ -28,11 +28,11 @@ const { data, has_more } = await res.json();
 ```json 成功响应
 {
   "object": "list",
-  "url": "/v1/traps?status=active&limit=10",
+  "url": "/traps?status=active&limit=10",
   "has_more": false,
   "data": [
     {
-      "id": "trap_1RasJr2f9hQe8KmN",
+      "id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
       "object": "trap",
       "name": "厨房 - 冰箱右侧",
       "location_desc": "冰箱右侧沿墙根，距墙角约 10cm，夹子垂直于墙，诱饵朝向墙角。",
@@ -47,7 +47,7 @@ const { data, has_more } = await res.json();
       "stats_catches": 3,
       "stats_misses": 1,
       "metadata": {
-        "created_from_session": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+        "source_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
         "calibration_quality": "passed"
       },
       "created": 1764039300,
@@ -83,17 +83,21 @@ const { data, has_more } = await res.json();
 </ParamField>
 
 <ParamField query="ending_before" type="string">
-  向前分页的游标
+  向前分页的游标（下一页第一个 trap 的 ID），用于反向分页回到上一页
 </ParamField>
 
 ## 状态说明
 
-| 状态 | 说明 | 颜色建议 |
-|------|------|----------|
-| `active` | 正常运行中 | 绿色 |
-| `warning` | 需要注意（如诱饵过期） | 黄色 |
-| `inactive` | 已停用 | 灰色 |
-| `triggered_caught` | 已触发/已捕获 | 红色 |
+| 状态 | 说明 | 颜色建议 | 来源 |
+|------|------|----------|------|
+| `active` | 正常运行中 | 绿色 | 用户设置 |
+| `inactive` | 已停用 | 灰色 | 用户设置 |
+| `warning` | 需要注意（如诱饵过期） | 黄色 | **系统自动** |
+| `triggered_caught` | 已触发/已捕获 | 红色 | **系统自动** |
+
+<Note>
+`warning` 和 `triggered_caught` 状态由系统根据陷阱事件自动设置，用户无法手动设置这两个状态。创建陷阱时只能传 `active` 或 `inactive`。
+</Note>
 
 ## 分页示例
 
@@ -112,7 +116,7 @@ if (has_more) {
 ## Trap 对象字段
 
 <ResponseField name="id" type="string">
-  Trap ID，前缀为 `trap_`
+  Trap ID，UUID 格式
 </ResponseField>
 
 <ResponseField name="name" type="string">
@@ -128,19 +132,31 @@ if (has_more) {
 </ResponseField>
 
 <ResponseField name="bait_type" type="string">
-  诱饵类型
+  诱饵类型：`peanut_butter` / `cheese` / `bacon` / `chocolate` / `nuts` / `grain` / `other` / `none`
+</ResponseField>
+
+<ResponseField name="rodent_target" type="string">
+  目标鼠种：`rat` / `mouse` / `unknown`
 </ResponseField>
 
 <ResponseField name="status" type="string">
   当前状态
 </ResponseField>
 
-<ResponseField name="last_checked_at" type="integer">
-  上次检查时间（Unix 时间戳）
+<ResponseField name="deployment_media_id" type="string | null">
+  部署时的图片 ID，在创建陷阱时填充（来自校准阶段的照片）
 </ResponseField>
 
-<ResponseField name="next_check_at" type="integer">
-  下次检查时间（Unix 时间戳），由规则引擎自动计算
+<ResponseField name="last_check_media_id" type="string | null">
+  最近一次检查的图片 ID，用户通过 `POST /trap-events`（event_type=check）提交检查时上传的照片
+</ResponseField>
+
+<ResponseField name="last_checked_at" type="integer | null">
+  上次检查时间（Unix 时间戳），初始为 `null`
+</ResponseField>
+
+<ResponseField name="next_check_at" type="integer | null">
+  下次检查时间（Unix 时间戳），由规则引擎自动计算。通常不会为 `null`，但在某些边界情况下可能为空。
 </ResponseField>
 
 <ResponseField name="stats_catches" type="integer">
@@ -150,3 +166,16 @@ if (has_more) {
 <ResponseField name="stats_misses" type="integer">
   空触发次数统计
 </ResponseField>
+
+## 错误响应
+
+| 场景 | HTTP 状态码 | Error Code | 说明 |
+|-----|------------|------------|------|
+| 无效 status 值 | 400 | `VALIDATION_ERROR` | status 必须是有效枚举值 |
+| 无效 limit 值 | 400 | `VALIDATION_ERROR` | limit 必须是 1-100 的整数 |
+| 无效游标 | 400 | `INVALID_CURSOR` | starting_after 或 ending_before 指向的 ID 不存在或格式错误 |
+| 未认证 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
+
+<Note>
+无效游标返回 400 而非 404，因为这是客户端参数错误，不是资源不存在。
+</Note>

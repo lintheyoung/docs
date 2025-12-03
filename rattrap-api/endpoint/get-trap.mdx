@@ -5,7 +5,7 @@ openapi: 'GET /traps/{id}'
 
 <RequestExample>
 ```bash cURL
-curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/traps/trap_1RasJr2f9hQe8KmN \
+curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/traps/3c175d6d-d5af-4070-b73a-c9a5ab8e37e7 \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx"
 ```
 
@@ -26,7 +26,7 @@ const trap = await res.json();
 <ResponseExample>
 ```json 成功响应
 {
-  "id": "trap_1RasJr2f9hQe8KmN",
+  "id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
   "object": "trap",
   "name": "厨房 - 冰箱右侧",
   "location_desc": "冰箱右侧沿墙根，距墙角约 10cm，夹子垂直于墙，诱饵朝向墙角。",
@@ -41,7 +41,7 @@ const trap = await res.json();
   "stats_catches": 3,
   "stats_misses": 1,
   "metadata": {
-    "created_from_session": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+    "source_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
     "calibration_quality": "passed"
   },
   "created": 1764039300,
@@ -49,13 +49,26 @@ const trap = await res.json();
 }
 ```
 
-```json 404 错误
+```json 404 错误 - 陷阱不存在
 {
   "error": {
     "type": "invalid_request_error",
-    "code": "trap_not_found",
-    "message": "No trap found with ID 'trap_xxx'.",
-    "doc_url": "https://docs.rattrap.ai/errors#trap_not_found"
+    "code": "TRAP_NOT_FOUND",
+    "message": "Trap not found",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/traps"
+  }
+}
+```
+
+```json 401 错误 - 未认证
+{
+  "error": {
+    "type": "authentication_error",
+    "code": "UNAUTHORIZED",
+    "message": "Missing Authorization header",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/traps"
   }
 }
 ```
@@ -64,6 +77,111 @@ const trap = await res.json();
 ## 使用说明
 
 获取单个陷阱的详细信息。通常用于陷阱详情页面。
+
+<Info>
+只能获取当前用户拥有的陷阱。尝试访问其他用户的陷阱会返回 404 错误（而非 403），以防止信息泄露。
+</Info>
+
+## 路径参数
+
+<ParamField path="id" type="string" required>
+  陷阱 ID（UUID 格式）
+</ParamField>
+
+## Trap 对象字段
+
+<ResponseField name="id" type="string">
+  Trap ID，UUID 格式
+</ResponseField>
+
+<ResponseField name="object" type="string">
+  固定值 `"trap"`
+</ResponseField>
+
+<ResponseField name="name" type="string">
+  UI 中显示的陷阱名称
+</ResponseField>
+
+<ResponseField name="location_desc" type="string | null">
+  位置描述，详细说明陷阱的放置位置
+</ResponseField>
+
+<ResponseField name="trap_type" type="string">
+  陷阱类型：`snap_trap` / `glue_board` / `cage_trap` / `electronic_trap` / `other`
+</ResponseField>
+
+<ResponseField name="bait_type" type="string">
+  诱饵类型：`peanut_butter` / `cheese` / `bacon` / `chocolate` / `nuts` / `grain` / `other` / `none`
+</ResponseField>
+
+<ResponseField name="rodent_target" type="string">
+  目标鼠种：`rat` / `mouse` / `unknown`
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  当前状态。`active` / `inactive` 可由用户设置，`warning` / `triggered_caught` 由系统自动设置
+</ResponseField>
+
+<ResponseField name="deployment_media_id" type="string | null">
+  部署时的图片 ID，在创建陷阱时填充（来自校准阶段的照片）
+</ResponseField>
+
+<ResponseField name="last_check_media_id" type="string | null">
+  最近一次检查的图片 ID，用户通过 `POST /trap-events`（event_type=check）提交检查时上传的照片
+</ResponseField>
+
+<ResponseField name="last_checked_at" type="integer | null">
+  上次检查时间（Unix 时间戳，秒），初始为 `null`
+</ResponseField>
+
+<ResponseField name="next_check_at" type="integer | null">
+  下次检查时间（Unix 时间戳，秒），创建时设为 创建时间 + 7 天，后续由规则引擎自动调整
+</ResponseField>
+
+<ResponseField name="stats_catches" type="integer">
+  捕获次数统计，每次 `catch` 事件自动 +1
+</ResponseField>
+
+<ResponseField name="stats_misses" type="integer">
+  空触发次数统计，每次 `miss` 事件自动 +1
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  元数据，包含 `source_session_id`（来源会话）和 `calibration_quality`（校准质量）等信息
+</ResponseField>
+
+<ResponseField name="created" type="integer">
+  创建时间（Unix 时间戳，秒）
+</ResponseField>
+
+<ResponseField name="updated" type="integer">
+  最后更新时间（Unix 时间戳，秒）
+</ResponseField>
+
+## 状态说明
+
+| 状态 | 说明 | 颜色建议 | 来源 |
+|------|------|----------|------|
+| `active` | 正常运行中 | 绿色 | 用户设置 |
+| `inactive` | 已停用 | 灰色 | 用户设置 |
+| `warning` | 需要注意（如诱饵过期） | 黄色 | **系统自动** |
+| `triggered_caught` | 已触发/已捕获 | 红色 | **系统自动** |
+
+<Note>
+`warning` 和 `triggered_caught` 状态由系统根据陷阱事件自动设置。当 `catch` 事件发生时，状态会自动变为 `triggered_caught`。
+</Note>
+
+## 错误响应
+
+| 场景 | HTTP 状态码 | Error Code | 说明 |
+|-----|------------|------------|------|
+| 陷阱不存在 | 404 | `TRAP_NOT_FOUND` | ID 不存在或不属于当前用户 |
+| 无效 ID 格式 | 400 | `VALIDATION_ERROR` | ID 格式不正确（非有效 UUID）**[待实现]** |
+| 未认证 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
+
+<Warning>
+**后端待实现**：无效 UUID 格式的 ID 应返回 400 `VALIDATION_ERROR`，而非直接传递给数据库导致 500 错误。
+</Warning>
 
 ## 详情页展示建议
 
@@ -90,7 +208,9 @@ const trap = await res.json();
   </Card>
 </CardGroup>
 
-## 计算「X 天后检查」
+## 代码示例
+
+### 计算「X 天后检查」
 
 ```javascript
 const trap = await getTrap(trapId);
@@ -100,18 +220,49 @@ const daysUntilCheck = Math.ceil((trap.next_check_at - now) / 86400);
 
 if (daysUntilCheck > 0) {
   console.log(`${daysUntilCheck} 天后检查`);
+} else if (daysUntilCheck === 0) {
+  console.log("今天需要检查");
 } else {
-  console.log("需要立即检查！");
+  console.log(`已逾期 ${Math.abs(daysUntilCheck)} 天，需要立即检查！`);
 }
+```
+
+### 获取部署照片 URL
+
+```javascript
+const trap = await getTrap(trapId);
+
+if (trap.deployment_media_id) {
+  // 使用 media_asset_id 获取图片 URL
+  const mediaUrl = `https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media/${trap.deployment_media_id}`;
+  console.log("部署照片:", mediaUrl);
+}
+```
+
+### 状态颜色映射
+
+```javascript
+const statusColors = {
+  active: '#22c55e',      // 绿色
+  inactive: '#6b7280',    // 灰色
+  warning: '#f59e0b',     // 黄色
+  triggered_caught: '#ef4444'  // 红色
+};
+
+const trap = await getTrap(trapId);
+const color = statusColors[trap.status];
 ```
 
 ## 相关接口
 
 <CardGroup cols={2}>
   <Card title="列出所有陷阱" icon="list" href="/rattrap-api/endpoint/list-traps">
-    `GET /v1/traps`
+    `GET /traps`
   </Card>
   <Card title="创建陷阱事件" icon="plus" href="/rattrap-api/endpoint/create-trap-event">
-    `POST /v1/trap-events`
+    `POST /trap-events`
+  </Card>
+  <Card title="从会话创建陷阱" icon="wand-magic-sparkles" href="/rattrap-api/endpoint/create-trap-from-session">
+    `POST /create-trap-from-session`
   </Card>
 </CardGroup>

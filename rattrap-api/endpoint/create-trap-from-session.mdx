@@ -54,7 +54,7 @@ const trap = await res.json();
 <ResponseExample>
 ```json 成功响应
 {
-  "id": "trap_1RasJr2f9hQe8KmN",
+  "id": "89e6eae2-d08a-430c-b57e-2ef599d70013",
   "object": "trap",
   "name": "厨房 - 冰箱右侧",
   "location_desc": "冰箱右侧沿墙根，距墙角约 10cm",
@@ -153,7 +153,7 @@ const trap = await res.json();
 | `name` | string | 陷阱名称 | - |
 | `location_desc` | string | 位置描述 | - |
 | `trap_type` | string | 陷阱类型 | `snap_trap`, `glue_board`, `cage_trap`, `electronic_trap`, `other` |
-| `bait_type` | string | 诱饵类型 | `peanut_butter`, `cheese`, `bacon`, `chocolate`, `nuts`, `grain`, `other` |
+| `bait_type` | string | 诱饵类型 | `peanut_butter`, `cheese`, `bacon`, `chocolate`, `nuts`, `grain`, `other`, `none` |
 | `rodent_target` | string | 目标鼠种 | `rat`, `mouse`, `unknown` |
 
 ### 可选字段
@@ -171,7 +171,7 @@ const trap = await res.json();
 
 | 字段 | 类型 | 说明 |
 |-----|------|------|
-| `id` | string | Trap ID，格式：`trap_xxx` |
+| `id` | string | Trap ID，UUID 格式 |
 | `object` | string | 固定值 `"trap"` |
 | `name` | string | 陷阱名称 |
 | `location_desc` | string \| null | 位置描述 |
@@ -299,7 +299,7 @@ const trap = await res.json();
 
 | 字段 | 初始值 | 说明 |
 |-----|-------|------|
-| `id` | 自动生成 | Trap ID，格式：`trap_xxx` |
+| `id` | 自动生成 | Trap ID，UUID 格式 |
 | `object` | `"trap"` | 对象类型标识 |
 | `last_checked_at` | `null` | 最后检查时间（还未检查） |
 | `next_check_at` | 创建时间 + 7 天 | 下次检查时间 |
