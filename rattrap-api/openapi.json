@@ -1501,17 +1501,22 @@
         "required": ["trap_id", "event_type"],
         "properties": {
           "trap_id": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid",
+            "description": "陷阱 ID（UUID 格式）"
           },
           "event_type": {
             "type": "string",
-            "enum": ["deployment", "maintenance", "check", "catch", "miss", "rebait"]
-          },
-          "details": {
-            "type": "object"
+            "enum": ["deployment", "check", "catch", "miss", "rebait", "maintenance"],
+            "description": "事件类型"
           },
           "media_id": {
-            "type": "string"
+            "type": "string",
+            "description": "关联的媒体资源 ID"
+          },
+          "details": {
+            "type": "object",
+            "description": "事件详情，结构根据事件类型不同而变化"
           }
         }
       },
@@ -1519,23 +1524,40 @@
         "type": "object",
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid",
+            "description": "事件 ID（UUID 格式）"
           },
           "object": {
             "type": "string",
             "enum": ["trap_event"]
           },
           "trap_id": {
-            "type": "string"
+            "type": "string",
+            "format": "uuid",
+            "description": "关联的陷阱 ID（UUID 格式）"
           },
           "event_type": {
-            "type": "string"
+            "type": "string",
+            "enum": ["deployment", "check", "catch", "miss", "rebait", "maintenance"],
+            "description": "事件类型"
+          },
+          "media_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "关联的媒体资源 ID"
           },
           "details": {
-            "type": "object"
+            "type": "object",
+            "description": "事件详情"
+          },
+          "recorded_at": {
+            "type": "integer",
+            "description": "事件发生时间（Unix 时间戳，秒）"
           },
           "created": {
-            "type": "integer"
+            "type": "integer",
+            "description": "记录创建时间（Unix 时间戳，秒）"
           }
         }
       }

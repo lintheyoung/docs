@@ -9,7 +9,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
   -H "Content-Type: application/json" \
   -d '{
-    "trap_id": "trap_1RasJr2f9hQe8KmN",
+    "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
     "event_type": "check",
     "media_id": "ma_check_123",
     "details": {
@@ -24,7 +24,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
   -H "Content-Type: application/json" \
   -d '{
-    "trap_id": "trap_1RasJr2f9hQe8KmN",
+    "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
     "event_type": "catch",
     "media_id": "ma_catch_456",
     "details": {
@@ -39,7 +39,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
   -H "Content-Type: application/json" \
   -d '{
-    "trap_id": "trap_1RasJr2f9hQe8KmN",
+    "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
     "event_type": "rebait",
     "details": {
       "new_bait_type": "peanut_butter",
@@ -52,16 +52,41 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
 <ResponseExample>
 ```json 成功响应
 {
-  "id": "evt_1TuVwX2y3zAb4CdE",
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
   "object": "trap_event",
-  "trap_id": "trap_1RasJr2f9hQe8KmN",
+  "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
   "event_type": "check",
   "media_id": "ma_check_123",
   "details": {
     "result": "empty",
     "bait_condition": "good"
   },
+  "recorded_at": 1764300000,
   "created": 1764300000
+}
+```
+
+```json 404 错误 - 陷阱不存在
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "TRAP_NOT_FOUND",
+    "message": "Trap not found",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/trap-events"
+  }
+}
+```
+
+```json 400 错误 - 无效事件类型
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "INVALID_EVENT_TYPE",
+    "message": "Invalid event_type. Must be one of: deployment, check, catch, miss, rebait, maintenance",
+    "param": "event_type",
+    "doc_url": "https://docs.rattrap.ai/api/trap-events"
+  }
 }
 ```
 </ResponseExample>
@@ -70,16 +95,42 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
 
 记录陷阱相关的各种事件，用于追踪历史和更新状态。
 
+<Info>
+`trap_id` 使用 UUID 格式（如 `3c175d6d-d5af-4070-b73a-c9a5ab8e37e7`）。
+</Info>
+
+## 请求参数
+
+<ParamField body="trap_id" type="string" required>
+  陷阱 ID（UUID 格式）
+</ParamField>
+
+<ParamField body="event_type" type="string" required>
+  事件类型：`deployment` / `check` / `catch` / `miss` / `rebait` / `maintenance`
+</ParamField>
+
+<ParamField body="media_id" type="string">
+  关联的媒体资源 ID（如检查照片、捕获证据照片）
+</ParamField>
+
+<ParamField body="details" type="object">
+  事件详情，结构根据事件类型不同而变化
+</ParamField>
+
 ## 事件类型
 
 | 类型 | 说明 | 触发场景 |
 |------|------|----------|
-| `deployment` | 部署完成 | 首次布防完成时自动创建 |
+| `deployment` | 部署完成 | 从 Session 创建陷阱时**自动创建**（无需手动调用） |
 | `check` | 检查 | 用户定期检查陷阱 |
 | `catch` | 捕获 | 成功捕获老鼠 |
 | `miss` | 空触发 | 触发但未捕获 |
 | `rebait` | 补饵 | 更换或补充诱饵 |
 | `maintenance` | 维护 | 清洁、调整、修复等 |
+
+<Warning>
+`deployment` 事件由 `POST /create-trap-from-session` 自动创建，前端通常不需要手动调用。
+</Warning>
 
 ## 各事件类型的 details 结构
 
@@ -121,36 +172,77 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
   </Tab>
 </Tabs>
 
+## 响应字段
+
+<ResponseField name="id" type="string">
+  事件 ID（UUID 格式）
+</ResponseField>
+
+<ResponseField name="object" type="string">
+  固定值 `"trap_event"`
+</ResponseField>
+
+<ResponseField name="trap_id" type="string">
+  关联的陷阱 ID（UUID 格式）
+</ResponseField>
+
+<ResponseField name="event_type" type="string">
+  事件类型：`deployment` / `check` / `catch` / `miss` / `rebait` / `maintenance`
+</ResponseField>
+
+<ResponseField name="media_id" type="string | null">
+  关联的媒体资源 ID
+</ResponseField>
+
+<ResponseField name="details" type="object">
+  事件详情
+</ResponseField>
+
+<ResponseField name="recorded_at" type="integer">
+  事件发生时间（Unix 时间戳，秒）
+</ResponseField>
+
+<ResponseField name="created" type="integer">
+  记录创建时间（Unix 时间戳，秒）
+</ResponseField>
+
 ## 事件创建后的副作用
 
-创建事件后，系统会自动：
+创建事件后，系统会自动更新关联陷阱的状态和统计数据：
 
-<AccordionGroup>
-  <Accordion title="更新陷阱状态">
-    - `check` 事件：更新 `last_checked_at`，重新计算 `next_check_at`
-    - `catch` 事件：更新 `status` 为 `triggered_caught`，增加 `stats_catches`
-    - `miss` 事件：增加 `stats_misses`
-    - `rebait` 事件：更新 `bait_type`（如果改变了）
-  </Accordion>
-  <Accordion title="更新媒体关联">
-    如果传入了 `media_id`，会更新 `last_check_media_id`
-  </Accordion>
-  <Accordion title="触发提醒">
-    根据事件类型可能触发推送通知或邮件提醒
-  </Accordion>
-</AccordionGroup>
+| 事件类型 | 陷阱字段更新 |
+|---------|-------------|
+| `check` | `last_checked_at` ← 当前时间<br/>`next_check_at` ← 根据规则引擎重新计算<br/>`last_check_media_id` ← `media_id`（如果提供） |
+| `catch` | `status` ← `triggered_caught`<br/>`stats_catches` ← +1<br/>`last_checked_at` ← 当前时间 |
+| `miss` | `stats_misses` ← +1<br/>`last_checked_at` ← 当前时间 |
+| `rebait` | `bait_type` ← `details.new_bait_type`（如果提供）<br/>`last_checked_at` ← 当前时间 |
+| `maintenance` | `last_checked_at` ← 当前时间 |
+| `deployment` | 无额外更新（由创建陷阱流程处理） |
+
+<Note>
+所有会更新 `last_checked_at` 的事件也会同时更新 `last_check_media_id`（如果请求中提供了 `media_id`）。
+</Note>
+
+## 错误响应
+
+| 场景 | HTTP 状态码 | Error Code | 说明 |
+|-----|------------|------------|------|
+| 陷阱不存在 | 404 | `TRAP_NOT_FOUND` | trap_id 不存在或不属于当前用户 |
+| 无效事件类型 | 400 | `INVALID_EVENT_TYPE` | event_type 不是有效的枚举值 |
+| 缺少必填字段 | 400 | `VALIDATION_ERROR` | 缺少 trap_id 或 event_type |
+| 未认证 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
 
 ## 建议的检查流程
 
 <Steps>
   <Step title="拍照">
-    用户拍摄陷阱当前状态，调用 `POST /v1/media-assets` 获取 `media_id`
+    用户拍摄陷阱当前状态，调用 `POST /media-assets` 获取 `media_id`
   </Step>
   <Step title="选择结果">
     用户选择检查结果：空 / 触发 / 捕获
   </Step>
   <Step title="创建事件">
-    调用 `POST /v1/trap-events` 记录事件
+    调用 `POST /trap-events` 记录事件
   </Step>
   <Step title="处理后续">
     - 如果是捕获：引导用户处理并可能重新布防
@@ -158,3 +250,17 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
     - 如果诱饵不佳：引导补饵
   </Step>
 </Steps>
+
+## 相关接口
+
+<CardGroup cols={2}>
+  <Card title="获取陷阱详情" icon="magnifying-glass" href="/rattrap-api/endpoint/get-trap">
+    `GET /traps/{id}`
+  </Card>
+  <Card title="创建媒体资源" icon="image" href="/rattrap-api/endpoint/create-media-asset">
+    `POST /media-assets`
+  </Card>
+  <Card title="从会话创建陷阱" icon="wand-magic-sparkles" href="/rattrap-api/endpoint/create-trap-from-session">
+    `POST /create-trap-from-session`
+  </Card>
+</CardGroup>
