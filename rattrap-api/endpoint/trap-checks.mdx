@@ -1,0 +1,604 @@
+---
+title: 'AI 智能巡检'
+openapi: 'POST /trap-checks'
+---
+
+<RequestExample>
+```bash cURL - 捕获分析
+curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
+    "media_asset_id": "ma_abc123xyz456",
+    "check_type": "catch"
+  }'
+```
+
+```bash cURL - 空陷阱诊断
+curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
+    "media_asset_id": "ma_def789uvw012",
+    "check_type": "empty"
+  }'
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 捕获分析
+{
+  "check_type": "catch",
+  "rodent_identification": {
+    "species": "rat",
+    "species_confidence": 0.92,
+    "subspecies": "Norway rat",
+    "sex": "male",
+    "sex_confidence": 0.85,
+    "estimated_weight_grams": 280,
+    "estimated_length_cm": 18,
+    "maturity": "adult"
+  },
+  "should_blur": true,
+  "blur_reason": "graphic_content",
+  "blurred_media_asset_id": "ma_blurred_xyz789",
+  "safety_guide": {
+    "disposal_method": "sealed_bag",
+    "ppe_requirements": ["gloves", "mask", "disinfectant"],
+    "warnings": [
+      "佩戴一次性手套处理",
+      "使用双层密封袋包裹",
+      "用消毒液清洁陷阱周围区域"
+    ]
+  },
+  "achievement_summary": "成功捕获成年雄性挪威鼠，体重约 280 克"
+}
+```
+
+```json 成功响应 - 空陷阱诊断（静默期）
+{
+  "check_type": "empty",
+  "diagnosis": {
+    "scenario": "neophobia",
+    "scenario_confidence": 0.89,
+    "bait_status": "present",
+    "trigger_status": "armed",
+    "primary_reason": "老鼠对新事物有天然的恐惧（新物反应），需要时间适应"
+  },
+  "recommendations": {
+    "immediate_actions": [
+      "保持现状，不要移动陷阱",
+      "避免在陷阱附近频繁活动",
+      "给老鼠 7-10 天的适应时间"
+    ],
+    "next_check_hours": 240,
+    "should_rebait": false,
+    "should_relocate": false,
+    "learning_insights": [
+      "新物反应是老鼠的本能，通常需要 3-7 天适应",
+      "耐心是成功捕鼠的关键，不要频繁调整陷阱"
+    ]
+  },
+  "annotated_media_asset_id": null
+}
+```
+
+```json 成功响应 - 空陷阱诊断（被盗食）
+{
+  "check_type": "empty",
+  "diagnosis": {
+    "scenario": "bait_stolen",
+    "scenario_confidence": 0.95,
+    "bait_status": "missing",
+    "trigger_status": "armed",
+    "primary_reason": "老鼠偷走了诱饵但没有触发陷阱"
+  },
+  "recommendations": {
+    "immediate_actions": [
+      "将诱饵涂抹在机关触发点深处",
+      "或用牙线将固体诱饵绑死在踏板上",
+      "考虑更换更粘稠的诱饵（如花生酱）"
+    ],
+    "next_check_hours": 72,
+    "should_rebait": true,
+    "should_relocate": false,
+    "bait_suggestion": {
+      "recommended_type": "peanut_butter",
+      "reason": "粘稠诱饵难以快速取走，延长接触时间"
+    },
+    "learning_insights": [
+      "老鼠学习能力强，会寻找安全的取食角度",
+      "诱饵固定是提高捕获率的有效方法"
+    ]
+  },
+  "annotated_media_asset_id": "ma_annotated_abc123"
+}
+```
+
+```json 成功响应 - 空陷阱诊断（空响）
+{
+  "check_type": "empty",
+  "diagnosis": {
+    "scenario": "false_trigger",
+    "scenario_confidence": 0.78,
+    "bait_status": "present",
+    "trigger_status": "triggered",
+    "primary_reason": "陷阱被意外触发，可能是放置不稳或周围震动导致"
+  },
+  "recommendations": {
+    "immediate_actions": [
+      "用双面胶或重物固定陷阱底座",
+      "检查陷阱是否放置在平稳表面",
+      "重新设置机关"
+    ],
+    "next_check_hours": 48,
+    "should_rebait": false,
+    "should_relocate": true,
+    "relocation_reason": "当前位置可能不够稳固",
+    "learning_insights": [
+      "空触发会浪费捕获机会，需要排查原因",
+      "陷阱稳定性对捕获成功率有重要影响"
+    ]
+  },
+  "annotated_media_asset_id": "ma_annotated_def456"
+}
+```
+
+```json 成功响应 - 空陷阱诊断（虎口脱险）
+{
+  "check_type": "empty",
+  "diagnosis": {
+    "scenario": "escape",
+    "scenario_confidence": 0.91,
+    "bait_status": "missing",
+    "trigger_status": "triggered",
+    "primary_reason": "老鼠触发了陷阱但成功逃脱，现在受惊并记住了这个危险",
+    "severity": "high"
+  },
+  "recommendations": {
+    "immediate_actions": [
+      "彻底清洗陷阱，去除恐惧气味（尿液/激素）",
+      "更换完全不同的诱饵类型",
+      "考虑更换陷阱类型"
+    ],
+    "next_check_hours": 24,
+    "should_rebait": true,
+    "should_relocate": true,
+    "bait_suggestion": {
+      "recommended_type": "chocolate",
+      "reason": "换一种老鼠没见过的味道，重置它的记忆"
+    },
+    "trap_replacement_suggestion": {
+      "recommended_type": "glue_board",
+      "reason": "从弹簧夹改为粘鼠板，完全不同的捕获机制"
+    },
+    "learning_insights": [
+      "虎口脱险是最难处理的情况，需要多管齐下",
+      "老鼠会记住危险经历并传递给同伴",
+      "必要时考虑专业灭鼠服务"
+    ]
+  },
+  "annotated_media_asset_id": "ma_annotated_ghi789"
+}
+```
+
+```json 400 错误 - 照片中未检测到老鼠
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "NO_RODENT_DETECTED",
+    "message": "照片中未检测到老鼠，请确认陷阱状态或重新拍摄",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/trap-checks"
+  }
+}
+```
+
+```json 400 错误 - 无法识别陷阱
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "TRAP_RECOGNITION_FAILED",
+    "message": "无法识别照片中的陷阱类型，请拍摄完整清晰的照片",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/trap-checks"
+  }
+}
+```
+
+```json 400 错误 - 照片质量不足
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "IMAGE_QUALITY_INSUFFICIENT",
+    "message": "照片质量不足，请在光线充足的环境下重新拍摄",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/trap-checks"
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+使用 AI 视觉分析陷阱巡检照片，提供智能诊断和建议。这是一个**无状态接口**，不会在数据库中记录事件，仅返回 AI 分析结果。
+
+<Info>
+此接口类似于 `/trap-recommendations`、`/bait-recommendations` 等 AI 辅助工具，只提供分析结果，不持久化存储。
+</Info>
+
+## 两种巡检模式
+
+<Tabs>
+  <Tab title="捕获分析 (catch)">
+    当用户确认陷阱**抓到老鼠**时使用，AI 会：
+    - 识别老鼠的品种、性别、体型
+    - 判断是否需要模糊处理（血腥内容）
+    - 生成安全处置建议
+    - 提供"战果卡片"数据
+  </Tab>
+  <Tab title="空陷阱诊断 (empty)">
+    当用户确认陷阱**是空的**时使用，AI 会：
+    - 分析诱饵状态（存在/消失）
+    - 检测机关状态（已触发/未触发）
+    - 诊断 4 种失败场景（静默期、被盗食、空响、虎口脱险）
+    - 给出针对性建议
+    - 计算下次检查时间
+  </Tab>
+</Tabs>
+
+## 请求参数
+
+<ParamField body="trap_id" type="string" required>
+  陷阱 ID（UUID 格式）
+</ParamField>
+
+<ParamField body="media_asset_id" type="string" required>
+  已上传的照片 ID，使用 `POST /media-assets` 获取。必须确保照片已上传完成（status 为 `ready`）。
+</ParamField>
+
+<ParamField body="check_type" type="string" required>
+  巡检类型：
+  - `catch` - 捕获分析（陷阱抓到老鼠）
+  - `empty` - 空陷阱诊断（陷阱是空的）
+</ParamField>
+
+## 捕获分析响应字段 (check_type="catch")
+
+<ResponseField name="check_type" type="string">
+  固定值 `"catch"`
+</ResponseField>
+
+<ResponseField name="rodent_identification" type="object">
+  老鼠识别结果
+
+  <Expandable title="识别字段详情">
+    <ResponseField name="species" type="string">
+      物种：`rat`（大鼠）/ `mouse`（小鼠）/ `unknown`（无法确定）
+    </ResponseField>
+
+    <ResponseField name="species_confidence" type="number">
+      物种识别置信度（0-1）
+    </ResponseField>
+
+    <ResponseField name="subspecies" type="string | null">
+      亚种，如 "Norway rat"（挪威鼠）、"House mouse"（家鼠）等
+    </ResponseField>
+
+    <ResponseField name="sex" type="string">
+      性别：`male`（雄性）/ `female`（雌性）/ `unknown`（无法确定）
+    </ResponseField>
+
+    <ResponseField name="sex_confidence" type="number">
+      性别判断置信度（0-1）
+    </ResponseField>
+
+    <ResponseField name="estimated_weight_grams" type="number | null">
+      预估体重（克）
+    </ResponseField>
+
+    <ResponseField name="estimated_length_cm" type="number | null">
+      预估体长（厘米，不含尾巴）
+    </ResponseField>
+
+    <ResponseField name="maturity" type="string">
+      成熟度：`juvenile`（幼年）/ `adult`（成年）/ `unknown`
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="should_blur" type="boolean">
+  是否需要模糊处理（画面是否包含血腥、恐怖内容）
+</ResponseField>
+
+<ResponseField name="blur_reason" type="string | null">
+  模糊原因，如 `"graphic_content"`（画面血腥）、`"visible_blood"`（可见血迹）
+</ResponseField>
+
+<ResponseField name="blurred_media_asset_id" type="string | null">
+  模糊处理后的照片 ID。如果 `should_blur=true`，后端会自动生成模糊版本。前端应优先显示此版本，并提供"查看原图"选项。
+</ResponseField>
+
+<ResponseField name="safety_guide" type="object">
+  安全处置指南
+
+  <Expandable title="安全指南详情">
+    <ResponseField name="disposal_method" type="string">
+      处置方法：`sealed_bag`（密封袋）/ `incineration`（焚烧）/ `professional_service`（专业服务）
+    </ResponseField>
+
+    <ResponseField name="ppe_requirements" type="string[]">
+      个人防护装备要求，如 `["gloves", "mask", "disinfectant"]`
+    </ResponseField>
+
+    <ResponseField name="warnings" type="string[]">
+      注意事项和警告，适合直接展示给用户
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="achievement_summary" type="string">
+  战果总结文案，如 "成功捕获成年雄性挪威鼠，体重约 280 克"。适合用于通知、分享卡片等场景。
+</ResponseField>
+
+## 空陷阱诊断响应字段 (check_type="empty")
+
+<ResponseField name="check_type" type="string">
+  固定值 `"empty"`
+</ResponseField>
+
+<ResponseField name="diagnosis" type="object">
+  诊断结果
+
+  <Expandable title="诊断字段详情">
+    <ResponseField name="scenario" type="string">
+      诊断场景：
+      - `neophobia` - 静默期（诱饵在 + 机关未触发）
+      - `bait_stolen` - 被盗食（诱饵消失 + 机关未触发）
+      - `false_trigger` - 空响（诱饵在 + 机关已触发）
+      - `escape` - 虎口脱险（诱饵消失 + 机关已触发）
+    </ResponseField>
+
+    <ResponseField name="scenario_confidence" type="number">
+      诊断置信度（0-1）
+    </ResponseField>
+
+    <ResponseField name="bait_status" type="string">
+      诱饵状态：`present`（存在）/ `missing`（消失）/ `degraded`（变质）
+    </ResponseField>
+
+    <ResponseField name="trigger_status" type="string">
+      机关状态：`armed`（未触发）/ `triggered`（已触发）
+    </ResponseField>
+
+    <ResponseField name="primary_reason" type="string">
+      主要原因的文字描述，适合直接展示给用户
+    </ResponseField>
+
+    <ResponseField name="severity" type="string">
+      严重程度：`low` / `medium` / `high`（仅在 escape 场景下为 high）
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="recommendations" type="object">
+  智能建议
+
+  <Expandable title="建议字段详情">
+    <ResponseField name="immediate_actions" type="string[]">
+      立即行动建议列表，适合作为任务清单展示
+    </ResponseField>
+
+    <ResponseField name="next_check_hours" type="number">
+      建议的下次检查间隔（小时）。前端可在记录事件时使用此值更新 `trap.next_check_at`。
+    </ResponseField>
+
+    <ResponseField name="should_rebait" type="boolean">
+      是否建议补饵
+    </ResponseField>
+
+    <ResponseField name="should_relocate" type="boolean">
+      是否建议更换位置
+    </ResponseField>
+
+    <ResponseField name="bait_suggestion" type="object">
+      诱饵更换建议（如果 `should_rebait=true`）
+      - `recommended_type` - 推荐的诱饵类型
+      - `reason` - 推荐理由
+    </ResponseField>
+
+    <ResponseField name="trap_replacement_suggestion" type="object">
+      陷阱更换建议（仅在 escape 场景）
+      - `recommended_type` - 推荐的陷阱类型
+      - `reason` - 推荐理由
+    </ResponseField>
+
+    <ResponseField name="learning_insights" type="string[]">
+      学习见解，帮助用户理解老鼠行为和捕鼠技巧
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="annotated_media_asset_id" type="string | null">
+  标注图 ID。如果 AI 检测到问题点（如陷阱倾斜、诱饵位置不佳），会在原图上标注并返回新图片的 ID。
+</ResponseField>
+
+## 4 种诊断场景说明
+
+<AccordionGroup>
+  <Accordion title="静默期 (neophobia) - 诱饵在 + 机关未触发">
+    **现象**：陷阱完好，诱饵还在，但没有触发。
+
+    **原因**：老鼠对新事物有天然恐惧（新物反应），需要时间适应。
+
+    **建议**：
+    - 保持现状，不要移动陷阱
+    - 避免在陷阱附近频繁活动
+    - 耐心等待 7-10 天
+
+    **下次检查**：240 小时（10 天）
+  </Accordion>
+
+  <Accordion title="被盗食 (bait_stolen) - 诱饵消失 + 机关未触发">
+    **现象**：诱饵被偷走，但陷阱没有触发。
+
+    **原因**：老鼠找到了安全的取食角度，没有接触到机关。
+
+    **建议**：
+    - 将诱饵涂抹在触发点深处
+    - 用牙线将固体诱饵绑死在踏板上
+    - 换用更粘稠的诱饵（如花生酱）
+
+    **下次检查**：72 小时（3 天）
+  </Accordion>
+
+  <Accordion title="空响 (false_trigger) - 诱饵在 + 机关已触发">
+    **现象**：陷阱被触发，但诱饵还在，没有抓到老鼠。
+
+    **原因**：陷阱放置不稳，被老鼠尾巴扫过或因震动误触发。
+
+    **建议**：
+    - 用双面胶或重物固定陷阱底座
+    - 检查是否放置在平稳表面
+    - 重新设置机关
+
+    **下次检查**：48 小时（2 天）
+  </Accordion>
+
+  <Accordion title="虎口脱险 (escape) - 诱饵消失 + 机关已触发">
+    **现象**：陷阱被触发，诱饵被吃，但老鼠逃脱了。
+
+    **原因**：老鼠触发陷阱但成功逃脱，现在它受惊并记住了危险，会留下警告激素。
+
+    **建议**（必须全部执行）：
+    - **彻底清洗陷阱**，去除恐惧气味（尿液/激素）
+    - **更换诱饵类型**，换一种老鼠没见过的
+    - **考虑更换陷阱类型**，使用完全不同的捕获机制
+
+    **下次检查**：24 小时（清洗后立即检查）
+
+    <Warning>
+    这是最难处理的情况，同一陷阱短期内很难再次生效。必要时考虑专业灭鼠服务。
+    </Warning>
+  </Accordion>
+</AccordionGroup>
+
+## 完整使用流程
+
+<Steps>
+  <Step title="用户选择陷阱">
+    从陷阱列表中选择要检查的陷阱
+  </Step>
+
+  <Step title="初步确认">
+    询问用户："这个陷阱抓到老鼠了吗？"
+    - 是 → 进入捕获流程（`check_type="catch"`）
+    - 否 → 进入诊断流程（`check_type="empty"`）
+  </Step>
+
+  <Step title="拍照上传">
+    ```typescript
+    // 1. 创建媒体资源
+    const mediaAsset = await POST('/media-assets', {
+      purpose: 'check',
+      content_type: 'image/jpeg'
+    });
+
+    // 2. 上传图片
+    await PUT(mediaAsset.upload_url, imageBlob);
+    ```
+  </Step>
+
+  <Step title="调用 AI 分析">
+    ```typescript
+    const result = await POST('/trap-checks', {
+      trap_id: trapId,
+      media_asset_id: mediaAsset.id,
+      check_type: 'catch' // 或 'empty'
+    });
+    ```
+  </Step>
+
+  <Step title="展示 AI 结果">
+    - **捕获**：展示战果卡片 + 安全建议
+    - **空陷阱**：展示诊断场景 + 行动建议
+  </Step>
+
+  <Step title="记录事件（用户确认后）">
+    ```typescript
+    await POST('/trap-events', {
+      trap_id: trapId,
+      event_type: result.check_type === 'catch' ? 'catch' : 'check',
+      media_id: mediaAsset.id,
+      details: {
+        // 捕获事件
+        ai_identified_species: result.rodent_identification?.species,
+        ai_confidence: result.rodent_identification?.species_confidence,
+
+        // 或检查事件
+        ai_diagnosis: result.diagnosis?.scenario,
+        recommended_next_check_hours: result.recommendations?.next_check_hours
+      }
+    });
+    ```
+
+    <Info>
+    记录事件时，后端会根据 `details.recommended_next_check_hours` 自动更新 `trap.next_check_at`。
+    </Info>
+  </Step>
+</Steps>
+
+## 注意事项
+
+<Warning>
+**此接口不会自动记录事件或更新陷阱状态**。前端需要在用户确认后，调用 `POST /trap-events` 来记录事件。
+</Warning>
+
+<Note>
+**图片质量要求**：
+- 最低分辨率：800 x 800 像素
+- 光线充足，避免过暗或过曝
+- 避免模糊，保持相机稳定
+- 确保陷阱在照片中心位置
+</Note>
+
+<Info>
+**AI 分析耗时**：
+- 捕获分析：通常 10-15 秒
+- 空陷阱诊断：通常 5-10 秒
+
+建议前端显示加载动画，提示用户等待。
+</Info>
+
+## 错误响应
+
+| 场景 | HTTP 状态码 | Error Code | 说明 |
+|-----|------------|------------|------|
+| 陷阱不存在 | 404 | `TRAP_NOT_FOUND` | trap_id 不存在或不属于当前用户 |
+| 媒体资源不存在 | 404 | `MEDIA_NOT_FOUND` | media_asset_id 不存在或未上传完成 |
+| 无效的 check_type | 400 | `VALIDATION_ERROR` | check_type 必须是 "catch" 或 "empty" |
+| 照片中无老鼠 | 400 | `NO_RODENT_DETECTED` | check_type="catch" 时，照片中未检测到老鼠 |
+| 无法识别陷阱 | 400 | `TRAP_RECOGNITION_FAILED` | check_type="empty" 时，无法识别陷阱类型 |
+| 照片质量不足 | 400 | `IMAGE_QUALITY_INSUFFICIENT` | 照片模糊、过暗或分辨率过低 |
+| AI 服务不可用 | 503 | `AI_ANALYSIS_FAILED` | AI 服务暂时不可用，请稍后重试 |
+| AI 配额超限 | 503 | `LLM_QUOTA_EXCEEDED` | AI 分析配额已用尽 |
+| 未认证 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
+
+## 相关接口
+
+<CardGroup cols={2}>
+  <Card title="创建媒体资源" icon="image" href="/rattrap-api/endpoint/create-media-asset">
+    `POST /media-assets` - 上传照片
+  </Card>
+  <Card title="创建陷阱事件" icon="calendar-plus" href="/rattrap-api/endpoint/create-trap-event">
+    `POST /trap-events` - 记录巡检事件
+  </Card>
+  <Card title="获取陷阱详情" icon="magnifying-glass" href="/rattrap-api/endpoint/get-trap">
+    `GET /traps/{id}` - 查看陷阱信息
+  </Card>
+  <Card title="诱饵推荐" icon="cheese" href="/rattrap-api/endpoint/bait-recommendations">
+    `POST /bait-recommendations` - AI 诱饵推荐
+  </Card>
+</CardGroup>
