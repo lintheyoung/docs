@@ -553,9 +553,17 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
 
   <Step title="记录事件（用户确认后）">
     ```typescript
+    // 根据诊断结果确定 event_type
+    let eventType = 'check';
+    if (result.check_type === 'catch') {
+      eventType = 'catch';
+    } else if (result.diagnosis?.scenario === 'escape') {
+      eventType = 'miss';  // 虎口脱险记录为空触发
+    }
+
     await POST('/trap-events', {
       trap_id: trapId,
-      event_type: result.check_type === 'catch' ? 'catch' : 'check',
+      event_type: eventType,
       media_id: mediaAsset.id,
       details: {
         // 捕获事件
@@ -570,10 +578,31 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
     ```
 
     <Info>
+    **check_type 与 event_type 的映射关系**：
+    - `check_type="catch"` → `event_type="catch"`（捕获事件）
+    - `check_type="empty"` + `scenario="escape"` → `event_type="miss"`（空触发事件）
+    - `check_type="empty"` + 其他场景 → `event_type="check"`（检查事件）
+
     记录事件时，后端会根据 `details.recommended_next_check_hours` 自动更新 `trap.next_check_at`。
     </Info>
   </Step>
 </Steps>
+
+## check_type 与 event_type 映射规则
+
+AI 巡检返回的 `check_type` 和诊断结果需要映射到正确的 `event_type` 来记录事件：
+
+| check_type | 诊断场景 (scenario) | 应记录的 event_type | 说明 |
+|-----------|-------------------|-------------------|------|
+| `catch` | - | `catch` | 成功捕获老鼠 |
+| `empty` | `neophobia` | `check` | 静默期，正常检查 |
+| `empty` | `bait_stolen` | `check` | 被盗食，正常检查 |
+| `empty` | `false_trigger` | `check` | 空响，正常检查 |
+| `empty` | `escape` | `miss` | **虎口脱险，记录为空触发** |
+
+<Warning>
+**重要**：`escape`（虎口脱险）场景虽然陷阱是空的，但因为老鼠触发了陷阱又逃脱，应该记录为 `event_type="miss"`（空触发），而不是普通的 `check`。这样可以正确统计陷阱的 `stats_misses` 字段。
+</Warning>
 
 ## 注意事项
 
