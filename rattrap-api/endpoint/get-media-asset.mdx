@@ -57,6 +57,25 @@ console.log(`图片 URL: ${mediaAsset.url}`);
 }
 ```
 
+```json 成功响应 - 标注图片
+{
+  "id": "ma_annotated_abc123",
+  "object": "media_asset",
+  "purpose": "check",
+  "content_type": "image/jpeg",
+  "url": "https://cdn.rattrap.ai/media/ma_annotated_abc123.jpg",
+  "status": "ready",
+  "is_annotated": true,
+  "original_media_id": "ma_def789uvw012",
+  "metadata": {
+    "annotation_type": "trap_diagnosis",
+    "issues_detected": ["too_far_from_wall", "wrong_orientation"],
+    "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7"
+  },
+  "created": 1764038500
+}
+```
+
 ```json 404 错误 - 媒体资源不存在
 {
   "error": {
@@ -74,6 +93,7 @@ console.log(`图片 URL: ${mediaAsset.url}`);
 
 获取媒体资源的详细信息和访问 URL。主要用于：
 - 获取模糊图片的 URL（当 AI 巡检返回 `blurred_media_asset_id` 时）
+- 获取标注图片的 URL（当 AI 诊断返回 `annotated_media_asset_id` 时）
 - 查看图片的元数据和状态
 - 获取原始图片的引用关系
 
@@ -110,11 +130,15 @@ console.log(`图片 URL: ${mediaAsset.url}`);
 </ResponseField>
 
 <ResponseField name="is_blurred" type="boolean">
-  是否为模糊处理版本
+  是否为模糊处理版本（AI 检测到血腥内容时自动生成）
+</ResponseField>
+
+<ResponseField name="is_annotated" type="boolean">
+  是否为标注版本（AI 在原图上标注问题点或推荐区域）
 </ResponseField>
 
 <ResponseField name="original_media_id" type="string | null">
-  如果是模糊版本，指向原始图片的 ID；否则为 `null`
+  如果是模糊版本或标注版本，指向原始图片的 ID；否则为 `null`
 </ResponseField>
 
 <ResponseField name="metadata" type="object">
@@ -164,22 +188,71 @@ if (blurredMedia.is_blurred && blurredMedia.original_media_id) {
 }
 ```
 
-## 图片关系说明
+### 场景 3：获取标注图片
+
+当 AI 诊断返回 `annotated_media_asset_id` 时，调用此接口获取标注图片的 URL：
+
+```typescript
+// AI 诊断返回标注图片 ID
+const diagnosisResult = await POST('/trap-checks', {
+  trap_id: trapId,
+  media_asset_id: originalMediaId,
+  check_type: 'empty'
+});
+
+// 获取标注图片
+if (diagnosisResult.annotated_media_asset_id) {
+  const annotatedMedia = await GET(`/media-assets/${diagnosisResult.annotated_media_asset_id}`);
+  setImageUrl(annotatedMedia.url);  // 显示标注版本
+}
+```
+
+## 图片类型说明
 
 <AccordionGroup>
   <Accordion title="原始图片">
     - `is_blurred: false`
+    - `is_annotated: false`
     - `original_media_id: null`
     - 用户上传的原始照片
   </Accordion>
 
   <Accordion title="模糊图片">
     - `is_blurred: true`
+    - `is_annotated: false`
     - `original_media_id: "ma_xxx"` - 指向原始图片
     - 由 AI 巡检自动生成（当检测到血腥内容时）
     - `metadata.blur_reason` 说明模糊原因
   </Accordion>
+
+  <Accordion title="标注图片">
+    - `is_blurred: false`
+    - `is_annotated: true`
+    - `original_media_id: "ma_xxx"` - 指向原始图片
+    - 由 AI 服务生成（在原图上标注问题点或推荐区域）
+    - `metadata.annotation_type` 说明标注类型：
+      - `trap_diagnosis` - 陷阱诊断标注（空陷阱诊断）
+      - `location_recommendation` - 位置推荐标注（位置分析）
+      - `calibration_issues` - 校准问题标注（校准检查）
+    - `metadata.issues_detected` 列出检测到的问题（如果有）
+  </Accordion>
 </AccordionGroup>
+
+## 标注图生成和存储机制
+
+<Info>
+**标注图的生成流程**：
+
+1. **生成方**：由后端 AI 服务生成（调用 Vision API 后，在原图上绘制边界框、箭头等标注）
+2. **存储位置**：存储在 `media_assets` 表中，与普通图片相同
+3. **关联关系**：通过 `original_media_id` 字段关联到原始图片
+4. **访问方式**：与普通图片完全相同，通过 `GET /media-assets/{id}` 获取 URL
+
+**标注图的用途**：
+- 空陷阱诊断：标注陷阱位置和问题区域（如距墙太远、方向错误）
+- 位置分析：标注推荐的放置区域（红框标出最佳位置）
+- 校准检查：标注检测到的问题点（如诱饵位置不佳、陷阱倾斜）
+</Info>
 
 ## 权限说明
 
