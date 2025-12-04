@@ -18,9 +18,9 @@ from typing import Dict, Any, Optional
 # 配置
 # ============================================================================
 
-BASE_URL = "https://lrsppxarhxvxcflougbp.supabase.co/functions/v1"
-AUTH_URL = "https://lrsppxarhxvxcflougbp.supabase.co/auth/v1/token?grant_type=password"
-ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxyc3BweGFyaHh2eGNmbG91Z2JwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzOTQyMjYsImV4cCI6MjA3OTk3MDIyNn0.iD6LwMFLYjvpH2Lh8shGtg5OTRVQm9Zq0HYHJdHf-9k"
+BASE_URL = "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1"
+AUTH_URL = "https://vwinvkxxheuexvpvzibt.supabase.co/auth/v1/token?grant_type=password"
+ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3aW52a3h4aGV1ZXh2cHZ6aWJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzOTgwOTcsImV4cCI6MjA3OTk3NDA5N30.QS6bhQMQdgPG2_bU9sYpMGyGPX7JNTJp2cZ8KVutucc"
 
 # 测试账号
 EMAIL = "test@example.com"
@@ -328,7 +328,7 @@ def run_tests():
     # 测试 2: 缺少 trap_id
     print_test("缺少 trap_id")
     resp = api_call("POST", "/trap-checks", data={
-        "media_asset_id": "ma_test_123",
+        "media_asset_id": "65190ea0-6ddd-4de3-8eff-1503d59d6f4d",
         "check_type": "catch"
     })
     if check_status(400, resp.status_code, "缺少 trap_id"):
@@ -339,7 +339,7 @@ def run_tests():
     # 测试 3: 缺少 media_asset_id
     print_test("缺少 media_asset_id")
     resp = api_call("POST", "/trap-checks", data={
-        "trap_id": "test-trap-id",
+        "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
         "check_type": "catch"
     })
     if check_status(400, resp.status_code, "缺少 media_asset_id"):
@@ -350,8 +350,8 @@ def run_tests():
     # 测试 4: 缺少 check_type
     print_test("缺少 check_type")
     resp = api_call("POST", "/trap-checks", data={
-        "trap_id": "test-trap-id",
-        "media_asset_id": "ma_test_123"
+        "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
+        "media_asset_id": "65190ea0-6ddd-4de3-8eff-1503d59d6f4d"
     })
     if check_status(400, resp.status_code, "缺少 check_type"):
         passed_tests += 1
@@ -366,8 +366,8 @@ def run_tests():
     # 测试 5: 无效 check_type
     print_test("无效 check_type")
     resp = api_call("POST", "/trap-checks", data={
-        "trap_id": "test-trap-id",
-        "media_asset_id": "ma_test_123",
+        "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
+        "media_asset_id": "65190ea0-6ddd-4de3-8eff-1503d59d6f4d",
         "check_type": "invalid_type"
     })
     if check_status(400, resp.status_code, "无效 check_type"):
@@ -384,7 +384,7 @@ def run_tests():
     print_test("不存在的 trap_id")
     resp = api_call("POST", "/trap-checks", data={
         "trap_id": "00000000-0000-0000-0000-000000000000",
-        "media_asset_id": "ma_test_123",
+        "media_asset_id": "65190ea0-6ddd-4de3-8eff-1503d59d6f4d",
         "check_type": "catch"
     })
     if check_status(404, resp.status_code, "不存在的 trap_id"):
@@ -397,7 +397,7 @@ def run_tests():
     if TEST_TRAP_ID:
         resp = api_call("POST", "/trap-checks", data={
             "trap_id": TEST_TRAP_ID,
-            "media_asset_id": "ma_nonexistent_999999",
+            "media_asset_id": "99999999-9999-9999-9999-999999999999",
             "check_type": "catch"
         })
         if check_status(404, resp.status_code, "不存在的 media_asset_id"):
@@ -507,8 +507,8 @@ def run_tests():
     print_test("无 Authorization header")
     resp = api_call("POST", "/trap-checks",
                     data={
-                        "trap_id": "test-trap-id",
-                        "media_asset_id": "ma_test_123",
+                        "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
+                        "media_asset_id": "65190ea0-6ddd-4de3-8eff-1503d59d6f4d",
                         "check_type": "catch"
                     },
                     headers={"Authorization": ""})
@@ -523,8 +523,8 @@ def run_tests():
     print_test("无效 Bearer token")
     resp = api_call("POST", "/trap-checks",
                     data={
-                        "trap_id": "test-trap-id",
-                        "media_asset_id": "ma_test_123",
+                        "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
+                        "media_asset_id": "65190ea0-6ddd-4de3-8eff-1503d59d6f4d",
                         "check_type": "catch"
                     },
                     headers={"Authorization": "Bearer invalid_token_xyz"})

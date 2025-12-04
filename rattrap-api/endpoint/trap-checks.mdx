@@ -10,7 +10,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
   -H "Content-Type: application/json" \
   -d '{
     "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
-    "media_asset_id": "ma_abc123xyz456",
+    "media_asset_id": "65190ea0-6ddd-4de3-8eff-1503d59d6f4d",
     "check_type": "catch"
   }'
 ```
@@ -21,7 +21,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
   -H "Content-Type: application/json" \
   -d '{
     "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
-    "media_asset_id": "ma_def789uvw012",
+    "media_asset_id": "a8f72b3e-9c41-4f2a-b5d3-7e1a6d8c9f0b",
     "check_type": "empty"
   }'
 ```
@@ -256,11 +256,11 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
 ## 请求参数
 
 <ParamField body="trap_id" type="string" required>
-  陷阱 ID（UUID 格式）
+  陷阱 ID（**UUID 格式**）
 </ParamField>
 
 <ParamField body="media_asset_id" type="string" required>
-  已上传的照片 ID，使用 `POST /media-assets` 获取。必须确保照片已上传完成（status 为 `ready`）。
+  已上传的照片 ID（**UUID 格式**），使用 `POST /media-assets` 获取。必须确保照片已上传完成（status 为 `ready`）。
 </ParamField>
 
 <ParamField body="check_type" type="string" required>
@@ -683,6 +683,7 @@ AI 巡检返回的 `check_type` 和诊断结果需要映射到正确的 `event_t
 |-----|------------|------------|------|
 | 陷阱不存在 | 404 | `TRAP_NOT_FOUND` | trap_id 不存在或不属于当前用户 |
 | 媒体资源不存在 | 404 | `MEDIA_NOT_FOUND` | media_asset_id 不存在或未上传完成 |
+| 无效 UUID 格式 | 400 | `VALIDATION_ERROR` | trap_id 或 media_asset_id 不是有效的 UUID 格式 |
 | 无效的 check_type | 400 | `VALIDATION_ERROR` | check_type 必须是 "catch" 或 "empty" |
 | 照片中无老鼠 | 400 | `NO_RODENT_DETECTED` | check_type="catch" 时，照片中未检测到老鼠 |
 | 无法识别陷阱 | 400 | `TRAP_RECOGNITION_FAILED` | check_type="empty" 时，无法识别陷阱类型 |
