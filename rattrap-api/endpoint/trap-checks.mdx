@@ -43,7 +43,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
   },
   "should_blur": true,
   "blur_reason": "graphic_content",
-  "blurred_media_asset_id": "ma_blurred_xyz789",
+  "blurred_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_blurred_xyz789",
   "safety_guide": {
     "disposal_method": "sealed_bag",
     "ppe_requirements": ["gloves", "mask", "disinfectant"],
@@ -81,7 +81,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
       "耐心是成功捕鼠的关键，不要频繁调整陷阱"
     ]
   },
-  "annotated_media_asset_id": null
+  "annotated_image_url": null
 }
 ```
 
@@ -113,7 +113,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
       "诱饵固定是提高捕获率的有效方法"
     ]
   },
-  "annotated_media_asset_id": "ma_annotated_abc123"
+  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_annotated_abc123"
 }
 ```
 
@@ -142,7 +142,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
       "陷阱稳定性对捕获成功率有重要影响"
     ]
   },
-  "annotated_media_asset_id": "ma_annotated_def456"
+  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_annotated_def456"
 }
 ```
 
@@ -180,7 +180,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
       "必要时考虑专业灭鼠服务"
     ]
   },
-  "annotated_media_asset_id": "ma_annotated_ghi789"
+  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_annotated_ghi789"
 }
 ```
 
@@ -317,14 +317,13 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
   模糊原因，如 `"graphic_content"`（画面血腥）、`"visible_blood"`（可见血迹）
 </ResponseField>
 
-<ResponseField name="blurred_media_asset_id" type="string | null">
-  模糊处理后的照片 ID（本质上就是一个普通的 `media_asset_id`）。如果 `should_blur=true`，后端会自动生成模糊版本并存储到媒体资源表中。
+<ResponseField name="blurred_image_url" type="string | null">
+  模糊处理后的照片 URL。如果 `should_blur=true`，后端会自动生成模糊版本并返回可直接访问的存储 URL。
 
   <Note>
-  这个 ID 可以直接用于：
-  - 调用 `GET /media-assets/{id}` 获取图片 URL
-  - 传递给其他接口作为 `media_id` 参数
-  - 与原始 `media_asset_id` 一样使用，没有特殊之处
+  URL 格式：`https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/{id}`
+
+  可直接用于前端 `<img>` 标签或其他需要图片 URL 的场景。
   </Note>
 </ResponseField>
 
@@ -428,11 +427,13 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
   </Expandable>
 </ResponseField>
 
-<ResponseField name="annotated_media_asset_id" type="string | null">
-  标注图 ID（本质上就是一个普通的 `media_asset_id`）。如果 AI 检测到问题点（如陷阱倾斜、诱饵位置不佳），会在原图上标注并返回新图片的 ID。
+<ResponseField name="annotated_image_url" type="string | null">
+  标注图 URL。如果 AI 检测到问题点（如陷阱倾斜、诱饵位置不佳），会在原图上标注并返回可直接访问的存储 URL。
 
   <Note>
-  这个 ID 可以直接调用 `GET /media-assets/{id}` 获取标注后的图片 URL，与普通的 `media_asset_id` 使用方式完全相同。
+  URL 格式：`https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/{id}`
+
+  可直接用于前端 `<img>` 标签显示标注后的图片。
   </Note>
 </ResponseField>
 
@@ -535,19 +536,17 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
   <Step title="展示 AI 结果">
     **捕获流程**：
     ```typescript
-    // 如果需要模糊，获取模糊图片 URL
-    if (result.should_blur && result.blurred_media_asset_id) {
-      const blurredMedia = await GET(`/media-assets/${result.blurred_media_asset_id}`);
-      setImageUrl(blurredMedia.url);  // 显示模糊版本
+    // 如果需要模糊，直接使用返回的 URL
+    if (result.should_blur && result.blurred_image_url) {
+      setImageUrl(result.blurred_image_url);  // 显示模糊版本
     }
     ```
 
     **空陷阱流程**：
     ```typescript
-    // 如果有标注图，获取标注图 URL
-    if (result.annotated_media_asset_id) {
-      const annotatedMedia = await GET(`/media-assets/${result.annotated_media_asset_id}`);
-      setImageUrl(annotatedMedia.url);  // 显示标注版本
+    // 如果有标注图，直接使用返回的 URL
+    if (result.annotated_image_url) {
+      setImageUrl(result.annotated_image_url);  // 显示标注版本
     }
     ```
   </Step>
