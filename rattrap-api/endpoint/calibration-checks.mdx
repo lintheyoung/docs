@@ -68,6 +68,7 @@ const check = await res.json();
   "id": "calib_1SgF3zD8wQpR6NmK",
   "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
   "media_asset_id": "ma_calib_1PpTqQx2YwZv9kLb",
+  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_calib_annotated_7YzXcP4v",
   "annotated_media_asset_id": "ma_calib_annotated_7YzXcP4v",
   "rodent_target": "rat",
   "trap_type": "snap_trap",
@@ -123,6 +124,7 @@ const check = await res.json();
   "id": "calib_1SgF3zD8wQpR6NmK_ok",
   "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
   "media_asset_id": "ma_calib_2_ok",
+  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_calib_2_ok_annotated",
   "annotated_media_asset_id": "ma_calib_2_ok_annotated",
   "rodent_target": "rat",
   "trap_type": "snap_trap",
@@ -253,13 +255,23 @@ const check = await res.json();
     列出具体问题和建议 (`issues`)
   </Card>
   <Card title="标注图片" icon="image">
-    在原图上标注问题点 (`annotated_media_asset_id`)
+    在原图上标注问题点 (`annotated_image_url` 和 `annotated_media_asset_id`)
   </Card>
 </CardGroup>
 
 <Check>
   AI 会**真实判断**布置是否正确，不会"故意失败"
 </Check>
+
+<Warning>
+**AI 生成图片的过期时长**：
+
+标注图片会在 `media_assets` 表中创建记录，过期时长由全局配置决定（默认 30 天）。过期后图片会被自动清理。
+
+响应中同时返回：
+- `annotated_image_url` - 可直接访问的存储 URL，用于前端显示
+- `annotated_media_asset_id` - 媒体资源 ID，用于后续关联和记录
+</Warning>
 
 ---
 

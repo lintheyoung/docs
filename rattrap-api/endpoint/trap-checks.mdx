@@ -44,6 +44,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
   "should_blur": true,
   "blur_reason": "graphic_content",
   "blurred_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_blurred_xyz789",
+  "blurred_media_asset_id": "ma_blurred_xyz789",
   "safety_guide": {
     "disposal_method": "sealed_bag",
     "ppe_requirements": ["gloves", "mask", "disinfectant"],
@@ -113,7 +114,8 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
       "诱饵固定是提高捕获率的有效方法"
     ]
   },
-  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_annotated_abc123"
+  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_annotated_abc123",
+  "annotated_media_asset_id": "ma_annotated_abc123"
 }
 ```
 
@@ -142,7 +144,8 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
       "陷阱稳定性对捕获成功率有重要影响"
     ]
   },
-  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_annotated_def456"
+  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_annotated_def456",
+  "annotated_media_asset_id": "ma_annotated_def456"
 }
 ```
 
@@ -180,7 +183,8 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
       "必要时考虑专业灭鼠服务"
     ]
   },
-  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_annotated_ghi789"
+  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_annotated_ghi789",
+  "annotated_media_asset_id": "ma_annotated_ghi789"
 }
 ```
 
@@ -327,6 +331,14 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
   </Note>
 </ResponseField>
 
+<ResponseField name="blurred_media_asset_id" type="string | null">
+  模糊图片的媒体资源 ID。与 `blurred_image_url` 对应，可用于后续关联（如记录到 `trap_events.media_id`）。
+
+  <Warning>
+  **AI 生成图片的过期时长**：模糊图片会在 media_assets 表中创建记录，过期时长由全局配置决定（默认 30 天）。过期后图片会被自动清理。
+  </Warning>
+</ResponseField>
+
 <ResponseField name="safety_guide" type="object">
   安全处置指南
 
@@ -437,6 +449,14 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
   </Note>
 </ResponseField>
 
+<ResponseField name="annotated_media_asset_id" type="string | null">
+  标注图片的媒体资源 ID。与 `annotated_image_url` 对应，可用于后续关联。
+
+  <Warning>
+  **AI 生成图片的过期时长**：标注图片会在 media_assets 表中创建记录，过期时长由全局配置决定（默认 30 天）。过期后图片会被自动清理。
+  </Warning>
+</ResponseField>
+
 ## 4 种诊断场景说明
 
 <AccordionGroup>
@@ -512,6 +532,15 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
 
   <Step title="拍照上传">
     ```typescript
+    // 0. 前端基础验证（推荐）
+    const img = new Image();
+    img.src = URL.createObjectURL(imageBlob);
+    await img.decode();
+    if (img.width < 800 || img.height < 800) {
+      alert('照片分辨率过低，请重新拍摄（最低 800x800）');
+      return;
+    }
+
     // 1. 创建媒体资源
     const mediaAsset = await POST('/media-assets', {
       purpose: 'check',
@@ -521,6 +550,10 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
     // 2. 上传图片
     await PUT(mediaAsset.upload_url, imageBlob);
     ```
+
+    <Info>
+    **前端验证建议**：在上传前检查照片分辨率（至少 800x800），避免用户等待 AI 分析后才发现质量不足。
+    </Info>
   </Step>
 
   <Step title="调用 AI 分析">
@@ -555,25 +588,39 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
     ```typescript
     // 根据诊断结果确定 event_type
     let eventType = 'check';
+    let details = {};
+
     if (result.check_type === 'catch') {
+      // 捕获事件
       eventType = 'catch';
-    } else if (result.diagnosis?.scenario === 'escape') {
-      eventType = 'miss';  // 虎口脱险记录为空触发
+      details = {
+        ai_identified_species: result.rodent_identification.species,
+        ai_identified_subspecies: result.rodent_identification.subspecies,
+        ai_confidence: result.rodent_identification.species_confidence,
+        ai_sex: result.rodent_identification.sex,
+        ai_estimated_weight_grams: result.rodent_identification.estimated_weight_grams,
+        should_blur: result.should_blur,
+        blur_reason: result.blur_reason
+      };
+    } else {
+      // 检查/空触发事件
+      if (result.diagnosis.scenario === 'escape') {
+        eventType = 'miss';  // 虎口脱险记录为空触发
+      }
+      details = {
+        ai_diagnosis: result.diagnosis.scenario,
+        ai_confidence: result.diagnosis.scenario_confidence,
+        bait_status: result.diagnosis.bait_status,
+        trigger_status: result.diagnosis.trigger_status,
+        recommended_next_check_hours: result.recommendations.next_check_hours
+      };
     }
 
     await POST('/trap-events', {
       trap_id: trapId,
       event_type: eventType,
       media_id: mediaAsset.id,
-      details: {
-        // 捕获事件
-        ai_identified_species: result.rodent_identification?.species,
-        ai_confidence: result.rodent_identification?.species_confidence,
-
-        // 或检查事件
-        ai_diagnosis: result.diagnosis?.scenario,
-        recommended_next_check_hours: result.recommendations?.next_check_hours
-      }
+      details: details
     });
     ```
 
@@ -583,7 +630,9 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
     - `check_type="empty"` + `scenario="escape"` → `event_type="miss"`（空触发事件）
     - `check_type="empty"` + 其他场景 → `event_type="check"`（检查事件）
 
-    记录事件时，后端会根据 `details.recommended_next_check_hours` 自动更新 `trap.next_check_at`。
+    **trap.next_check_at 更新逻辑**：后端会优先使用 `details.recommended_next_check_hours`（AI 推荐），如果没有则使用默认的 maintenance_rules 计算。
+
+    **trap.status 更新**：`miss` 事件会将陷阱状态更新为 `triggered_empty`。
     </Info>
   </Step>
 </Steps>

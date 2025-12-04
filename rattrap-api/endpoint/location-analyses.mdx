@@ -50,7 +50,8 @@ const res = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/l
 
 const analysis = await res.json();
 // 使用 analysis.placement_text 显示文字说明
-// 使用 analysis.annotated_media_asset_id 加载标注图
+// 使用 analysis.annotated_image_url 直接加载标注图
+// 或使用 analysis.annotated_media_asset_id 进行后续关联
 ```
 </RequestExample>
 
@@ -61,6 +62,7 @@ const analysis = await res.json();
   "id": "loc_1RasJr2f9hQe8KmN",
   "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
   "media_asset_id": "ma_room_1PpTqQx2YwZv9kLb",
+  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_room_annotated_9DzXcP4v",
   "annotated_media_asset_id": "ma_room_annotated_9DzXcP4v",
   "rodent_target": "rat",
   "trap_type": "snap_trap",
@@ -197,12 +199,22 @@ const analysis = await res.json();
     详细的放置指导文案 (`placement_text`)
   </Card>
   <Card title="标注图片" icon="image">
-    在原图上标出推荐区域 (`annotated_media_asset_id`)
+    在原图上标出推荐区域 (`annotated_image_url` 和 `annotated_media_asset_id`)
   </Card>
   <Card title="结构化数据" icon="code">
     bounding boxes 供前端高级可视化 (`zones`)
   </Card>
 </CardGroup>
+
+<Warning>
+**AI 生成图片的过期时长**：
+
+标注图片会在 `media_assets` 表中创建记录，过期时长由全局配置决定（默认 30 天）。过期后图片会被自动清理。
+
+响应中同时返回：
+- `annotated_image_url` - 可直接访问的存储 URL，用于前端显示
+- `annotated_media_asset_id` - 媒体资源 ID，用于后续关联和记录
+</Warning>
 
 ---
 
@@ -277,11 +289,8 @@ const analysis = await res.json();
     ```javascript
     const analysis = await analysisRes.json();
 
-    // 构建标注图片 URL
-    const annotatedImageUrl = `https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/${analysis.annotated_media_asset_id}`;
-
-    // 在前端显示
-    document.getElementById('annotated-image').src = annotatedImageUrl;
+    // 直接使用返回的 URL
+    document.getElementById('annotated-image').src = analysis.annotated_image_url;
     document.getElementById('placement-text').textContent = analysis.placement_text;
     ```
   </Step>
