@@ -1,0 +1,207 @@
+---
+title: '获取媒体资源'
+openapi: 'GET /media-assets/{id}'
+---
+
+<RequestExample>
+```bash cURL
+curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets/ma_abc123xyz456 \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx"
+```
+
+```javascript Node.js
+const res = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets/ma_abc123xyz456", {
+  headers: {
+    "Authorization": `Bearer ${accessToken}`
+  }
+});
+
+const mediaAsset = await res.json();
+console.log(`图片 URL: ${mediaAsset.url}`);
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 原始图片
+{
+  "id": "ma_abc123xyz456",
+  "object": "media_asset",
+  "purpose": "check",
+  "content_type": "image/jpeg",
+  "url": "https://cdn.rattrap.ai/media/ma_abc123xyz456.jpg",
+  "status": "ready",
+  "is_blurred": false,
+  "original_media_id": null,
+  "metadata": {
+    "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7"
+  },
+  "created": 1764038400
+}
+```
+
+```json 成功响应 - 模糊图片
+{
+  "id": "ma_blurred_xyz789",
+  "object": "media_asset",
+  "purpose": "evidence",
+  "content_type": "image/jpeg",
+  "url": "https://cdn.rattrap.ai/media/ma_blurred_xyz789.jpg",
+  "status": "ready",
+  "is_blurred": true,
+  "original_media_id": "ma_abc123xyz456",
+  "metadata": {
+    "blur_reason": "graphic_content",
+    "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7"
+  },
+  "created": 1764038450
+}
+```
+
+```json 404 错误 - 媒体资源不存在
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "MEDIA_NOT_FOUND",
+    "message": "Media asset not found",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/media-assets"
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+获取媒体资源的详细信息和访问 URL。主要用于：
+- 获取模糊图片的 URL（当 AI 巡检返回 `blurred_media_asset_id` 时）
+- 查看图片的元数据和状态
+- 获取原始图片的引用关系
+
+## 路径参数
+
+<ParamField path="id" type="string" required>
+  媒体资源 ID，格式为 `ma_` 开头的字符串
+</ParamField>
+
+## 响应字段
+
+<ResponseField name="id" type="string">
+  媒体资源 ID
+</ResponseField>
+
+<ResponseField name="object" type="string">
+  固定值 `"media_asset"`
+</ResponseField>
+
+<ResponseField name="purpose" type="string">
+  媒体用途：`setup`（布防流程）/ `check`（检查）/ `evidence`（证据）
+</ResponseField>
+
+<ResponseField name="content_type" type="string">
+  内容类型：`image/jpeg` / `image/png` / `image/webp`
+</ResponseField>
+
+<ResponseField name="url" type="string">
+  图片访问 URL，可直接用于显示图片
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  状态：`pending`（待上传）/ `ready`（已就绪）
+</ResponseField>
+
+<ResponseField name="is_blurred" type="boolean">
+  是否为模糊处理版本
+</ResponseField>
+
+<ResponseField name="original_media_id" type="string | null">
+  如果是模糊版本，指向原始图片的 ID；否则为 `null`
+</ResponseField>
+
+<ResponseField name="metadata" type="object">
+  自定义元���据
+</ResponseField>
+
+<ResponseField name="created" type="integer">
+  创建时间戳（Unix timestamp，秒）
+</ResponseField>
+
+## 典型使用场景
+
+### 场景 1：获取模糊图片
+
+当 AI 巡检返回 `blurred_media_asset_id` 时，调用此接口获取模糊图片的 URL：
+
+```typescript
+// 1. 调用 AI 巡检
+const checkResult = await POST('/trap-checks', {
+  trap_id: trapId,
+  media_asset_id: originalMediaId,
+  check_type: 'catch'
+});
+
+// 2. 如果需要模糊，获取模糊图片
+if (checkResult.should_blur && checkResult.blurred_media_asset_id) {
+  const blurredMedia = await GET(`/media-assets/${checkResult.blurred_media_asset_id}`);
+
+  // 3. 显示模糊图片
+  setImageUrl(blurredMedia.url);
+
+  // 4. 提供"查看原图"选项
+  setOriginalImageUrl(originalMediaUrl);
+}
+```
+
+### 场景 2：查看原始图片
+
+如果当前是模糊版本，可以通过 `original_media_id` 获取原图：
+
+```typescript
+const blurredMedia = await GET('/media-assets/ma_blurred_xyz789');
+
+if (blurredMedia.is_blurred && blurredMedia.original_media_id) {
+  const originalMedia = await GET(`/media-assets/${blurredMedia.original_media_id}`);
+  console.log(`原图 URL: ${originalMedia.url}`);
+}
+```
+
+## 图片关系说明
+
+<AccordionGroup>
+  <Accordion title="原始图片">
+    - `is_blurred: false`
+    - `original_media_id: null`
+    - 用户上传的原始照片
+  </Accordion>
+
+  <Accordion title="模糊图片">
+    - `is_blurred: true`
+    - `original_media_id: "ma_xxx"` - 指向原始图片
+    - 由 AI 巡检自动生成（当检测到血腥内容时）
+    - `metadata.blur_reason` 说明模糊原因
+  </Accordion>
+</AccordionGroup>
+
+## 权限说明
+
+<Warning>
+只能访问属于当前用户的媒体资源。尝试访问其他用户的资源会返回 404 错误。
+</Warning>
+
+## 错误响应
+
+| 场景 | HTTP 状态码 | Error Code | 说明 |
+|-----|------------|------------|------|
+| 媒体资源不存在 | 404 | `MEDIA_NOT_FOUND` | ID 不存在或不属于当前用户 |
+| 无效的 ID 格式 | 400 | `VALIDATION_ERROR` | ID 格式不正确 |
+| 未认证 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
+
+## 相关接口
+
+<CardGroup cols={2}>
+  <Card title="创建媒体资源" icon="plus" href="/rattrap-api/endpoint/create-media-asset">
+    `POST /media-assets` - 上传新图片
+  </Card>
+  <Card title="AI 智能巡检" icon="wand-magic-sparkles" href="/rattrap-api/endpoint/trap-checks">
+    `POST /trap-checks` - 可能生成模糊图片
+  </Card>
+</CardGroup>

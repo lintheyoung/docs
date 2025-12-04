@@ -84,7 +84,8 @@
           {
             "group": "媒体资源",
             "pages": [
-              "rattrap-api/endpoint/create-media-asset"
+              "rattrap-api/endpoint/create-media-asset",
+              "rattrap-api/endpoint/get-media-asset"
             ]
           },
           {
