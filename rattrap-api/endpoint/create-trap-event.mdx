@@ -4,14 +4,28 @@ openapi: 'POST /trap-events'
 ---
 
 <RequestExample>
-```bash cURL - 检查事件
+```bash cURL - 检查事件（带照片）
 curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
   -H "Content-Type: application/json" \
   -d '{
     "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
     "event_type": "check",
-    "media_id": "ma_check_123",
+    "media_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "details": {
+      "result": "empty",
+      "bait_condition": "good"
+    }
+  }'
+```
+
+```bash cURL - 检查事件（不带照片）
+curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
+    "event_type": "check",
     "details": {
       "result": "empty",
       "bait_condition": "good"
@@ -26,7 +40,6 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
   -d '{
     "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
     "event_type": "catch",
-    "media_id": "ma_catch_456",
     "details": {
       "rodent_type": "rat",
       "disposal_method": "disposed"
@@ -56,7 +69,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
   "object": "trap_event",
   "trap_id": "3c175d6d-d5af-4070-b73a-c9a5ab8e37e7",
   "event_type": "check",
-  "media_id": "ma_check_123",
+  "media_id": "b2c3d4e5-f678-9012-bcde-f12345678901",
   "details": {
     "result": "empty",
     "bait_condition": "good"
@@ -110,7 +123,11 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
 </ParamField>
 
 <ParamField body="media_id" type="string">
-  关联的媒体资源 ID（如检查照片、捕获证据照片）
+  关联的媒体资源 ID（UUID 格式），如检查照片、捕获证据照片。使用 `POST /media-assets` 返回的 `id` 字段。
+
+  <Note>
+  如果提供 `media_id`，后端会验证该媒体资源是否存在，不存在则返回 400 错误。
+  </Note>
 </ParamField>
 
 <ParamField body="details" type="object">
@@ -136,6 +153,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
 
 <Tabs>
   <Tab title="check">
+    **基础检查**（不使用 AI）：
     ```json
     {
       "result": "empty",        // empty / triggered / caught
@@ -143,8 +161,25 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
       "notes": "一切正常"
     }
     ```
+
+    **AI 智能巡检**（使用 `POST /trap-checks` 后）：
+    ```json
+    {
+      "result": "empty",
+      "bait_condition": "good",
+      "ai_diagnosis": "neophobia",  // neophobia / bait_stolen / false_trigger / escape
+      "ai_confidence": 0.89,
+      "recommended_next_check_hours": 240,
+      "notes": "AI 诊断：静默期，建议保持现状"
+    }
+    ```
+
+    <Note>
+    如果使用了 AI 巡检，建议在 `details` 中包含 AI 分析结果。后端会根据 `recommended_next_check_hours` 自动更新 `trap.next_check_at`。
+    </Note>
   </Tab>
   <Tab title="catch">
+    **基础捕获记录**（不使用 AI）：
     ```json
     {
       "rodent_type": "rat",           // rat / mouse / unknown
@@ -152,6 +187,24 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
       "notes": "在厨房捕获一只大鼠"
     }
     ```
+
+    **AI 智能巡检**（使用 `POST /trap-checks` 后）：
+    ```json
+    {
+      "rodent_type": "rat",
+      "disposal_method": "disposed",
+      "ai_identified_species": "rat",
+      "ai_subspecies": "Norway rat",
+      "ai_confidence": 0.92,
+      "ai_sex": "male",
+      "ai_estimated_weight_grams": 280,
+      "notes": "AI 识别：成年雄性挪威鼠"
+    }
+    ```
+
+    <Note>
+    如果使用了 AI 巡检，建议在 `details` 中包含 AI 识别结果，方便后续数据分析和统计。
+    </Note>
   </Tab>
   <Tab title="rebait">
     ```json
@@ -212,7 +265,7 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
 
 | 事件类型 | 陷阱字段更新 |
 |---------|-------------|
-| `check` | `last_checked_at` ← 当前时间<br/>`next_check_at` ← 根据规则引擎重新计算<br/>`last_check_media_id` ← `media_id`（如果提供） |
+| `check` | `last_checked_at` ← 当前时间<br/>`next_check_at` ← 根据 `details.recommended_next_check_hours` 计算（如果提供），否则使用默认规则<br/>`last_check_media_id` ← `media_id`（如果提供） |
 | `catch` | `status` ← `triggered_caught`<br/>`stats_catches` ← +1<br/>`last_checked_at` ← 当前时间 |
 | `miss` | `stats_misses` ← +1<br/>`last_checked_at` ← 当前时间 |
 | `rebait` | `bait_type` ← `details.new_bait_type`（如果提供）<br/>`last_checked_at` ← 当前时间 |
@@ -230,6 +283,8 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-events \
 | 陷阱不存在 | 404 | `TRAP_NOT_FOUND` | trap_id 不存在或不属于当前用户 |
 | 无效事件类型 | 400 | `INVALID_EVENT_TYPE` | event_type 不是有效的枚举值 |
 | 缺少必填字段 | 400 | `VALIDATION_ERROR` | 缺少 trap_id 或 event_type |
+| 无效 media_id 格式 | 400 | `VALIDATION_ERROR` | media_id 不是有效的 UUID 格式 |
+| 媒体资源不存在 | 400 | `VALIDATION_ERROR` | media_id 指向的媒体资源不存在或不属于当前用户 |
 | 未认证 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
 
 ## 建议的检查流程
