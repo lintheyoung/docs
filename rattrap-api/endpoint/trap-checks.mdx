@@ -616,6 +616,8 @@ AI 巡检返回的 `check_type` 和诊断结果需要映射到正确的 `event_t
 - 光线充足，避免过暗或过曝
 - 避免模糊，保持相机稳定
 - 确保陷阱在照片中心位置
+
+**验证时机**：这些质量要求由 AI 在分析时验证，`POST /media-assets` 接口不会进行质量检查。如果图片质量不足，AI 分析会返回 `IMAGE_QUALITY_INSUFFICIENT` 错误，前端需要提示用户重新拍摄。
 </Note>
 
 <Info>
@@ -635,7 +637,7 @@ AI 巡检返回的 `check_type` 和诊断结果需要映射到正确的 `event_t
 | 无效的 check_type | 400 | `VALIDATION_ERROR` | check_type 必须是 "catch" 或 "empty" |
 | 照片中无老鼠 | 400 | `NO_RODENT_DETECTED` | check_type="catch" 时，照片中未检测到老鼠 |
 | 无法识别陷阱 | 400 | `TRAP_RECOGNITION_FAILED` | check_type="empty" 时，无法识别陷阱类型 |
-| 照片质量不足 | 400 | `IMAGE_QUALITY_INSUFFICIENT` | 照片模糊、过暗或分辨率过低 |
+| 照片质量不足 | 400 | `IMAGE_QUALITY_INSUFFICIENT` | 照片模糊、过暗或分辨率过低（由 AI 分析时检测） |
 | AI 服务不可用 | 503 | `AI_ANALYSIS_FAILED` | AI 服务暂时不可用，请稍后重试 |
 | AI 配额超限 | 503 | `LLM_QUOTA_EXCEEDED` | AI 分析配额已用尽 |
 | 未认证 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
