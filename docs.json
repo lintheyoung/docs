@@ -77,7 +77,8 @@
               "rattrap-api/endpoint/trap-recommendations",
               "rattrap-api/endpoint/bait-recommendations",
               "rattrap-api/endpoint/location-analyses",
-              "rattrap-api/endpoint/calibration-checks"
+              "rattrap-api/endpoint/calibration-checks",
+              "rattrap-api/endpoint/trap-checks"
             ]
           },
           {
