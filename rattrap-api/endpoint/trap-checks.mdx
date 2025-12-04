@@ -318,7 +318,14 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
 </ResponseField>
 
 <ResponseField name="blurred_media_asset_id" type="string | null">
-  模糊处理后的照片 ID。如果 `should_blur=true`，后端会自动生成模糊版本。前端应优先显示此版本，并提供"查看原图"选项。
+  模糊处理后的照片 ID（本质上就是一个普通的 `media_asset_id`）。如果 `should_blur=true`，后端会自动生成模糊版本并存储到媒体资源表中。
+
+  <Note>
+  这个 ID 可以直接用于：
+  - 调用 `GET /media-assets/{id}` 获取图片 URL
+  - 传递给其他接口作为 `media_id` 参数
+  - 与原始 `media_asset_id` 一样使用，没有特殊之处
+  </Note>
 </ResponseField>
 
 <ResponseField name="safety_guide" type="object">
@@ -422,7 +429,11 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
 </ResponseField>
 
 <ResponseField name="annotated_media_asset_id" type="string | null">
-  标注图 ID。如果 AI 检测到问题点（如陷阱倾斜、诱饵位置不佳），会在原图上标注并返回新图片的 ID。
+  标注图 ID（本质上就是一个普通的 `media_asset_id`）。如果 AI 检测到问题点（如陷阱倾斜、诱饵位置不佳），会在原图上标注并返回新图片的 ID。
+
+  <Note>
+  这个 ID 可以直接调用 `GET /media-assets/{id}` 获取标注后的图片 URL，与普通的 `media_asset_id` 使用方式完全相同。
+  </Note>
 </ResponseField>
 
 ## 4 种诊断场景说明
@@ -522,8 +533,23 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/trap-checks \
   </Step>
 
   <Step title="展示 AI 结果">
-    - **捕获**：展示战果卡片 + 安全建议
-    - **空陷阱**：展示诊断场景 + 行动建议
+    **捕获流程**：
+    ```typescript
+    // 如果需要模糊，获取模糊图片 URL
+    if (result.should_blur && result.blurred_media_asset_id) {
+      const blurredMedia = await GET(`/media-assets/${result.blurred_media_asset_id}`);
+      setImageUrl(blurredMedia.url);  // 显示模糊版本
+    }
+    ```
+
+    **空陷阱流程**：
+    ```typescript
+    // 如果有标注图，获取标注图 URL
+    if (result.annotated_media_asset_id) {
+      const annotatedMedia = await GET(`/media-assets/${result.annotated_media_asset_id}`);
+      setImageUrl(annotatedMedia.url);  // 显示标注版本
+    }
+    ```
   </Step>
 
   <Step title="记录事件（用户确认后）">
