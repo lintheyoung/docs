@@ -1,0 +1,325 @@
+---
+title: '生成位置标注图'
+openapi: 'POST /location-annotations'
+---
+
+<RequestExample>
+```bash cURL
+curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/location-annotations \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: loc-annot-7f9b4bde-47c2-4ff0-9b0c-eed1d72ff001" \
+  -d '{
+    "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+    "media_asset_id": "ma_room_1PpTqQx2YwZv9kLb",
+    "rodent_target": "rat",
+    "trap_type": "snap_trap",
+    "bait_type": "peanut_butter",
+    "user_location": {
+      "country": "TW",
+      "city": "Taipei",
+      "environment": "apartment"
+    },
+    "options": {
+      "language": "zh-CN"
+    }
+  }'
+```
+
+```javascript Node.js
+const res = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/location-annotations", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+    "Idempotency-Key": `loc-annot-${crypto.randomUUID()}`
+  },
+  body: JSON.stringify({
+    setup_session_id: sessionId,
+    media_asset_id: roomPhotoId,
+    rodent_target: "rat",
+    trap_type: "snap_trap",
+    bait_type: "peanut_butter",
+    options: {
+      language: "zh-CN"
+    }
+  })
+});
+
+const annotation = await res.json();
+// 使用 annotation.annotated_image_url 显示标注后的图片
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "object": "location_annotation",
+  "id": "loca_1RasJr2f9hQe8KmN",
+  "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+  "media_asset_id": "ma_room_1PpTqQx2YwZv9kLb",
+  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_room_annotated_9DzXcP4v.jpg",
+  "annotated_media_asset_id": "ma_room_annotated_9DzXcP4v",
+  "rodent_target": "rat",
+  "trap_type": "snap_trap",
+  "bait_type": "peanut_butter",
+  "annotation_count": 2,
+  "created": 1764039000
+}
+```
+
+```json 错误 - 缺少必填字段
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "VALIDATION_ERROR",
+    "message": "media_asset_id is required",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/location-annotations"
+  }
+}
+```
+
+```json 错误 - Media Asset 不存在
+{
+  "error": {
+    "type": "invalid_request_error",
+    "code": "MEDIA_NOT_FOUND",
+    "message": "The specified media_asset_id does not exist or does not belong to the current user",
+    "param": "media_asset_id",
+    "doc_url": "https://docs.rattrap.ai/api/location-annotations"
+  }
+}
+```
+
+```json 错误 - 图片标注失败
+{
+  "error": {
+    "type": "api_error",
+    "code": "IMAGE_ANNOTATION_FAILED",
+    "message": "Failed to generate annotated image. Please try again.",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/location-annotations"
+  }
+}
+```
+
+```json 错误 - LLM 服务失败
+{
+  "error": {
+    "type": "api_error",
+    "code": "LLM_SERVICE_ERROR",
+    "message": "Failed to analyze location. Please try again.",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/location-annotations"
+  }
+}
+```
+
+```json 错误 - LLM 余额不足
+{
+  "error": {
+    "type": "api_error",
+    "code": "LLM_QUOTA_EXCEEDED",
+    "message": "LLM service quota exceeded. Please contact support or try again later.",
+    "param": null,
+    "doc_url": "https://docs.rattrap.ai/api/location-annotations"
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+这个接口用于生成带有推荐放置位置标注的图片。AI 会分析房间照片，在图片上直接标注出推荐的陷阱放置位置（用红框、箭头等标记）。
+
+<CardGroup cols={2}>
+  <Card title="标注图片" icon="image">
+    返回已标注推荐位置的图片 URL (`annotated_image_url`)
+  </Card>
+  <Card title="媒体资源 ID" icon="fingerprint">
+    标注图片的 media_asset_id，可用于后续关联 (`annotated_media_asset_id`)
+  </Card>
+</CardGroup>
+
+<Info>
+**与 location-analyses 的区别**：
+- `location-analyses`：返回文字建议和结构化数据，不返回标注图片
+- `location-annotations`：返回 AI 在原图上标注好位置的图片
+</Info>
+
+---
+
+## 请求参数
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `media_asset_id` | string | ✅ | 房间照片 ID（必须先通过 `/media-assets` 上传） |
+| `rodent_target` | string | ✅ | 目标鼠种：`rat` / `mouse` / `unknown` |
+| `trap_type` | string | ✅ | 陷阱类型：`snap_trap` / `glue_board` / `cage_trap` / `electronic_trap` / `other` |
+| `bait_type` | string | | 诱饵类型 |
+| `setup_session_id` | string | | 关联到布防会话 |
+| `user_location` | object | | 用户位置信息 |
+| `options.language` | string | | 标注文字的语言（默认 `zh-CN`） |
+
+<Warning>
+缺少必填字段会返回 `400 VALIDATION_ERROR`
+</Warning>
+
+---
+
+## 响应字段说明
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 标注记录 ID，格式: `loca_xxx` |
+| `object` | string | 固定值 `"location_annotation"` |
+| `annotated_image_url` | string | 标注后图片的访问 URL |
+| `annotated_media_asset_id` | string | 标注图片的媒体资源 ID |
+| `annotation_count` | integer | 图片上标注的位置数量 |
+| `created` | integer | 创建时间戳（Unix timestamp） |
+
+---
+
+## 图片上传流程
+
+<Steps>
+  <Step title="创建媒体资源">
+    调用 `POST /media-assets` 创建媒体资源并获取 `upload_url`
+
+    ```javascript
+    const res = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/media-assets", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        purpose: "setup",
+        content_type: "image/jpeg",
+        metadata: {}
+      })
+    });
+    const mediaAsset = await res.json();
+    ```
+  </Step>
+
+  <Step title="上传图片">
+    使用返回的 `upload_url` 上传图片
+
+    ```javascript
+    await fetch(mediaAsset.upload_url, {
+      method: "PUT",
+      headers: { "Content-Type": "image/jpeg" },
+      body: imageBlob
+    });
+    ```
+  </Step>
+
+  <Step title="调用标注接口">
+    使用 `media_asset_id` 调用本接口
+
+    ```javascript
+    const annotRes = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/location-annotations", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        media_asset_id: mediaAsset.id,
+        rodent_target: "rat",
+        trap_type: "snap_trap"
+      })
+    });
+    const annotation = await annotRes.json();
+    ```
+  </Step>
+
+  <Step title="显示标注图片">
+    使用返回的 `annotated_image_url` 显示图片
+
+    ```javascript
+    document.getElementById('annotated-image').src = annotation.annotated_image_url;
+    ```
+  </Step>
+</Steps>
+
+---
+
+## 前端使用建议
+
+```jsx
+// React 示例
+function AnnotatedLocationResult({ annotation }) {
+  return (
+    <div className="annotation-result">
+      <img
+        src={annotation.annotated_image_url}
+        alt="推荐放置位置"
+        className="annotated-image"
+      />
+      <p className="hint">
+        图中红框标注了 {annotation.annotation_count} 个推荐放置位置
+      </p>
+    </div>
+  );
+}
+```
+
+---
+
+## 错误响应
+
+| 场景 | HTTP 状态码 | Error Code | 说明 |
+|-----|------------|------------|------|
+| 缺少必填字段 | 400 | `VALIDATION_ERROR` | 请求参数不完整 |
+| Media Asset 不存在 | 404 | `MEDIA_NOT_FOUND` | 照片不存在或不属于当前用户 |
+| 图片标注失败 | 500 | `IMAGE_ANNOTATION_FAILED` | 标注图片生成失败 |
+| LLM 服务失败 | 503 | `LLM_SERVICE_ERROR` | AI 分析服务暂时不可用 |
+| LLM 余额不足 | 503 | `LLM_QUOTA_EXCEEDED` | AI 服务配额已用尽 |
+| 请求超时 | 504 | `REQUEST_TIMEOUT` | AI 处理超时 |
+| 未授权访问 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
+
+---
+
+## AI 标注说明
+
+<Note>
+**标注内容**
+
+AI 会在图片上标注以下内容：
+- **红色矩形框**：推荐放置陷阱的区域
+- **优先级数字**：1、2、3 表示推荐优先级
+- **箭头**：指示陷阱朝向建议
+
+**标注依据**
+- 墙角和墙根位置
+- 洞口、缝隙、管道孔
+- 食物源附近区域
+- 老鼠活动痕迹
+
+**性能说明**
+- 分析 + 标注通常需要 10-20 秒
+- 超过 45 秒会返回 `REQUEST_TIMEOUT` 错误
+</Note>
+
+---
+
+## 标注图片有效期
+
+<Warning>
+标注图片会在 `media_assets` 表中创建记录，过期时长由全局配置决定（默认 30 天）。过期后图片会被自动清理。
+
+建议在前端缓存 `annotated_image_url`，避免重复调用接口。
+</Warning>
+
+---
+
+## 幂等性建议
+
+<Tip>
+**推荐的幂等键格式**：`loc-annot-${setupSessionId}-${mediaAssetId}`
+
+同一个 setup session 中对同一张照片的多次标注会复用结果。
+</Tip>

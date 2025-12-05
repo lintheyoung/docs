@@ -386,7 +386,7 @@
       "post": {
         "operationId": "createLocationAnalysis",
         "summary": "分析放置位置",
-        "description": "对用户拍摄的房间全景照片进行视觉分析，找出最佳放置陷阱的位置，并生成带标注的图片。",
+        "description": "对用户拍摄的房间照片进行分析，返回通用的陷阱摆放建议（文字建议，不含标注图片）。",
         "tags": ["AI Recommendations"],
         "requestBody": {
           "content": {
@@ -404,6 +404,65 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/LocationAnalysis"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/location-annotations": {
+      "post": {
+        "operationId": "createLocationAnnotation",
+        "summary": "生成位置标注图",
+        "description": "对用户拍摄的房间照片进行分析，在图片上标注推荐的陷阱放置位置，返回标注后的图片。",
+        "tags": ["AI Recommendations"],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LocationAnnotationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功返回标注图片",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LocationAnnotation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Media Asset 不存在",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "AI 服务不可用",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1066,34 +1125,40 @@
       },
       "LocationAnalysisRequest": {
         "type": "object",
-        "required": ["media_asset_id"],
+        "required": ["media_asset_id", "rodent_target", "trap_type"],
         "properties": {
           "setup_session_id": {
-            "type": "string"
+            "type": "string",
+            "description": "关联的布防会话 ID"
           },
           "media_asset_id": {
             "type": "string",
-            "description": "房间全景照片 ID"
+            "description": "房间照片 ID（必须先通过 /media-assets 上传）"
           },
           "rodent_target": {
             "type": "string",
+            "description": "目标鼠种",
             "enum": ["rat", "mouse", "unknown"]
           },
           "trap_type": {
-            "type": "string"
+            "type": "string",
+            "description": "陷阱类型",
+            "enum": ["snap_trap", "glue_board", "cage_trap", "electronic_trap", "other"]
           },
           "bait_type": {
-            "type": "string"
+            "type": "string",
+            "description": "诱饵类型",
+            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "nuts", "grain", "other", "none"]
+          },
+          "user_location": {
+            "$ref": "#/components/schemas/UserLocation"
           },
           "options": {
             "type": "object",
             "properties": {
-              "max_zones": {
-                "type": "integer",
-                "default": 2
-              },
               "language": {
                 "type": "string",
+                "description": "返回文案的语言",
                 "default": "zh-CN"
               }
             }
@@ -1108,56 +1173,210 @@
             "enum": ["location_analysis"]
           },
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "分析记录 ID，格式: loc_xxx"
+          },
+          "setup_session_id": {
+            "type": "string",
+            "description": "关联的布防会话 ID"
           },
           "media_asset_id": {
-            "type": "string"
-          },
-          "annotated_media_asset_id": {
             "type": "string",
-            "description": "带标注的图片 ID"
+            "description": "房间照片 ID"
           },
-          "placement_text": {
+          "rodent_target": {
             "type": "string",
-            "description": "详细的放置说明"
+            "description": "目标鼠种"
           },
-          "zones": {
+          "trap_type": {
+            "type": "string",
+            "description": "陷阱类型"
+          },
+          "bait_type": {
+            "type": "string",
+            "description": "诱饵类型"
+          },
+          "summary": {
+            "type": "string",
+            "description": "总结说明，概述房间情况和整体建议"
+          },
+          "recommendations": {
             "type": "array",
+            "description": "摆放建议列表，按优先级排序",
             "items": {
-              "$ref": "#/components/schemas/PlacementZone"
+              "$ref": "#/components/schemas/PlacementRecommendation"
             }
           },
+          "placement_tips": {
+            "$ref": "#/components/schemas/PlacementTips"
+          },
+          "environment_analysis": {
+            "$ref": "#/components/schemas/EnvironmentAnalysis"
+          },
           "created": {
-            "type": "integer"
+            "type": "integer",
+            "description": "创建时间戳（Unix timestamp）"
           }
         }
       },
-      "PlacementZone": {
+      "PlacementRecommendation": {
         "type": "object",
+        "description": "单个摆放建议",
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "建议 ID，如 rec_1"
           },
-          "label": {
-            "type": "string"
+          "title": {
+            "type": "string",
+            "description": "建议标题，如「沿墙角放置」"
           },
           "priority": {
-            "type": "integer"
+            "type": "integer",
+            "description": "优先级，1 为最高"
           },
-          "confidence": {
-            "type": "number"
+          "reason": {
+            "type": "string",
+            "description": "为什么推荐这个位置"
           },
-          "description": {
-            "type": "string"
+          "tips": {
+            "type": "array",
+            "description": "具体操作建议列表",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "PlacementTips": {
+        "type": "object",
+        "description": "通用摆放技巧",
+        "properties": {
+          "orientation": {
+            "type": "string",
+            "description": "陷阱朝向建议"
           },
-          "bounding_box": {
+          "distance_to_wall": {
+            "type": "string",
+            "description": "距离墙面的建议"
+          },
+          "quantity_suggestion": {
+            "type": "string",
+            "description": "建议放置数量"
+          }
+        }
+      },
+      "EnvironmentAnalysis": {
+        "type": "object",
+        "description": "环境分析结果",
+        "properties": {
+          "room_type": {
+            "type": "string",
+            "description": "识别的房间类型",
+            "enum": ["kitchen", "bathroom", "storage", "bedroom", "living_room", "garage", "other"]
+          },
+          "risk_level": {
+            "type": "string",
+            "description": "风险等级",
+            "enum": ["low", "medium", "high"]
+          },
+          "identified_features": {
+            "type": "array",
+            "description": "识别到的环境特征列表",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "LocationAnnotationRequest": {
+        "type": "object",
+        "required": ["media_asset_id", "rodent_target", "trap_type"],
+        "properties": {
+          "setup_session_id": {
+            "type": "string",
+            "description": "关联的布防会话 ID"
+          },
+          "media_asset_id": {
+            "type": "string",
+            "description": "房间照片 ID（必须先通过 /media-assets 上传）"
+          },
+          "rodent_target": {
+            "type": "string",
+            "description": "目标鼠种",
+            "enum": ["rat", "mouse", "unknown"]
+          },
+          "trap_type": {
+            "type": "string",
+            "description": "陷阱类型",
+            "enum": ["snap_trap", "glue_board", "cage_trap", "electronic_trap", "other"]
+          },
+          "bait_type": {
+            "type": "string",
+            "description": "诱饵类型",
+            "enum": ["peanut_butter", "cheese", "bacon", "chocolate", "nuts", "grain", "other", "none"]
+          },
+          "user_location": {
+            "$ref": "#/components/schemas/UserLocation"
+          },
+          "options": {
             "type": "object",
             "properties": {
-              "x": { "type": "number" },
-              "y": { "type": "number" },
-              "width": { "type": "number" },
-              "height": { "type": "number" }
+              "language": {
+                "type": "string",
+                "description": "标注文字的语言",
+                "default": "zh-CN"
+              }
             }
+          }
+        }
+      },
+      "LocationAnnotation": {
+        "type": "object",
+        "properties": {
+          "object": {
+            "type": "string",
+            "enum": ["location_annotation"]
+          },
+          "id": {
+            "type": "string",
+            "description": "标注记录 ID，格式: loca_xxx"
+          },
+          "setup_session_id": {
+            "type": "string",
+            "description": "关联的布防会话 ID"
+          },
+          "media_asset_id": {
+            "type": "string",
+            "description": "原始房间照片 ID"
+          },
+          "annotated_image_url": {
+            "type": "string",
+            "description": "标注后图片的访问 URL"
+          },
+          "annotated_media_asset_id": {
+            "type": "string",
+            "description": "标注图片的媒体资源 ID"
+          },
+          "rodent_target": {
+            "type": "string",
+            "description": "目标鼠种"
+          },
+          "trap_type": {
+            "type": "string",
+            "description": "陷阱类型"
+          },
+          "bait_type": {
+            "type": "string",
+            "description": "诱饵类型"
+          },
+          "annotation_count": {
+            "type": "integer",
+            "description": "图片上标注的位置数量"
+          },
+          "created": {
+            "type": "integer",
+            "description": "创建时间戳（Unix timestamp）"
           }
         }
       },

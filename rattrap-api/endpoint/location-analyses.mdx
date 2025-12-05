@@ -21,7 +21,6 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/location-analyses \
       "environment": "apartment"
     },
     "options": {
-      "max_zones": 2,
       "language": "zh-CN"
     }
   }'
@@ -42,16 +41,14 @@ const res = await fetch("https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/l
     trap_type: "snap_trap",
     bait_type: "peanut_butter",
     options: {
-      max_zones: 2,
       language: "zh-CN"
     }
   })
 });
 
 const analysis = await res.json();
-// 使用 analysis.placement_text 显示文字说明
-// 使用 analysis.annotated_image_url 直接加载标注图
-// 或使用 analysis.annotated_media_asset_id 进行后续关联
+// 使用 analysis.recommendations 显示摆放建议列表
+// 使用 analysis.summary 显示总结说明
 ```
 </RequestExample>
 
@@ -62,45 +59,55 @@ const analysis = await res.json();
   "id": "loc_1RasJr2f9hQe8KmN",
   "setup_session_id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
   "media_asset_id": "ma_room_1PpTqQx2YwZv9kLb",
-  "annotated_image_url": "https://vwinvkxxheuexvpvzibt.supabase.co/storage/v1/object/public/media-assets/ma_room_annotated_9DzXcP4v",
-  "annotated_media_asset_id": "ma_room_annotated_9DzXcP4v",
   "rodent_target": "rat",
   "trap_type": "snap_trap",
   "bait_type": "peanut_butter",
-  "placement_text": "建议将老鼠夹放置在冰箱右侧沿墙根位置，距离墙角约 10 厘米，夹子垂直于墙摆放，诱饵一端朝向墙角。请确保陷阱紧贴墙面，并避免被垃圾桶或杂物挡住。",
-  "zones": [
+  "summary": "根据您上传的房间照片，我们识别出这是一个厨房环境。建议优先在墙角和隐蔽处放置陷阱，老鼠通常沿墙壁移动并喜欢在黑暗处活动。",
+  "recommendations": [
     {
-      "id": "zone_A",
-      "label": "推荐点位 A",
+      "id": "rec_1",
+      "title": "沿墙角放置",
       "priority": 1,
-      "confidence": 0.93,
-      "description": "冰箱右侧墙角附近，靠近电线和小孔洞，是老鼠常走的贴墙路线。",
-      "bounding_box": {
-        "x": 0.62,
-        "y": 0.48,
-        "width": 0.18,
-        "height": 0.20
-      },
-      "distance_to_wall_cm": 0,
-      "orientation_hint": "trap_perpendicular_to_wall_bait_towards_corner"
+      "reason": "老鼠倾向沿着墙壁移动，墙角是它们的必经之路",
+      "tips": [
+        "靠近墙角放置，陷阱紧贴墙面",
+        "保持出入动线通畅，不要被杂物遮挡",
+        "距离食源（冰箱、垃圾桶）10-30 厘米"
+      ]
     },
     {
-      "id": "zone_B",
-      "label": "备选点位 B",
+      "id": "rec_2",
+      "title": "隐蔽的黑暗处",
       "priority": 2,
-      "confidence": 0.78,
-      "description": "水槽下方橱柜前的墙根位置，适合作为第二个陷阱或备用位置。",
-      "bounding_box": {
-        "x": 0.15,
-        "y": 0.60,
-        "width": 0.20,
-        "height": 0.15
-      },
-      "distance_to_wall_cm": 0,
-      "orientation_hint": "trap_parallel_to_wall"
+      "reason": "老鼠喜欢在隐蔽、安静的地方活动",
+      "tips": [
+        "放在橱柜下方或后面",
+        "放在冰箱后面或侧面",
+        "保持周围环境安静"
+      ]
+    },
+    {
+      "id": "rec_3",
+      "title": "管道和电线孔附近",
+      "priority": 3,
+      "reason": "这些是老鼠进出房间的常见入口",
+      "tips": [
+        "检查墙壁上的管道孔洞",
+        "在电线穿墙处附近放置",
+        "陷阱开口朝向孔洞方向"
+      ]
     }
   ],
-  "notes": "房间整体较整洁，可优先在冰箱附近放置第一个陷阱。",
+  "placement_tips": {
+    "orientation": "陷阱垂直于墙面放置，诱饵端朝向墙角",
+    "distance_to_wall": "紧贴墙面或距离墙面不超过 5 厘米",
+    "quantity_suggestion": "建议在厨房放置 2-3 个陷阱，覆盖不同角落"
+  },
+  "environment_analysis": {
+    "room_type": "kitchen",
+    "risk_level": "medium",
+    "identified_features": ["冰箱", "橱柜", "墙角"]
+  },
   "created": 1764039000
 }
 ```
@@ -141,18 +148,6 @@ const analysis = await res.json();
 }
 ```
 
-```json 错误 - 未找到合适位置
-{
-  "error": {
-    "type": "invalid_request_error",
-    "code": "NO_SUITABLE_LOCATION",
-    "message": "Could not identify suitable trap placement locations in this photo. Please try a different angle or room.",
-    "param": "media_asset_id",
-    "doc_url": "https://docs.rattrap.ai/api/location-analyses"
-  }
-}
-```
-
 ```json 错误 - LLM 服务失败
 {
   "error": {
@@ -176,45 +171,24 @@ const analysis = await res.json();
   }
 }
 ```
-
-```json 错误 - 图片标注失败
-{
-  "error": {
-    "type": "api_error",
-    "code": "IMAGE_ANNOTATION_FAILED",
-    "message": "Location analysis completed but failed to generate annotated image. Returning text-only result.",
-    "param": "annotated_media_asset_id",
-    "doc_url": "https://docs.rattrap.ai/api/location-analyses"
-  }
-}
-```
 </ResponseExample>
 
 ## 使用说明
 
-这是「位置侦查阶段」的核心接口。AI 会对用户拍摄的房间全景照片进行视觉分析，生成：
+这是「位置侦查阶段」的核心接口。AI 会对用户拍摄的房间照片进行分析，识别房间类型和环境特征，然后返回通用的陷阱摆放建议。
 
-<CardGroup cols={3}>
-  <Card title="文字说明" icon="align-left">
-    详细的放置指导文案 (`placement_text`)
+<CardGroup cols={2}>
+  <Card title="摆放建议" icon="list-check">
+    结构化的建议列表 (`recommendations`)，包含标题、原因和具体技巧
   </Card>
-  <Card title="标注图片" icon="image">
-    在原图上标出推荐区域 (`annotated_image_url` 和 `annotated_media_asset_id`)
-  </Card>
-  <Card title="结构化数据" icon="code">
-    bounding boxes 供前端高级可视化 (`zones`)
+  <Card title="环境分析" icon="magnifying-glass">
+    识别房间类型和风险等级 (`environment_analysis`)
   </Card>
 </CardGroup>
 
-<Warning>
-**AI 生成图片的过期时长**：
-
-标注图片会在 `media_assets` 表中创建记录，过期时长由全局配置决定（默认 30 天）。过期后图片会被自动清理。
-
-响应中同时返回：
-- `annotated_image_url` - 可直接访问的存储 URL，用于前端显示
-- `annotated_media_asset_id` - 媒体资源 ID，用于后续关联和记录
-</Warning>
+<Info>
+**注意**：本接口不会返回图片中的具体坐标位置，而是根据房间类型和环境特征，提供通用的摆放策略和建议。用户需要根据建议自行选择具体的放置位置。
+</Info>
 
 ---
 
@@ -234,12 +208,9 @@ const analysis = await res.json();
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        purpose: "setup",  // 位置分析属于 setup 阶段
+        purpose: "setup",
         content_type: "image/jpeg",
-        metadata: {
-          usage: "location_analysis",
-          room_type: "kitchen"  // 可选：标注房间类型
-        }
+        metadata: {}
       })
     });
     const mediaAsset = await res.json();
@@ -272,60 +243,74 @@ const analysis = await res.json();
       body: JSON.stringify({
         media_asset_id: mediaAsset.id,
         rodent_target: "rat",
-        trap_type: "snap_trap",
-        bait_type: "peanut_butter",
-        options: {
-          max_zones: 2,
-          language: "zh-CN"
-        }
+        trap_type: "snap_trap"
       })
     });
     ```
   </Step>
-
-  <Step title="获取标注图片">
-    使用返回的 `annotated_media_asset_id` 获取带标注的图片
-
-    ```javascript
-    const analysis = await analysisRes.json();
-
-    // 直接使用返回的 URL
-    document.getElementById('annotated-image').src = analysis.annotated_image_url;
-    document.getElementById('placement-text').textContent = analysis.placement_text;
-    ```
-  </Step>
 </Steps>
-
-<Note>
-**关于图片上传的重要说明**
-
-1. **必须先创建 media asset**：不能直接传 media_asset_id，必须先通过 `POST /media-assets` 接口创建资源
-2. **预签名 URL 有效期**：upload_url 有 15 分钟有效期，需要在创建后及时上传
-3. **认证要求**：media asset 和用户绑定，只能使用自己上传的图片
-4. **图片要求**：建议使用广角拍摄，确保墙面、地面清晰可见，避免过暗或模糊
-</Note>
 
 ---
 
-## 必填字段说明
+## 请求参数
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `media_asset_id` | string | ✅ | 房间照片 ID（必须先通过 `/media-assets` 上传） |
+| `rodent_target` | string | ✅ | 目标鼠种：`rat` / `mouse` / `unknown` |
+| `trap_type` | string | ✅ | 陷阱类型：`snap_trap` / `glue_board` / `cage_trap` / `electronic_trap` / `other` |
+| `bait_type` | string | | 诱饵类型，帮助 AI 提供更针对性的建议 |
+| `setup_session_id` | string | | 关联到布防会话，便于后续追踪 |
+| `user_location` | object | | 用户位置信息，帮助 AI 考虑地域特点 |
+| `options.language` | string | | 返回文案的语言（默认 `zh-CN`） |
 
 <Warning>
-**必填字段**
-
-- ✅ `media_asset_id` - 房间照片 ID（必须先通过 `/media-assets` 上传）
-- ✅ `rodent_target` - 目标鼠种 (rat / mouse / unknown)
-- ✅ `trap_type` - 陷阱类型 (snap_trap / glue_board / cage_trap / electronic_trap / other)
-
-**可选但推荐的字段**
-
-- `bait_type` - 诱饵类型，帮助 AI 考虑陷阱朝向
-- `setup_session_id` - 关联到布防会话，便于后续追踪
-- `user_location` - 用户位置信息，帮助 AI 考虑地域特点
-- `options.max_zones` - 返回推荐点位数量（默认 2，最大 5）
-- `options.language` - 返回文案的语言（默认 zh-CN）
-
 缺少必填字段会返回 `400 VALIDATION_ERROR`
 </Warning>
+
+---
+
+## 响应字段说明
+
+### 顶层字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 分析记录 ID，格式: `loc_xxx` |
+| `object` | string | 固定值 `"location_analysis"` |
+| `summary` | string | 总结说明，概述房间情况和整体建议 |
+| `recommendations` | array | 摆放建议列表，按优先级排序 |
+| `placement_tips` | object | 通用摆放技巧 |
+| `environment_analysis` | object | 环境分析结果 |
+| `created` | integer | 创建时间戳（Unix timestamp） |
+
+### recommendations 结构
+
+每个建议包含：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 建议 ID，如 `rec_1` |
+| `title` | string | 建议标题，如「沿墙角放置」 |
+| `priority` | integer | 优先级，1 为最高 |
+| `reason` | string | 为什么推荐这个位置 |
+| `tips` | array | 具体操作建议列表 |
+
+### placement_tips 结构
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `orientation` | string | 陷阱朝向建议 |
+| `distance_to_wall` | string | 距离墙面的建议 |
+| `quantity_suggestion` | string | 建议放置数量 |
+
+### environment_analysis 结构
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `room_type` | string | 识别的房间类型：`kitchen` / `bathroom` / `storage` / `bedroom` / `living_room` / `garage` / `other` |
+| `risk_level` | string | 风险等级：`low` / `medium` / `high` |
+| `identified_features` | array | 识别到的环境特征列表 |
 
 ---
 
@@ -333,118 +318,78 @@ const analysis = await res.json();
 
 在 **LOC_RESULT** 页面：
 
-1. 用 `placement_text` 做主要说明文案
-2. 用 `annotated_media_asset_id` 加载那张带红框的标注图
-3. 可选：根据 `zones.bounding_box` 在客户端加动画框 / 点击交互
+1. 用 `summary` 做顶部的总结说明
+2. 用 `recommendations` 渲染建议卡片列表
+3. 用 `placement_tips` 显示通用摆放技巧
+4. 可选：根据 `environment_analysis.room_type` 显示对应的图标
+
+```jsx
+// React 示例
+function LocationResult({ analysis }) {
+  return (
+    <div>
+      <p className="summary">{analysis.summary}</p>
+
+      {analysis.recommendations.map(rec => (
+        <Card key={rec.id}>
+          <h3>{rec.title}</h3>
+          <p className="reason">{rec.reason}</p>
+          <ul>
+            {rec.tips.map((tip, i) => <li key={i}>{tip}</li>)}
+          </ul>
+        </Card>
+      ))}
+
+      <div className="tips">
+        <p>朝向：{analysis.placement_tips.orientation}</p>
+        <p>距墙：{analysis.placement_tips.distance_to_wall}</p>
+        <p>数量：{analysis.placement_tips.quantity_suggestion}</p>
+      </div>
+    </div>
+  );
+}
+```
 
 <Info>
-  用户按照提示在现实中放置好陷阱后，点击「我放好了，去检查」进入校准阶段。
+用户阅读建议后，点击「我放好了，去检查」进入校准阶段。
 </Info>
 
-## zones 结构详解
-
-每个 zone 代表一个候选放置区域：
-
-<ResponseField name="zones[].id" type="string">
-  区域 ID，例如 `"zone_A"`
-</ResponseField>
-
-<ResponseField name="zones[].priority" type="integer">
-  优先级，1 为最高
-</ResponseField>
-
-<ResponseField name="zones[].confidence" type="number">
-  0–1 之间，AI 对这个点位的信心
-</ResponseField>
-
-<ResponseField name="zones[].bounding_box" type="object">
-  图片中的矩形区域，用于在前端画框
-
-  ```json
-  {
-    "x": 0.62,      // 左上角 x，归一化到 0–1
-    "y": 0.48,      // 左上角 y
-    "width": 0.18,
-    "height": 0.20
-  }
-  ```
-</ResponseField>
-
-<ResponseField name="zones[].distance_to_wall_cm" type="number">
-  建议陷阱距离墙面的距离（厘米）
-</ResponseField>
-
-<ResponseField name="zones[].orientation_hint" type="string">
-  陷阱应该如何朝向，例如 `"trap_perpendicular_to_wall_bait_towards_corner"`
-</ResponseField>
-
-## options 参数
-
-<ParamField body="options.max_zones" type="integer" default="2">
-  返回几个推荐点位，最大 5
-</ParamField>
-
-<ParamField body="options.language" type="string" default="zh-CN">
-  `placement_text` 的语言
-</ParamField>
-
-<ParamField body="options.need_heatmap" type="boolean" default="false">
-  是否返回热力图（未来扩展）
-</ParamField>
+---
 
 ## 错误响应
 
 | 场景 | HTTP 状态码 | Error Code | 说明 |
 |-----|------------|------------|------|
-| LLM 服务失败 | 503 | `LLM_SERVICE_ERROR` | AI 分析服务暂时不可用，请稍后重试 |
-| LLM 余额不足 | 503 | `LLM_QUOTA_EXCEEDED` | AI 服务配额已用尽，请联系技术支持 |
-| 图片分析失败 | 400 | `ROOM_RECOGNITION_FAILED` | 无法分析房间照片，建议重新拍摄更清晰的广角照片 |
-| 未找到合适位置 | 400 | `NO_SUITABLE_LOCATION` | 未能识别出合适的陷阱放置位置，建议换个角度或房间拍摄 |
-| 图片标注失败 | 500 | `IMAGE_ANNOTATION_FAILED` | 位置分析完成但标注图片生成失败，仅返回文字结果 |
-| Media Asset 不存在 | 404 | `MEDIA_NOT_FOUND` | 照片不存在或不属于当前用户 |
 | 缺少必填字段 | 400 | `VALIDATION_ERROR` | 请求参数不完整 |
-| 请求超时 | 504 | `REQUEST_TIMEOUT` | AI 处理超时，请简化图片或稍后重试 |
+| Media Asset 不存在 | 404 | `MEDIA_NOT_FOUND` | 照片不存在或不属于当前用户 |
+| 图片分析失败 | 400 | `ROOM_RECOGNITION_FAILED` | 无法分析房间照片，建议重新拍摄 |
+| LLM 服务失败 | 503 | `LLM_SERVICE_ERROR` | AI 分析服务暂时不可用 |
+| LLM 余额不足 | 503 | `LLM_QUOTA_EXCEEDED` | AI 服务配额已用尽 |
+| 请求超时 | 504 | `REQUEST_TIMEOUT` | AI 处理超时 |
 | 未授权访问 | 401 | `UNAUTHORIZED` | 缺少或无效的 Authorization header |
-
-<Warning>
-**前端错误处理建议：**
-- `LLM_SERVICE_ERROR` / `LLM_QUOTA_EXCEEDED` / `REQUEST_TIMEOUT`: 显示"服务繁忙，请稍后重试"，提供重试按钮
-- `ROOM_RECOGNITION_FAILED` / `NO_SUITABLE_LOCATION`: 提示用户"照片不清晰或未找到合适位置，请重新拍摄"，返回拍照界面
-- `IMAGE_ANNOTATION_FAILED`: 显示文字说明，隐藏标注图片（部分降级）
-- `MEDIA_NOT_FOUND`: 提示用户重新上传照片
-- `VALIDATION_ERROR`: 根据 `param` 字段高亮对应的输入框
-- `UNAUTHORIZED`: 引导用户重新登录
-</Warning>
 
 ---
 
 ## AI 分析逻辑说明
 
 <Note>
-**本接口使用 LLM（大语言模型）+ 计算机视觉进行分析**
+**本接口使用 LLM（大语言模型）进行分析**
 
-### 分析考虑因素
-1. **墙角和墙根**：老鼠喜欢沿墙移动，墙角是高优先级位置
-2. **洞口和缝隙**：电线孔、管道口、门缝等是老鼠出入口
-3. **食物源附近**：冰箱旁、垃圾桶附近、厨房区域
-4. **障碍物**：避免被家具、杂物遮挡的位置
-5. **陷阱类型**：不同陷阱需要不同的空间和朝向
-6. **鼠种特性**：rat（大鼠）和 mouse（小鼠）的活动路径不同
+### 分析流程
+1. **房间识别**：识别照片中的房间类型（厨房、卫生间、储藏室等）
+2. **特征提取**：识别环境特征（冰箱、橱柜、管道等）
+3. **风险评估**：根据环境特征评估鼠患风险等级
+4. **建议生成**：根据鼠种、陷阱类型和环境特征生成摆放建议
 
-### 输出内容
-1. **placement_text**：详细的文字说明，包括具体距离、朝向、注意事项
-2. **annotated_media_asset_id**：在原图上用红框/箭头标注推荐区域的图片
-3. **zones**：结构化数据，包含 bounding box、优先级、置信度等
+### 考虑因素
+- **鼠种特性**：rat（大鼠）和 mouse（小鼠）的活动习性不同
+- **陷阱类型**：不同陷阱需要不同的摆放策略
+- **环境特征**：根据识别到的家具、电器等提供针对性建议
+- **地域因素**：如果提供了 `user_location`，会考虑地域特点
 
 ### 性能说明
-- 图片分析 + 标注生成通常需要 10-20 秒
-- 复杂场景（多个房间、杂乱环境）可能需要 20-30 秒
+- 分析通常需要 5-15 秒
 - 超过 45 秒会返回 `REQUEST_TIMEOUT` 错误
-
-### 质量保证
-- 每个推荐位置都有 `confidence` 评分（0-1）
-- 优先级排序：priority=1 为最佳位置
-- 如果置信度过低（<0.5），系统会返回 `NO_SUITABLE_LOCATION` 错误
 </Note>
 
 ---
@@ -452,8 +397,6 @@ const analysis = await res.json();
 ## 幂等性建议
 
 建议对「同一房间照片 + 同一上下文」的分析使用相同 `Idempotency-Key`：
-- 避免重复调用 AI，节约成本
-- 用户在前端刷新 LOC_RESULT 页面时保持结果一致
 
 <Tip>
 **推荐的幂等键格式**：`loc-analysis-${setupSessionId}-${mediaAssetId}`
@@ -473,18 +416,13 @@ const analysis = await res.json();
   <img src="/images/room.jpg" alt="测试用房间照片" />
 </Frame>
 
-**使用方法**：
-1. 下载此图片到本地
-2. 通过 `POST /media-assets` 接口上传（`purpose: "setup"`）
-3. 使用返回的 `media_asset_id` 调用本接口
-
 **测试脚本示例**：
 ```python
 # 1. 创建媒体资源
 response = requests.post(
     f"{BASE_URL}/media-assets",
     headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    json={"purpose": "setup", "content_type": "image/jpeg", "metadata": {"usage": "location_analysis"}}
+    json={"purpose": "setup", "content_type": "image/jpeg", "metadata": {}}
 )
 media_id = response.json()['id']
 upload_url = response.json()['upload_url']
@@ -500,8 +438,8 @@ response = requests.post(
     json={
         "media_asset_id": media_id,
         "rodent_target": "rat",
-        "trap_type": "snap_trap",
-        "options": {"max_zones": 2, "language": "zh-CN"}
+        "trap_type": "snap_trap"
     }
 )
+print(response.json())
 ```
