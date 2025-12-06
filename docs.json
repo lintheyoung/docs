@@ -152,14 +152,7 @@
   "openapi": [
     "/rattrap-api/openapi.json"
   ],
-  "integrations": {
-    "crisp": "7ea85f39-a49f-4017-934c-010ed9c9db4d"
-  },
-  "scripts": [
-    {
-      "src": "/scripts/crisp-config.js"
-    }
-  ],
+  "head": "<script>window.$crisp=[];window.CRISP_WEBSITE_ID=\"7ea85f39-a49f-4017-934c-010ed9c9db4d\";(function(){var d=document;var s=d.createElement(\"script\");s.src=\"https://client.crisp.chat/l.js\";s.async=1;d.getElementsByTagName(\"head\")[0].appendChild(s);})();</script>",
   "api": {
     "auth": {
       "method": "bearer",
