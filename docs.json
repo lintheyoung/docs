@@ -152,6 +152,14 @@
   "openapi": [
     "/rattrap-api/openapi.json"
   ],
+  "integrations": {
+    "crisp": "7ea85f39-a49f-4017-934c-010ed9c9db4d"
+  },
+  "scripts": [
+    {
+      "src": "/scripts/crisp-config.js"
+    }
+  ],
   "api": {
     "auth": {
       "method": "bearer",
