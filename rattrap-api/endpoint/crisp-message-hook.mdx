@@ -21,24 +21,7 @@ openapi: "POST /crisp-message-hook"
 https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/crisp-message-hook
 ```
 
-### 安全验证
-
-请求会包含 `X-Crisp-Signature` header，后端必须验证此签名：
-
-```typescript
-const signature = request.headers.get('X-Crisp-Signature');
-const secret = Deno.env.get('CRISP_WEBHOOK_SECRET');
-const body = await request.text();
-
-const expectedSignature = crypto
-  .createHmac('sha256', secret)
-  .update(body)
-  .digest('hex');
-
-if (signature !== expectedSignature) {
-  return new Response('Invalid signature', { status: 401 });
-}
-```
+**注意**：此接口无需认证，直接接收 Crisp 发送的消息即可。
 
 ## 处理的事件类型
 
