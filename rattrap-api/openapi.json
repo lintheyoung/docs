@@ -675,6 +675,77 @@
           }
         }
       }
+    },
+    "/crisp-message-hook": {
+      "post": {
+        "operationId": "crispMessageHook",
+        "summary": "Crisp Message Hook",
+        "description": "接收 Crisp 客服系统的 webhook 事件",
+        "tags": ["Webhooks"],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["website_id", "event", "timestamp", "data"],
+                "properties": {
+                  "website_id": {
+                    "type": "string",
+                    "description": "Crisp 网站 ID"
+                  },
+                  "event": {
+                    "type": "string",
+                    "description": "事件类型",
+                    "enum": ["message:send", "message:received", "session:set_email", "session:set_data"]
+                  },
+                  "timestamp": {
+                    "type": "integer",
+                    "description": "事件时间戳（Unix 时间）"
+                  },
+                  "data": {
+                    "type": "object",
+                    "description": "事件数据"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "处理成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "签名验证失败",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
