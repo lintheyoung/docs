@@ -5,7 +5,13 @@ openapi: "POST /crisp-message-hook"
 
 ## 概述
 
-此 Edge Function 用于接收 Crisp 客服系统发送的 webhook 事件，处理用户消息、会话更新等事件。
+此 Edge Function 用于接收 Crisp 客服系统发送的 webhook 事件，提取用户消息内容用于后续 RAG 问答分析。
+
+**核心功能**：
+- 接收 Crisp 的 `message:send` 事件
+- 提取消息内容（`data.content`）
+- 记录日志用于测试验证
+- 为后续 RAG 分析提供数据源
 
 ## Webhook 配置
 
@@ -34,19 +40,35 @@ if (signature !== expectedSignature) {
 }
 ```
 
-## 支持的事件类型
+## 处理的事件类型
 
-### message:send
-用户在聊天窗口发送消息时触发
+目前仅处理 `message:send` 事件（用户发送消息）。
 
-### message:received
-客服回复用户消息时触发
+## 后端实现要点
 
-### session:set_email
-用户设置邮箱时触发
+### 1. 消息提取
+从 webhook payload 中提取关键信息：
+- `data.content`: 消息内容（用于 RAG）
+- `data.from`: 消息来源（user/operator）
+- `data.session_id`: 会话 ID
+- `data.user.nickname`: 用户昵称
 
-### session:set_data
-会话自定义数据更新时触发
+### 2. 测试阶段
+打印日志验证解析成功：
+```typescript
+console.log('Received message:', {
+  session_id: data.session_id,
+  from: data.from,
+  content: data.content,
+  user: data.user.nickname
+});
+```
+
+### 3. 后续扩展
+提取的消息将用于：
+- 构建 RAG 知识库
+- 分析用户常见问题
+- 优化客服回复
 
 ## 请求示例
 
@@ -54,20 +76,20 @@ if (signature !== expectedSignature) {
 {
   "website_id": "7ea85f39-a49f-4017-934c-010ed9c9db4d",
   "event": "message:send",
-  "timestamp": 1733565668,
+  "timestamp": 1506985696616,
   "data": {
     "website_id": "7ea85f39-a49f-4017-934c-010ed9c9db4d",
-    "session_id": "session_xxx",
-    "message": {
-      "type": "text",
-      "content": "用户发送的消息内容",
-      "from": "user",
-      "origin": "chat",
-      "timestamp": 1733565668
-    },
+    "session_id": "session_36ba3566-9651-4790-afc8-ffedbccc317f",
+    "type": "text",
+    "content": "Hey :)",
+    "from": "user",
+    "origin": "chat",
+    "stamped": true,
+    "timestamp": 1506985696616,
+    "fingerprint": 150698569649423,
     "user": {
-      "nickname": "访客",
-      "email": "user@example.com"
+      "nickname": "visitor493603",
+      "user_id": "session_36ba3566-9651-4790-afc8-ffedbccc317f"
     }
   }
 }

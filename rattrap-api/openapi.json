@@ -698,15 +698,58 @@
                   "event": {
                     "type": "string",
                     "description": "事件类型",
-                    "enum": ["message:send", "message:received", "session:set_email", "session:set_data"]
+                    "enum": ["message:send"]
                   },
                   "timestamp": {
                     "type": "integer",
-                    "description": "事件时间戳（Unix 时间）"
+                    "description": "事件时间戳（Unix 毫秒）"
                   },
                   "data": {
                     "type": "object",
-                    "description": "事件数据"
+                    "description": "消息数据",
+                    "properties": {
+                      "website_id": {
+                        "type": "string"
+                      },
+                      "session_id": {
+                        "type": "string"
+                      },
+                      "type": {
+                        "type": "string",
+                        "enum": ["text"]
+                      },
+                      "content": {
+                        "type": "string",
+                        "description": "消息内容（用于 RAG 分析）"
+                      },
+                      "from": {
+                        "type": "string",
+                        "enum": ["user", "operator"]
+                      },
+                      "origin": {
+                        "type": "string"
+                      },
+                      "stamped": {
+                        "type": "boolean"
+                      },
+                      "timestamp": {
+                        "type": "integer"
+                      },
+                      "fingerprint": {
+                        "type": "integer"
+                      },
+                      "user": {
+                        "type": "object",
+                        "properties": {
+                          "nickname": {
+                            "type": "string"
+                          },
+                          "user_id": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
