@@ -1,0 +1,139 @@
+---
+title: "Crisp Message Hook"
+description: "接收 Crisp 客服系统的 webhook 事件"
+---
+
+## 接口信息
+
+- **方法**: POST
+- **URL**: `https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/crisp-message-hook`
+- **认证**: 通过 X-Crisp-Signature header 验证
+
+## 概述
+
+此 Edge Function 用于接收 Crisp 客服系统发送的 webhook 事件，处理用户消息、会话更新等事件。
+
+## Webhook 配置
+
+在 Crisp 后台配置 webhook URL：
+
+```
+https://lrsppxarhxvxcflougbp.supabase.co/functions/v1/crisp-message-hook
+```
+
+验证方式：HMAC-SHA256 签名验证
+
+## 请求
+
+### Headers
+
+<ParamField header="X-Crisp-Signature" type="string" required>
+  Crisp 使用 webhook secret 生成的 HMAC-SHA256 签名
+</ParamField>
+
+<ParamField header="Content-Type" type="string" required>
+  application/json
+</ParamField>
+
+### Body
+
+<ParamField body="website_id" type="string" required>
+  Crisp 网站 ID
+</ParamField>
+
+<ParamField body="event" type="string" required>
+  事件类型，如 `message:send`、`message:received`、`session:set_email` 等
+</ParamField>
+
+<ParamField body="timestamp" type="number" required>
+  事件时间戳（Unix 时间）
+</ParamField>
+
+<ParamField body="data" type="object" required>
+  事件数据，包含消息内容、用户信息等
+</ParamField>
+
+## 支持的事件类型
+
+### message:send
+用户在聊天窗口发送消息时触发
+
+### message:received
+客服回复用户消息时触发
+
+### session:set_email
+用户设置邮箱时触发
+
+### session:set_data
+会话自定义数据更新时触发
+
+## 响应
+
+<ResponseField name="success" type="boolean">
+  处理是否成功
+</ResponseField>
+
+## 示例
+
+<RequestExample>
+```json
+{
+  "website_id": "7ea85f39-a49f-4017-934c-010ed9c9db4d",
+  "event": "message:send",
+  "timestamp": 1733565668,
+  "data": {
+    "website_id": "7ea85f39-a49f-4017-934c-010ed9c9db4d",
+    "session_id": "session_xxx",
+    "message": {
+      "type": "text",
+      "content": "用户发送的消息内容",
+      "from": "user",
+      "origin": "chat",
+      "timestamp": 1733565668
+    },
+    "user": {
+      "nickname": "访客",
+      "email": "user@example.com"
+    }
+  }
+}
+```
+</RequestExample>
+
+<ResponseExample>
+```json
+{
+  "success": true
+}
+```
+</ResponseExample>
+
+## 安全验证
+
+后端必须验证 `X-Crisp-Signature` header 中的签名，确保请求来自 Crisp：
+
+```typescript
+const signature = request.headers.get('X-Crisp-Signature');
+const secret = Deno.env.get('CRISP_WEBHOOK_SECRET');
+const body = await request.text();
+
+const expectedSignature = crypto
+  .createHmac('sha256', secret)
+  .update(body)
+  .digest('hex');
+
+if (signature !== expectedSignature) {
+  return new Response('Invalid signature', { status: 401 });
+}
+```
+
+## 错误响应
+
+<ResponseField name="error" type="string">
+  错误描述
+</ResponseField>
+
+可能的错误：
+- `401 Unauthorized`: 签名验证失败
+- `400 Bad Request`: 请求格式错误
+- `500 Internal Server Error`: 服务器内部错误

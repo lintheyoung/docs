@@ -89,6 +89,12 @@
             ]
           },
           {
+            "group": "Webhooks",
+            "pages": [
+              "rattrap-api/endpoint/crisp-message-hook"
+            ]
+          },
+          {
             "group": "陷阱管理",
             "pages": [
               "rattrap-api/endpoint/list-traps",
