@@ -161,9 +161,13 @@
       "mode": "show"
     }
   },
-  "analytics": {
-    "crisp": {
-      "id": "7ea85f39-a49f-4017-934c-010ed9c9db4d"
+  "head": [
+    {
+      "tag": "script",
+      "attributes": {
+        "type": "text/javascript"
+      },
+      "children": "window.$crisp=[];window.CRISP_WEBSITE_ID=\"7ea85f39-a49f-4017-934c-010ed9c9db4d\";(function(){d=document;s=d.createElement(\"script\");s.src=\"https://client.crisp.chat/l.js\";s.async=1;d.getElementsByTagName(\"head\")[0].appendChild(s);})();"
     }
-  }
+  ]
 }
