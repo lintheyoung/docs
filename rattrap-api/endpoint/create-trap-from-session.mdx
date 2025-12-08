@@ -3,6 +3,12 @@ title: '从会话创建陷阱'
 openapi: 'POST /create-trap-from-session'
 ---
 
+<Info>
+**方式 A**：这是创建陷阱的两种方式之一。需要先完成校准（Session 状态为 completed），再调用此接口。
+
+如果希望**一次请求完成**校准和创建陷阱，请使用 [方式 B：更新布防会话](/rattrap-api/endpoint/update-setup-session)，在提交 `calibration_data` 时同时传入 `trap_name`。
+</Info>
+
 <RequestExample>
 ```bash cURL
 curl "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/create-trap-from-session?session_id=ss_1Qy8u8CZ7aQp98Xb5WJtR3" \
@@ -129,8 +135,36 @@ const trap = await res.json();
 
 从一个已经走完布防流程的 setup session 中，创建一条真正的 **Trap 实体**。
 
+### 两种创建 Trap 的方式
+
+| 方式 | 接口 | 请求次数 | 特点 |
+|------|------|---------|------|
+| **方式 A（本接口）** | `POST /create-trap-from-session` | 2 次 | 前端提供全部 5 个必填字段 |
+| **方式 B** | `POST /setup-sessions/{id}` + `trap_name` | 1 次 | 从 Session 数据自动获取字段 |
+
+<Tabs>
+  <Tab title="方式 A（本接口）">
+    ```
+    1. POST /setup-sessions/{id}   → 提交 calibration_data，stage 变为 completed
+    2. POST /create-trap-from-session → 传入 5 个必填字段，创建 Trap
+    ```
+    **适用场景**：需要前端自定义全部字段值
+  </Tab>
+  <Tab title="方式 B（推荐）">
+    ```
+    POST /setup-sessions/{id}
+    {
+      "calibration_data": { ... },
+      "trap_name": "厨房陷阱1"
+    }
+    → 一次完成：stage 变为 completed + 自动创建 Trap
+    ```
+    **适用场景**：标准流程，数据已在 Session 中
+  </Tab>
+</Tabs>
+
 <Warning>
-**前置条件：**
+**前置条件（方式 A）：**
 - Session 必须存在且属于当前用户
 - Session 的 `current_stage` 必须为 `"completed"`
 - 如果 Session 已经创建过陷阱（`created_trap_id` 不为空），会直接返回已存在的陷阱（幂等性）

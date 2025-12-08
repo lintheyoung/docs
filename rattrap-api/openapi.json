@@ -1075,7 +1075,7 @@
       },
       "UpdateSetupSessionRequest": {
         "type": "object",
-        "description": "更新布防会话的请求。rodent_target 会自动合并到 identification_data.rodent_target。提交哪个阶段的数据就推进到下一阶段。",
+        "description": "更新布防会话的请求。rodent_target 会自动合并到 identification_data.rodent_target。提交哪个阶段的数据就推进到下一阶段。在校准阶段提交 calibration_data 时，如果同时传入 trap_name，会自动创建 Trap 和 deployment Event。",
         "properties": {
           "rodent_target": {
             "type": "string",
@@ -1096,7 +1096,13 @@
           },
           "calibration_data": {
             "type": "object",
-            "description": "校准阶段数据（提交后推进到 completed 阶段）"
+            "description": "校准阶段数据（提交后推进到 completed 阶段）。如果同时传入 trap_name，会自动创建 Trap。"
+          },
+          "trap_name": {
+            "type": "string",
+            "description": "陷阱名称（仅在提交 calibration_data 时使用）。传入此字段时，系统会自动创建 Trap 和 deployment Event，从 Session 各阶段数据获取 trap_type、bait_type、location_desc 等字段。",
+            "example": "厨房陷阱1",
+            "maxLength": 100
           },
           "metadata": {
             "type": "object",

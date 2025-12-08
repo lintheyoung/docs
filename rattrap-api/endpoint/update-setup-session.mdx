@@ -4,7 +4,7 @@ openapi: 'POST /setup-sessions/{id}'
 ---
 
 <RequestExample>
-```bash cURL
+```bash cURL - 识别阶段
 curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/setup-sessions/ss_1Qy8u8CZ7aQp98Xb5WJtR3 \
   -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOiJhdXRoZW50aWNhdGVkIiwiZXhwIjoxNzMyNjE4MDAwLCJpYXQiOjE3MzI2MTQ0MDAsImlzcyI6Imh0dHBzOi8vdndpbnZreHhoZXVleHZwdnppYnQuc3VwYWJhc2UuY28iLCJzdWIiOiJ1c2VyLWlkLWhlcmUifQ.xxx" \
   -H "Content-Type: application/json" \
@@ -25,7 +25,22 @@ curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/setup-sessions/ss_1Qy
   }'
 ```
 
-```javascript Node.js
+```bash cURL - 校准完成并创建陷阱
+curl https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/setup-sessions/ss_1Qy8u8CZ7aQp98Xb5WJtR3 \
+  -H "Authorization: Bearer {token}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "calibration_data": {
+      "media_asset_id": "ma_calib_xxx",
+      "calibration_check_id": "cc_xxx",
+      "is_correct": true,
+      "skipped": false
+    },
+    "trap_name": "厨房陷阱1"
+  }'
+```
+
+```javascript Node.js - 识别阶段
 const res = await fetch(`https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/setup-sessions/${sessionId}`, {
   method: "POST",
   headers: {
@@ -50,10 +65,32 @@ const res = await fetch(`https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/s
 
 const session = await res.json();
 ```
+
+```javascript Node.js - 校准完成并创建陷阱
+const res = await fetch(`https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/setup-sessions/${sessionId}`, {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    calibration_data: {
+      media_asset_id: "ma_calib_xxx",
+      calibration_check_id: "cc_xxx",
+      is_correct: true,
+      skipped: false
+    },
+    trap_name: "厨房陷阱1"
+  })
+});
+
+const session = await res.json();
+// session.created_trap_id 包含新创建的陷阱 ID
+```
 </RequestExample>
 
 <ResponseExample>
-```json 成功响应
+```json 成功响应 - 阶段更新
 {
   "id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
   "object": "setup_session",
@@ -84,11 +121,118 @@ const session = await res.json();
   "updated": 1764038455
 }
 ```
+
+```json 成功响应 - 完成并创建陷阱
+{
+  "id": "ss_1Qy8u8CZ7aQp98Xb5WJtR3",
+  "object": "setup_session",
+  "current_stage": "completed",
+  "created_trap_id": "trap_1702012345678_123456",
+  "rodent_target": "rat",
+  "identification_data": {
+    "rodent_target": "rat",
+    "confidence": 0.95
+  },
+  "strategy_data": {
+    "selected_trap_type": "snap_trap",
+    "selected_bait_type": "peanut_butter",
+    "recommended_interval_hours": 24
+  },
+  "location_scout_data": {
+    "media_asset_id": "ma_loc_xxx",
+    "room_type": "kitchen",
+    "location_description": "厨房 - 沿墙角放置"
+  },
+  "calibration_data": {
+    "media_asset_id": "ma_calib_xxx",
+    "calibration_check_id": "cc_xxx",
+    "is_correct": true,
+    "skipped": false
+  },
+  "metadata": {
+    "source": "mobile_app"
+  },
+  "created": 1764038400,
+  "updated": 1764038999
+}
+```
+
+```json 错误响应 - 数据不完整
+{
+  "error": {
+    "type": "validation_error",
+    "code": "INCOMPLETE_SESSION",
+    "message": "Cannot complete setup: missing required data",
+    "details": {
+      "missing_fields": [
+        "strategy_data.selected_trap_type",
+        "location_scout_data.location_description"
+      ]
+    }
+  }
+}
+```
 </ResponseExample>
 
 ## 使用说明
 
 这是一个**通用更新接口**，用于更新布防会话的各个阶段数据。
+
+<Info>
+**重要更新**：校准阶段完成时，可以同时提交 `trap_name` 来自动创建陷阱（Trap）和部署事件（deployment Event），无需再单独调用 `create-trap-from-session` 接口。
+</Info>
+
+### 创建陷阱的两种方式
+
+本接口支持两种方式创建 Trap：
+
+| 方式 | 说明 | 请求次数 | 适用场景 |
+|------|------|---------|---------|
+| **方式 A** | 先完成校准，再调用 `create-trap-from-session` | 2 次 | 需要前端自定义全部字段 |
+| **方式 B** | 完成校准时同时传 `trap_name`，自动创建 Trap | 1 次 | 标准流程，数据已在 Session 中 |
+
+<Tabs>
+  <Tab title="方式 B（推荐）">
+    **一次请求完成全部操作**
+
+    ```json
+    {
+      "calibration_data": {
+        "media_asset_id": "ma_calib_xxx",
+        "is_correct": true
+      },
+      "trap_name": "厨房陷阱1"
+    }
+    ```
+
+    系统会自动：
+    1. 更新 `calibration_data`，stage 变为 `completed`
+    2. 从 Session 各阶段数据创建 Trap
+    3. 创建 `deployment` 类型的 Trap Event
+    4. 返回 `created_trap_id`
+  </Tab>
+  <Tab title="方式 A（现有）">
+    **两次请求**
+
+    ```json
+    // 第一步：完成校准
+    POST /setup-sessions/{id}
+    { "calibration_data": { "media_asset_id": "ma_xxx", "is_correct": true } }
+
+    // 第二步：创建陷阱
+    POST /create-trap-from-session?session_id={id}
+    {
+      "name": "厨房陷阱1",
+      "location_desc": "厨房角落",
+      "trap_type": "snap_trap",
+      "bait_type": "peanut_butter",
+      "rodent_target": "rat"
+    }
+    ```
+
+    适用于需要前端自定义全部字段值的场景。
+  </Tab>
+</Tabs>
 
 ### 核心机制
 
@@ -177,20 +321,38 @@ API 响应时，后端会自动从 `identification_data.rodent_target` 提取到
   </Tab>
 
   <Tab title="校准阶段 → Completed">
-    用于写入校准检查结果：
+    用于写入校准检查结果。支持两种模式：
 
+    **模式 1：只完成校准（不创建 Trap）**
     ```json
     {
       "calibration_data": {
-        "sensitivity": 0.8,
-        "trigger_threshold": 50,
-        "calibration_photo_url": "https://...",
-        "is_ready": true
+        "media_asset_id": "ma_calib_xxx",
+        "calibration_check_id": "cc_xxx",
+        "is_correct": true,
+        "skipped": false
       }
     }
     ```
+    - `current_stage` 变为 `"completed"`
+    - `created_trap_id` 保持 `null`
+    - 之后可以使用 `create-trap-from-session` 创建 Trap
 
-    提交后 `current_stage` 会从 `"calibration"` 推进到 `"completed"`。
+    **模式 2：完成校准并自动创建 Trap（推荐）**
+    ```json
+    {
+      "calibration_data": {
+        "media_asset_id": "ma_calib_xxx",
+        "calibration_check_id": "cc_xxx",
+        "is_correct": true,
+        "skipped": false
+      },
+      "trap_name": "厨房陷阱1"
+    }
+    ```
+    - `current_stage` 变为 `"completed"`
+    - 自动创建 Trap 和 deployment Event
+    - `created_trap_id` 返回新创建的陷阱 ID
   </Tab>
 </Tabs>
 
@@ -323,3 +485,86 @@ POST /setup-sessions/ss_xxx
 <Note>
 同样的验证规则也适用于 `identification_data.rodent_target`。
 </Note>
+
+## trap_name 字段（新增）
+
+<Info>
+`trap_name` 是**新增字段**，仅在校准阶段完成时使用，用于触发自动创建 Trap 的逻辑。
+</Info>
+
+### 字段说明
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `trap_name` | string | 条件必填 | 陷阱名称，仅在提交 `calibration_data` 时填写 |
+
+### 触发条件
+
+当以下条件**同时满足**时，触发自动创建 Trap 逻辑：
+
+1. `session.current_stage == 'calibration'`
+2. 请求中包含 `calibration_data`
+3. 请求中包含 `trap_name` 且非空（去除首尾空格后）
+
+### 验证规则
+
+| 值 | 结果 |
+|---|---|
+| `"厨房陷阱1"` | ✅ 有效，触发创建 Trap |
+| `"  厨房陷阱1  "` | ✅ 有效，会去除首尾空格 |
+| `""` | ❌ 无效，不触发创建 Trap |
+| `"   "` | ❌ 无效，不触发创建 Trap |
+| 不传该字段 | ✅ 有效，不触发创建 Trap（使用方式 A） |
+
+### 长度限制
+
+建议 `trap_name` 长度不超过 **100 字符**。
+
+## 自动创建 Trap 的数据来源
+
+当使用方式 B（传入 `trap_name`）时，Trap 的字段从以下位置自动获取：
+
+| Trap 字段 | 数据来源 | 说明 |
+|-----------|---------|------|
+| `name` | `request.trap_name` | 请求中传入 |
+| `trap_type` | `session.strategy_data.selected_trap_type` | 策略阶段选择 |
+| `bait_type` | `session.strategy_data.selected_bait_type` | 策略阶段选择 |
+| `rodent_target` | `session.rodent_target` | 识别阶段确认 |
+| `location_desc` | `session.location_scout_data.location_description` | 位置阶段填写 |
+| `deployment_media_id` | `request.calibration_data.media_asset_id` | 校准照片 |
+| `next_check_at` | `NOW() + recommended_interval_hours` | 默认 24 小时 |
+
+### 数据完整性检查
+
+在创建 Trap 前，系统会检查以下字段是否存在：
+
+- `session.rodent_target`
+- `session.strategy_data.selected_trap_type`
+- `session.strategy_data.selected_bait_type`
+- `session.location_scout_data.location_description`
+- `request.calibration_data.media_asset_id`
+- `request.trap_name`
+
+如果任何字段缺失，返回 `400 INCOMPLETE_SESSION` 错误。
+
+## 幂等性
+
+<Warning>
+方式 B 支持幂等性：如果 Session 已经创建过 Trap（`created_trap_id` 不为空），重复请求会直接返回现有数据，不会创建新的 Trap。
+</Warning>
+
+```json
+// 第一次请求：创建 Trap
+// 第二次请求：返回已存在的 Session，created_trap_id 不变
+```
+
+## 相关接口
+
+<CardGroup cols={2}>
+  <Card title="从会话创建陷阱" icon="wand-magic-sparkles" href="/rattrap-api/endpoint/create-trap-from-session">
+    方式 A：`POST /create-trap-from-session`
+  </Card>
+  <Card title="创建陷阱事件" icon="calendar-plus" href="/rattrap-api/endpoint/create-trap-event">
+    `POST /trap-events`
+  </Card>
+</CardGroup>
