@@ -236,8 +236,9 @@
     "/create-trap-from-session": {
       "post": {
         "operationId": "createTrapFromSession",
-        "summary": "从会话创建陷阱",
-        "description": "从一个已完成的 setup session 创建 Trap 实体。要求 current_stage 为 completed，且所有核心字段（name, location_desc, trap_type, bait_type, rodent_target）必须由用户提供。支持幂等性：如果 session 已创建过陷阱，直接返回已存在的陷阱。",
+        "summary": "从会话创建陷阱（已废弃）",
+        "description": "【已废弃】请使用 POST /setup-sessions/{id} 接口，在提交 calibration_data 时同时传入 trap_name 来创建陷阱。此接口从一个已完成的 setup session 创建 Trap 实体，要求 current_stage 为 completed，且所有核心字段必须由用户提供。",
+        "deprecated": true,
         "tags": ["Setup Sessions"],
         "parameters": [
           {

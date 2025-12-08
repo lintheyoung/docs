@@ -179,60 +179,28 @@ const session = await res.json();
 这是一个**通用更新接口**，用于更新布防会话的各个阶段数据。
 
 <Info>
-**重要更新**：校准阶段完成时，可以同时提交 `trap_name` 来自动创建陷阱（Trap）和部署事件（deployment Event），无需再单独调用 `create-trap-from-session` 接口。
+**重要**：校准阶段完成时，**必须**同时提交 `trap_name` 来创建陷阱（Trap）和部署事件（deployment Event）。
 </Info>
 
-### 创建陷阱的两种方式
+### 校准完成并创建陷阱
 
-本接口支持两种方式创建 Trap：
+在校准阶段提交 `calibration_data` 时，同时传入 `trap_name`：
 
-| 方式 | 说明 | 请求次数 | 适用场景 |
-|------|------|---------|---------|
-| **方式 A** | 先完成校准，再调用 `create-trap-from-session` | 2 次 | 需要前端自定义全部字段 |
-| **方式 B** | 完成校准时同时传 `trap_name`，自动创建 Trap | 1 次 | 标准流程，数据已在 Session 中 |
+```json
+{
+  "calibration_data": {
+    "media_asset_id": "ma_calib_xxx",
+    "is_correct": true
+  },
+  "trap_name": "厨房陷阱1"
+}
+```
 
-<Tabs>
-  <Tab title="方式 B（推荐）">
-    **一次请求完成全部操作**
-
-    ```json
-    {
-      "calibration_data": {
-        "media_asset_id": "ma_calib_xxx",
-        "is_correct": true
-      },
-      "trap_name": "厨房陷阱1"
-    }
-    ```
-
-    系统会自动：
-    1. 更新 `calibration_data`，stage 变为 `completed`
-    2. 从 Session 各阶段数据创建 Trap
-    3. 创建 `deployment` 类型的 Trap Event
-    4. 返回 `created_trap_id`
-  </Tab>
-  <Tab title="方式 A（现有）">
-    **两次请求**
-
-    ```json
-    // 第一步：完成校准
-    POST /setup-sessions/{id}
-    { "calibration_data": { "media_asset_id": "ma_xxx", "is_correct": true } }
-
-    // 第二步：创建陷阱
-    POST /create-trap-from-session?session_id={id}
-    {
-      "name": "厨房陷阱1",
-      "location_desc": "厨房角落",
-      "trap_type": "snap_trap",
-      "bait_type": "peanut_butter",
-      "rodent_target": "rat"
-    }
-    ```
-
-    适用于需要前端自定义全部字段值的场景。
-  </Tab>
-</Tabs>
+系统会自动：
+1. 更新 `calibration_data`，stage 变为 `completed`
+2. 从 Session 各阶段数据创建 Trap
+3. 创建 `deployment` 类型的 Trap Event
+4. 返回 `created_trap_id`
 
 ### 核心机制
 
@@ -321,24 +289,8 @@ API 响应时，后端会自动从 `identification_data.rodent_target` 提取到
   </Tab>
 
   <Tab title="校准阶段 → Completed">
-    用于写入校准检查结果。支持两种模式：
+    用于写入校准检查结果并创建陷阱。**必须**同时传入 `trap_name`：
 
-    **模式 1：只完成校准（不创建 Trap）**
-    ```json
-    {
-      "calibration_data": {
-        "media_asset_id": "ma_calib_xxx",
-        "calibration_check_id": "cc_xxx",
-        "is_correct": true,
-        "skipped": false
-      }
-    }
-    ```
-    - `current_stage` 变为 `"completed"`
-    - `created_trap_id` 保持 `null`
-    - 之后可以使用 `create-trap-from-session` 创建 Trap
-
-    **模式 2：完成校准并自动创建 Trap（推荐）**
     ```json
     {
       "calibration_data": {
@@ -550,7 +502,7 @@ POST /setup-sessions/ss_xxx
 ## 幂等性
 
 <Warning>
-方式 B 支持幂等性：如果 Session 已经创建过 Trap（`created_trap_id` 不为空），重复请求会直接返回现有数据，不会创建新的 Trap。
+支持幂等性：如果 Session 已经创建过 Trap（`created_trap_id` 不为空），重复请求会直接返回现有数据，不会创建新的 Trap。
 </Warning>
 
 ```json
@@ -561,10 +513,10 @@ POST /setup-sessions/ss_xxx
 ## 相关接口
 
 <CardGroup cols={2}>
-  <Card title="从会话创建陷阱" icon="wand-magic-sparkles" href="/rattrap-api/endpoint/create-trap-from-session">
-    方式 A：`POST /create-trap-from-session`
-  </Card>
   <Card title="创建陷阱事件" icon="calendar-plus" href="/rattrap-api/endpoint/create-trap-event">
     `POST /trap-events`
+  </Card>
+  <Card title="获取陷阱详情" icon="magnifying-glass" href="/rattrap-api/endpoint/get-trap">
+    `GET /traps/{id}`
   </Card>
 </CardGroup>

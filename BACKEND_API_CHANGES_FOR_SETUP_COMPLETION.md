@@ -4,7 +4,7 @@
 > **创建日期**: 2024-12-08  
 > **更新日期**: 2024-12-08  
 > **优先级**: 高  
-> **前置依赖**: 现有的 setup-sessions、traps、trap-events、create-trap-from-session API
+> **前置依赖**: 现有的 setup-sessions、traps、trap-events API
 
 ---
 
@@ -28,61 +28,27 @@
 
 ---
 
-## 二、API 架构说明
+## 二、API 变更清单
 
-### 2.1 两种创建 Trap 的方式（均保留）
-
-本次修改后，系统将支持**两种**方式创建 Trap，均保留并行使用：
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        创建 Trap 的两种方式                                  │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  方式 A（现有）                      方式 B（新增）                           │
-│  ─────────────                      ─────────────                           │
-│                                                                             │
-│  1. POST /setup-sessions/{id}       1. POST /setup-sessions/{id}            │
-│     提交 calibration_data              提交 calibration_data + trap_name    │
-│     → stage 变为 completed             → stage 变为 completed               │
-│                                        → 自动创建 Trap                       │
-│  2. POST /create-trap-from-session     → 自动创建 deployment Event          │
-│     传入 session_id + 5个必填字段       → 返回 created_trap_id               │
-│     → 创建 Trap                                                             │
-│     → 创建 deployment Event                                                 │
-│                                                                             │
-│  特点：                              特点：                                  │
-│  • 前端需要两次请求                  • 前端只需一次请求                       │
-│  • 前端提供全部 Trap 字段            • Trap 字段从 Session 数据自动获取       │
-│  • 向后兼容现有实现                  • 用户体验更好                           │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
-### 2.2 两种方式的对比
-
-| 对比项 | 方式 A (create-trap-from-session) | 方式 B (update-setup-session) |
-|--------|----------------------------------|------------------------------|
-| **请求次数** | 2 次 | 1 次 |
-| **前端传入字段** | 5 个必填 (name, location_desc, trap_type, bait_type, rodent_target) | 1 个必填 (trap_name) |
-| **数据来源** | 前端提供全部字段 | 从 Session 各阶段数据自动获取 |
-| **next_check_at** | 创建时间 + 7 天（固定） | 创建时间 + recommended_interval_hours |
-| **session_id 存储** | metadata.source_session_id | traps.setup_session_id（新增列） |
-| **使用场景** | 需要前端自定义字段值 | 标准流程，数据已在 Session 中 |
-| **保留状态** | ✅ 保留 | ✅ 新增 |
-
-### 2.3 API 变更清单
+### 2.1 变更概述
 
 | API | 端点 | 变更类型 | 说明 |
 |-----|------|---------|------|
-| **Update Setup Session** | `POST /setup-sessions/{id}` | **修改** | 增加完成逻辑（方式 B） |
-| **Create Trap From Session** | `POST /create-trap-from-session` | **保留** | 现有逻辑不变（方式 A） |
+| **Update Setup Session** | `POST /setup-sessions/{id}` | **修改** | 校准完成时必须同时创建 Trap |
+| **Create Trap From Session** | `POST /create-trap-from-session` | **废弃** | 标记为 Deprecated，保持向后兼容 |
 | Create Trap | `POST /traps` | 无变更 | 由上述 API 内部调用 |
 | Create Trap Event | `POST /trap-events` | 无变更 | 由上述 API 内部调用 |
 
+### 2.2 废弃说明
+
+`POST /create-trap-from-session` 接口已标记为 **Deprecated**：
+- 该接口仍可正常工作，保持向后兼容
+- 新代码应使用 `POST /setup-sessions/{id}` 并传入 `trap_name`
+- 建议在日志中记录该接口调用，方便追踪迁移进度
+
 ---
 
-## 三、方式 B 详细规范（Update Setup Session 完成逻辑）
+## 三、Update Setup Session 完成逻辑
 
 ### 3.1 端点
 
@@ -120,13 +86,13 @@ Content-Type: application/json
 | `calibration_data.calibration_check_id` | string | ❌ | 校准检查 API 返回的 ID |
 | `calibration_data.is_correct` | boolean | ✅ | 是否通过校准 |
 | `calibration_data.skipped` | boolean | ❌ | 是否跳过校准（用户选择"先用这样"） |
-| `trap_name` | string | ✅* | 陷阱名称（**仅在完成阶段必填**） |
+| `trap_name` | string | ✅ | 陷阱名称（**必填**） |
 
-> **注意**: `trap_name` 是**新增字段**，仅在提交 `calibration_data` 时必填。其他阶段（identification、strategy、location）更新时不需要此字段。
+> **注意**: `trap_name` 是**新增字段**，在提交 `calibration_data` 时**必须**同时提供。其他阶段（identification、strategy、location）更新时不需要此字段。
 
 ### 3.5 触发完成逻辑的条件
 
-当以下条件**同时满足**时，触发方式 B 的完成逻辑：
+当以下条件**同时满足**时，触发完成逻辑：
 
 ```
 1. session.current_stage == 'calibration'
@@ -134,11 +100,7 @@ Content-Type: application/json
 3. request.trap_name 存在且非空（去除首尾空格后）
 ```
 
-如果只有 `calibration_data` 没有 `trap_name`：
-- **不触发**方式 B 的完成逻辑
-- 正常更新 `calibration_data`，stage 变为 `completed`
-- 但**不创建** Trap 和 Event
-- 前端可以之后使用方式 A (`create-trap-from-session`) 创建 Trap
+**注意**：`trap_name` 是必填字段，如果缺失则返回 `400 VALIDATION_ERROR`。
 
 ### 3.6 成功响应 (200 OK)
 

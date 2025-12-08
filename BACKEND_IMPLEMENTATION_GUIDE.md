@@ -2,6 +2,7 @@
 
 > **文档目的**: 后端开发人员实现参考  
 > **创建日期**: 2024-12-08  
+> **更新日期**: 2024-12-08  
 > **关联文档**: [BACKEND_API_CHANGES_FOR_SETUP_COMPLETION.md](./BACKEND_API_CHANGES_FOR_SETUP_COMPLETION.md)
 
 ---
@@ -11,8 +12,9 @@
 | 项目 | 内容 |
 |------|------|
 | **需要修改的 API** | `POST /setup-sessions/{id}` (Update Setup Session) |
+| **需要废弃的 API** | `POST /create-trap-from-session` (标记为 Deprecated) |
 | **变更类型** | 新增完成逻辑 |
-| **核心功能** | 校准阶段完成时，可选自动创建 Trap 和 deployment Event |
+| **核心功能** | 校准阶段完成时，**必须**同时创建 Trap 和 deployment Event |
 
 ---
 
@@ -34,13 +36,13 @@
 
 | 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `trap_name` | string | 条件必填 | 仅在提交 `calibration_data` 时使用，触发自动创建 Trap |
+| `trap_name` | string | **必填** | 校准阶段完成时必须提供，用于创建 Trap |
 
 ---
 
 ## 三、触发条件
 
-当以下条件**同时满足**时，触发自动创建 Trap 逻辑：
+当以下条件**同时满足**时，触发创建 Trap 逻辑：
 
 ```
 1. session.current_stage == 'calibration'
@@ -48,10 +50,7 @@
 3. request.trap_name 存在且非空（trim 后 length > 0）
 ```
 
-**注意**：如果只有 `calibration_data` 没有 `trap_name`，则：
-- 正常更新 calibration_data
-- stage 变为 completed
-- **不创建** Trap（前端可后续使用 create-trap-from-session）
+**注意**：`trap_name` 是必填字段，如果缺失则返回 `400 VALIDATION_ERROR`。
 
 ---
 
@@ -246,12 +245,21 @@ POST /setup-sessions/ss_xxx
 # 预期: 200, 不创建新 Trap, 返回已存在数据
 ```
 
-### 只提交 calibration_data
+### 缺少 trap_name
 ```bash
 POST /setup-sessions/ss_xxx
 { "calibration_data": { "media_asset_id": "ma_xxx", "is_correct": true } }
-# 预期: 200, stage=completed, created_trap_id=null
+# 预期: 400, VALIDATION_ERROR, "trap_name is required when completing setup"
 ```
+
+---
+
+## 十三、废弃 API 说明
+
+`POST /create-trap-from-session` 接口已标记为 **Deprecated**，后端无需修改该接口，但需要：
+
+1. 在日志中记录该接口的调用（方便追踪迁移进度）
+2. 该接口仍可正常工作，保持向后兼容
 
 ---
 
