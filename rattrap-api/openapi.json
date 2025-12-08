@@ -789,6 +789,141 @@
           }
         }
       }
+    },
+    "/knowledge-upload": {
+      "post": {
+        "operationId": "uploadKnowledge",
+        "summary": "上传知识库文件",
+        "description": "管理员上传知识库文件（文本、图片、PDF、Word），用于 RAG 知识问答系统。系统会自动提取内容、生成向量嵌入并存入数据库。",
+        "tags": ["Knowledge"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "要上传的文件（支持 .txt, .jpg, .png, .webp, .pdf, .docx）"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "知识标题（可选，默认使用文件名）"
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": ["rodent_knowledge", "trap_usage", "faq", "general"],
+                    "description": "知识分类（可选，默认 general）"
+                  },
+                  "tags": {
+                    "type": "string",
+                    "description": "标签数组（JSON 字符串，例如 \"[\\\"老鼠习性\\\",\\\"防治\\\"]\"）"
+                  },
+                  "visibility": {
+                    "type": "string",
+                    "enum": ["private", "public"],
+                    "description": "隐私级别：private（租户私有）/ public（全局共享），默认 private"
+                  },
+                  "language": {
+                    "type": "string",
+                    "description": "语言代码（ISO 639-1），例如 en, zh, ja, es，默认 en"
+                  },
+                  "source_url": {
+                    "type": "string",
+                    "description": "原始来源 URL，用于引用追溯（可选）"
+                  },
+                  "source_title": {
+                    "type": "string",
+                    "description": "来源标题，显示在引用中（可选）"
+                  },
+                  "source_author": {
+                    "type": "string",
+                    "description": "作者或来源机构（可选）"
+                  },
+                  "access_level": {
+                    "type": "string",
+                    "enum": ["public", "internal", "private"],
+                    "description": "访问权限：public（直接访问）/ internal（需登录）/ private（仅内部），默认 public"
+                  },
+                  "applicable_countries": {
+                    "type": "string",
+                    "description": "适用国家列表（JSON 字符串，ISO 3166-1），例如 \"[\\\"US\\\",\\\"CA\\\"]\"（可选）"
+                  },
+                  "excluded_countries": {
+                    "type": "string",
+                    "description": "排除国家列表（JSON 字符串，优先级高于 applicable_countries）（可选）"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "上传成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeEntry"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（缺少文件、不支持的格式、验证失败）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权（Token 无效或缺失）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "权限不足（需要 admin 或 owner 角色）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "文件太大（超过 10MB）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "服务器内部错误（文件提取、向量生成、数据库错误）",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1891,6 +2026,105 @@
           "created": {
             "type": "integer",
             "description": "记录创建时间（Unix 时间戳，秒）"
+          }
+        }
+      },
+      "KnowledgeEntry": {
+        "type": "object",
+        "description": "知识库条目",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "知识库条目 ID，格式：kb_xxx"
+          },
+          "tenant_id": {
+            "type": "string",
+            "nullable": true,
+            "description": "租户 ID（private 模式）或 null（public 模式）"
+          },
+          "title": {
+            "type": "string",
+            "description": "知识标题"
+          },
+          "content": {
+            "type": "string",
+            "description": "提取的文本内容或图片描述"
+          },
+          "content_type": {
+            "type": "string",
+            "enum": ["document", "image", "text", "qa"],
+            "description": "内容类型"
+          },
+          "source_file_name": {
+            "type": "string",
+            "description": "原始文件名"
+          },
+          "source_file_type": {
+            "type": "string",
+            "enum": ["txt", "jpg", "png", "webp", "pdf", "docx"],
+            "description": "文件类型"
+          },
+          "image_url": {
+            "type": "string",
+            "nullable": true,
+            "description": "图片公开 URL（仅图片类型）"
+          },
+          "source_url": {
+            "type": "string",
+            "nullable": true,
+            "description": "原始来源 URL"
+          },
+          "source_title": {
+            "type": "string",
+            "nullable": true,
+            "description": "来源标题"
+          },
+          "access_level": {
+            "type": "string",
+            "enum": ["public", "internal", "private"],
+            "description": "访问权限级别"
+          },
+          "category": {
+            "type": "string",
+            "description": "知识分类"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "标签数组"
+          },
+          "language": {
+            "type": "string",
+            "description": "语言代码（ISO 639-1）"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": ["private", "public"],
+            "description": "隐私级别"
+          },
+          "is_active": {
+            "type": "boolean",
+            "description": "是否启用"
+          },
+          "usage_count": {
+            "type": "integer",
+            "description": "使用次数"
+          },
+          "created_by": {
+            "type": "string",
+            "description": "创建者用户 ID"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "创建时间（ISO 8601）"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "更新时间（ISO 8601）"
           }
         }
       }
