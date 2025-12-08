@@ -95,6 +95,12 @@
             ]
           },
           {
+            "group": "AI 客服",
+            "pages": [
+              "rattrap-api/endpoint/rag-qa"
+            ]
+          },
+          {
             "group": "陷阱管理",
             "pages": [
               "rattrap-api/endpoint/list-traps",
