@@ -98,7 +98,9 @@
             "group": "AI 客服",
             "pages": [
               "rattrap-api/endpoint/rag-qa",
-              "rattrap-api/endpoint/knowledge-upload"
+              "rattrap-api/endpoint/knowledge-upload",
+              "rattrap-api/endpoint/get-knowledge",
+              "rattrap-api/endpoint/delete-knowledge"
             ]
           },
           {
