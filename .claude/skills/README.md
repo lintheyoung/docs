@@ -4,7 +4,7 @@ This directory contains custom skills for the Rattrap API documentation project.
 
 ## Available Skills
 
-### 🚀 Deploy Skill
+### 🚀 Deploy Skill (`deploy.md`)
 
 Automates the deployment process by pushing changes to GitHub, which triggers CI/CD.
 
@@ -34,6 +34,50 @@ Or simply say:
 
 **Quick Deploy:**
 Just say "quick deploy" for fast deployments with auto-generated commit messages.
+
+---
+
+### 📁 Temporary Documents Management (`temp-docs.md`)
+
+Keeps the repository clean by defaulting temporary files to `/tmp` directory.
+
+**Core Principle:**
+Unless you explicitly say "save to project", all temporary and test files go to `/tmp/rattrap-docs/`
+
+**Automatically uses `/tmp` for:**
+- Test scripts (`test-*.py`, `test-*.js`)
+- Temporary documentation and notes
+- Exploration and analysis files
+- Code examples and experiments
+- Design document drafts
+
+**What it does:**
+1. Analyzes if a file is temporary or permanent
+2. Defaults to `/tmp` for temporary files
+3. Saves to project only when explicitly requested
+4. Keeps temp files organized for easy promotion
+5. Reminds you where files are saved
+
+**Usage examples:**
+```
+❌ "Write a test for the API" → Saves to project (bad)
+✅ "Write a test for the API" → Saves to /tmp (with this skill)
+
+✅ "Write a test and save to project" → Saves to project (explicit)
+```
+
+**Promoting temp files to project:**
+```
+Say: "add test-api.py to project"
+Or:  "move this to the repository"
+```
+
+**Benefits:**
+- ✅ Clean git status (no test files clutter)
+- ✅ Safe experimentation without polluting repo
+- ✅ Organized `/tmp` directory structure
+- ✅ Easy to promote useful files later
+- ✅ Better git history
 
 ## How Skills Work
 
