@@ -68,7 +68,7 @@ console.log(`知识已上传: ${knowledgeEntry.id}`);
 }
 ```
 
-```json 成功响应 - 图片文件
+```json 成功响应 - 图片文件（有 source_url）
 {
   "id": "kb_9z8y7x6w5v4u3t2s",
   "tenant_id": "tenant_abc123",
@@ -78,7 +78,33 @@ console.log(`知识已上传: ${knowledgeEntry.id}`);
   "source_file_name": "charging_port.jpg",
   "source_file_type": "jpg",
   "image_url": "https://storage.rattrap.ai/knowledge/kb_9z8y7x6w5v4u3t2s.jpg",
+  "file_url": "https://rattrap.com/manual/charging",
   "source_url": "https://rattrap.com/manual/charging",
+  "access_level": "public",
+  "category": "trap_usage",
+  "tags": ["充电", "使用说明"],
+  "language": "zh",
+  "visibility": "public",
+  "is_active": true,
+  "usage_count": 0,
+  "created_by": "user_123",
+  "created_at": "2025-12-08T10:35:00Z",
+  "updated_at": "2025-12-08T10:35:00Z"
+}
+```
+
+```json 成功响应 - 图片文件（无 source_url，自动生成）
+{
+  "id": "kb_9z8y7x6w5v4u3t2s",
+  "tenant_id": "tenant_abc123",
+  "title": "充电口位置示意图",
+  "content": "图片展示了 RatTrap Pro 捕鼠器底部的 USB-C 充电口位置，位于电源开关旁边...",
+  "content_type": "image",
+  "source_file_name": "charging_port.jpg",
+  "source_file_type": "jpg",
+  "image_url": "https://storage.rattrap.ai/knowledge/kb_9z8y7x6w5v4u3t2s.jpg",
+  "file_url": "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/knowledge-files/kb_9z8y7x6w5v4u3t2s",
+  "source_url": null,
   "access_level": "public",
   "category": "trap_usage",
   "tags": ["充电", "使用说明"],
@@ -223,6 +249,8 @@ console.log(`知识已上传: ${knowledgeEntry.id}`);
 
 **文本文件（.txt, .md）**：
 - 直接读取文件内容作为知识文本
+- 如果文件较大（> 2000 tokens），自动切片为多个知识条目
+- 切片时保留上下文，避免语义割裂
 
 **图片文件（.jpg, .png, .webp）**：
 - 将图片上传到 Supabase Storage
@@ -234,6 +262,35 @@ console.log(`知识已上传: ${knowledgeEntry.id}`);
 **文档文件（.pdf, .docx）**（即将支持）：
 - 使用文档解析库提取文本内容
 - 保留文档结构和格式信息
+- 如果文档较大，自动切片存储
+
+**文件切片逻辑**：
+- 大文件会被自动切片为多个知识条目（例如：文件1【第一部分】、文件1【第二部分】）
+- 所有切片共享相同的 `source_file_id` 用于关联
+- 所有切片共享相同的 `file_url`（指向完整文件）
+- 切片仅用于提高检索精度，对用户透明
+
+### 2.5 文件 URL 生成
+
+系统会根据 `source_url` 和 `access_level` 自动生成 `file_url`：
+
+**有 source_url 的情况**：
+```
+- source_url 存在 → file_url = source_url（使用用户提供的 URL）
+```
+
+**无 source_url 的情况（自动生成）**：
+```
+- access_level = 'public' → file_url = https://[domain]/functions/v1/knowledge-files/{id}（公开访问）
+- access_level = 'internal' → file_url = https://[domain]/functions/v1/knowledge-files/{id}（需登录验证）
+- access_level = 'private' → file_url = https://[domain]/functions/v1/knowledge-files/{id}（仅管理员）
+```
+
+**文件 URL 特性**：
+- 长久有效，不会过期
+- 支持权限验证（根据 access_level）
+- 对于切片文件，所有切片返回相同的 `file_url`（指向完整文件）
+- 用户通过 `GET /knowledge-files/{id}` 获取完整原始文件内容
 
 ### 3. 向量嵌入生成
 
@@ -266,7 +323,8 @@ const embedding = await generateEmbedding(content);
 | `source_file_name` | string | 原始文件名 |
 | `source_file_type` | string | 文件类型：`txt` / `jpg` / `png` / `pdf` / `docx` |
 | `image_url` | string | 图片公开 URL（仅图片类型） |
-| `source_url` | string | 原始来源 URL |
+| `file_url` | string | 文件访问 URL（用于引用和下载完整文件）|
+| `source_url` | string | 原始来源 URL（用户提供的外部链接） |
 | `source_title` | string | 来源标题 |
 | `access_level` | string | 访问权限级别 |
 | `category` | string | 知识分类 |
@@ -278,6 +336,13 @@ const embedding = await generateEmbedding(content);
 | `created_by` | string | 创建者用户 ID |
 | `created_at` | string | 创建时间（ISO 8601） |
 | `updated_at` | string | 更新时间（ISO 8601） |
+
+<Info>
+**file_url vs source_url**：
+- `file_url`：系统生成的文件访问 URL，用于获取完整文件内容，支持权限验证
+- `source_url`：用户提供的原始来源 URL（可选），用于引用追溯
+- 如果提供了 `source_url`，`file_url` 将与其相同；否则自动生成
+</Info>
 
 <Info>
 **向量字段**：`embedding` 字段（1536 维向量）不会在响应中返回，因为它仅用于后端检索。
@@ -341,16 +406,84 @@ const embedding = await generateEmbedding(content);
 
 ## access_level 参数说明
 
-用于控制 `source_url` 的访问权限（引用追溯功能）：
+用于控制文件访问权限和引用追溯功能：
 
-| 值 | 说明 | 链接处理方式 |
-|---|---|---|
-| `public` | 公开访问 | AI 回答中直接展示原始 URL，用户可直接点击 |
-| `internal` | 内部访问 | 通过权限网关 `/functions/v1/kb-redirect` 代理访问，需要登录验证 |
-| `private` | 私有内容 | 知识可用于生成回答，但不在引用中暴露 URL |
+| 值 | 说明 | 链接处理方式 | 权限验证 |
+|---|---|---|---|
+| `public` | 公开访问 | AI 回答中直接展示 `file_url`，所有用户可直接访问 | 无需验证 |
+| `internal` | 内部访问 | 通过权限网关访问，需要登录验证 | 需登录 |
+| `private` | 私有内容 | 知识可用于生成回答，但不在引用中暴露 URL | 仅管理员 |
+
+**权限验证流程**：
+1. 用户点击 `file_url` 链接
+2. 后端检查用户登录状态和角色
+3. 根据 `access_level` 决定是否允许访问：
+   - `public`：直接返回文件内容
+   - `internal`：需要登录，验证通过后返回文件
+   - `private`：需要管理员角色，否则返回 403
 
 <Warning>
-**安全提示**：`internal` 和 `private` 级别的知识不会直接暴露 `source_url`，避免未授权访问内部文档。
+**安全提示**：`internal` 和 `private` 级别的知识文件需要权限验证，确保敏感内容不被未授权访问。
+</Warning>
+
+## 文件切片和引用合并
+
+### 文件切片机制
+
+当上传大文件时（如长文档、大PDF），系统会自动切片为多个知识条目：
+
+```
+原始文件：product_manual.pdf (5000 tokens)
+↓
+切片存储：
+- kb_abc123_1 "产品手册【第一部分】" (2000 tokens)
+- kb_abc123_2 "产品手册【第二部分】" (2000 tokens)
+- kb_abc123_3 "产品手册【第三部分】" (1000 tokens)
+```
+
+**切片特性**：
+- 所有切片共享相同的 `source_file_id`（用于关联）
+- 所有切片共享相同的 `file_url`（指向完整文件）
+- 所有切片共享相同的 `source_url`（如果提供）
+- 每个切片有独立的向量嵌入（用于精确检索）
+
+### 引用合并逻辑
+
+在 RAG 问答系统中，当多个切片被检索到时，系统会自动合并引用：
+
+```
+用户问题："如何使用 RatTrap Pro？"
+↓
+检索结果：
+- kb_abc123_1 (相关度 0.85)
+- kb_abc123_2 (相关度 0.78)
+↓
+引用合并：
+只返回一个引用：
+{
+  "title": "产品手册",
+  "url": "https://[domain]/functions/v1/knowledge-files/abc123",
+  "source_ids": ["kb_abc123_1", "kb_abc123_2"]
+}
+```
+
+<Info>
+**用户体验**：用户看到的引用链接是完整文件，而不是碎片化的"第一部分"、"第二部分"。点击链接可以查看完整的原始文件。
+</Info>
+
+### 文件级操作
+
+所有知识库操作都是**文件级别**的，而不是切片级别的：
+
+| 操作 | 行为 |
+|------|------|
+| **上传** | 上传一个完整文件，后端自动切片（如需要） |
+| **获取** | `GET /knowledge-files/{id}` 返回完整原始文件 |
+| **删除** | `DELETE /knowledge-base/{id}` 删除文件的所有切片 |
+| **更新** | `PATCH /knowledge-base/{id}` 更新文件的所有切片 |
+
+<Warning>
+**重要**：API 操作始终针对完整文件。切片是后端的内部优化，对 API 用户透明。
 </Warning>
 
 ## 图片处理特殊说明

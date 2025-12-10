@@ -100,6 +100,7 @@
               "rattrap-api/endpoint/rag-qa",
               "rattrap-api/endpoint/knowledge-upload",
               "rattrap-api/endpoint/get-knowledge",
+              "rattrap-api/endpoint/get-knowledge-file",
               "rattrap-api/endpoint/delete-knowledge"
             ]
           },

@@ -79,6 +79,61 @@ Or:  "move this to the repository"
 - ✅ Easy to promote useful files later
 - ✅ Better git history
 
+---
+
+### 📑 Navigation Update Skill (`navigation-update.md`)
+
+Ensures all new documentation pages are properly added to the navigation menu.
+
+**Core Principle:**
+Every new `.mdx` file **must** be added to `docs.json` to appear in the documentation menu.
+
+**When it activates:**
+- Automatically when a new `.mdx` file is created
+- When user says "add to navigation"
+- After creating any documentation file
+
+**What it does:**
+1. Detects new documentation files
+2. Identifies the appropriate navigation group
+3. Adds the file to `docs.json` navigation config
+4. Verifies the update was successful
+5. Reminds user to check deployed docs
+
+**Navigation groups:**
+```
+- 概览 (Overview)
+- 认证 (Authentication)
+- Setup Sessions
+- AI 智能推荐 (AI Recommendations)
+- 媒体资源 (Media Assets)
+- Webhooks
+- AI 客服 (AI Customer Service)
+- 陷阱管理 (Trap Management)
+```
+
+**Usage:**
+```
+Automatic: Creates new file → Skill reminds to add to navigation
+Manual: Say "add [filename] to navigation"
+```
+
+**Workflow:**
+```
+1. Create rattrap-api/endpoint/new-feature.mdx
+2. Skill detects and asks: "Add to navigation?"
+3. User confirms
+4. Skill adds to appropriate group in docs.json
+5. ✅ File appears in documentation menu
+```
+
+**Benefits:**
+- ✅ Never forget to add files to navigation
+- ✅ Documentation always accessible
+- ✅ Consistent navigation structure
+- ✅ Automatic group detection
+- ✅ Prevents broken documentation links
+
 ## How Skills Work
 
 Skills in Claude Code are specialized agents that help with specific tasks. When you invoke a skill:

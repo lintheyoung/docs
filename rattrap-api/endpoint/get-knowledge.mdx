@@ -1,5 +1,5 @@
 ---
-title: '获取知识库文件'
+title: '获取知识库条目'
 openapi: 'GET /knowledge-base/{id}'
 ---
 
@@ -49,6 +49,7 @@ print(f"知识标题: {knowledge_entry['title']}")
   "content_type": "document",
   "source_file_name": "mouse_knowledge.txt",
   "source_file_type": "txt",
+  "file_url": "https://vwinvkxxheuexvpvzibt.supabase.co/functions/v1/knowledge-files/kb_1a2b3c4d5e6f7g8h",
   "source_url": "https://example.com/mouse-guide",
   "access_level": "internal",
   "category": "rodent_knowledge",
@@ -73,6 +74,7 @@ print(f"知识标题: {knowledge_entry['title']}")
   "source_file_name": "charging_port.jpg",
   "source_file_type": "jpg",
   "image_url": "https://storage.rattrap.ai/knowledge/kb_9z8y7x6w5v4u3t2s.jpg",
+  "file_url": "https://rattrap.com/manual/charging",
   "source_url": "https://rattrap.com/manual/charging",
   "access_level": "public",
   "category": "trap_usage",
@@ -124,11 +126,18 @@ print(f"知识标题: {knowledge_entry['title']}")
 
 ## 使用说明
 
-通过此接口可以获取单个知识库条目的详细信息。支持获取文本、图片等各种类型的知识内容。
+通过此接口可以获取单个知识库条目的详细信息（元数据）。支持获取文本、图片等各种类型的知识内容。
+
+<Info>
+**获取完整文件内容**：
+- 此接口返回知识条目的元数据和文本描述
+- 若要下载完整原始文件，请使用 `GET /knowledge-files/{id}` 接口
+- `file_url` 字段提供了完整文件的访问链接
+</Info>
 
 <CardGroup cols={3}>
-  <Card title="完整信息" icon="file-lines">
-    返回知识条目的所有元数据和内容
+  <Card title="元数据查询" icon="file-lines">
+    返回知识条目的所有元数据和内容描述
   </Card>
   <Card title="权限检查" icon="shield">
     自动验证用户对知识条目的访问权限
@@ -137,6 +146,10 @@ print(f"知识标题: {knowledge_entry['title']}")
     返回知识条目的使用次数等统计信息
   </Card>
 </CardGroup>
+
+<Warning>
+**权限要求**：需要登录认证。只能访问有权限的知识条目（基于 `visibility` 和 `access_level`）。
+</Warning>
 
 ## 请求参数
 
@@ -148,12 +161,44 @@ print(f"知识标题: {knowledge_entry['title']}")
 
 ## 访问权限规则
 
+系统会根据 `visibility` 和 `access_level` 字段进行双层权限验证：
+
+### 第一层：visibility 权限
+
 <Info>
-**权限检查逻辑**：
-1. `visibility='public'` 的知识：所有已登录用户均可访问
-2. `visibility='private'` 的知识：仅同租户用户可访问
+**visibility 检查逻辑**：
+1. `visibility='public'` 的知识：所有已登录用户均可访问元数据
+2. `visibility='private'` 的知识：仅同租户用户可访问元数据
 3. 管理员可以访问所有知识（包括其他租户的私有知识）
 </Info>
+
+### 第二层：access_level 权限
+
+当用户尝试访问 `file_url`（完整文件）时，根据 `access_level` 进行权限验证：
+
+| access_level | 权限要求 | 验证逻辑 |
+|--------------|----------|----------|
+| `public` | 无需额外验证 | 任何已登录用户可访问 |
+| `internal` | 需要登录 | 验证用户已登录，拒绝匿名访问 |
+| `private` | 需要管理员角色 | 验证用户为 admin 或 owner 角色 |
+
+**权限验证流程示例**：
+
+```
+1. 用户请求 GET /knowledge-base/kb_xxx
+   ↓ 检查 visibility
+   ✅ public 或同租户 → 返回元数据（包含 file_url）
+
+2. 用户点击 file_url 链接
+   ↓ 检查 access_level
+   - public → ✅ 直接返回文件
+   - internal → 检查登录 → ✅ 返回文件 / ❌ 401
+   - private → 检查管理员 → ✅ 返回文件 / ❌ 403
+```
+
+<Warning>
+**安全提示**：`file_url` 链接包含权限验证。即使用户获得了链接，也必须满足 `access_level` 要求才能访问文件内容。
+</Warning>
 
 ## 响应字段说明
 
@@ -167,7 +212,8 @@ print(f"知识标题: {knowledge_entry['title']}")
 | `source_file_name` | string | 原始文件名 |
 | `source_file_type` | string | 文件类型：`txt` / `jpg` / `png` / `pdf` / `docx` |
 | `image_url` | string | 图片公开 URL（仅图片类型） |
-| `source_url` | string | 原始来源 URL |
+| `file_url` | string | 文件访问 URL（用于获取完整原始文件） |
+| `source_url` | string | 原始来源 URL（用户提供的外部链接） |
 | `source_title` | string | 来源标题 |
 | `access_level` | string | 访问权限级别：`public` / `internal` / `private` |
 | `category` | string | 知识分类 |
@@ -179,6 +225,13 @@ print(f"知识标题: {knowledge_entry['title']}")
 | `created_by` | string | 创建者用户 ID |
 | `created_at` | string | 创建时间（ISO 8601） |
 | `updated_at` | string | 更新时间（ISO 8601） |
+
+<Info>
+**file_url 说明**：
+- 对于切片文件，所有切片返回相同的 `file_url`（指向完整文件）
+- 访问 `file_url` 会触发 `access_level` 权限验证
+- 使用 `GET /knowledge-files/{id}` 可以下载完整原始文件
+</Info>
 
 <Info>
 **向量字段**：`embedding` 字段（1536 维向量）不会在响应中返回，因为它仅用于后端检索。
