@@ -1,0 +1,550 @@
+---
+title: 'User API 介绍'
+description: 'PestGG IoT系统用户端API - 设备绑定、控制和管理接口'
+---
+
+## 概述
+
+User API 为最终用户提供设备绑定、实时控制、共享和转移等功能。普通用户权限即可访问。
+
+## 核心功能
+
+<CardGroup cols={3}>
+  <Card title="设备绑定" icon="link" href="/user-api/endpoint/user-device-bind">
+    通过激活码绑定新设备
+  </Card>
+
+  <Card title="AWS凭证" icon="key" href="/user-api/endpoint/get-aws-credentials">
+    获取MQTT连接凭证
+  </Card>
+
+  <Card title="设备设置" icon="sliders" href="/user-api/endpoint/setup-sessions">
+    引导设备首次设置流程
+  </Card>
+
+  <Card title="设备控制" icon="gamepad" href="/user-api/endpoint/user-device-control">
+    发送控制命令到设备
+  </Card>
+
+  <Card title="设备共享" icon="share-nodes" href="/user-api/endpoint/device-share">
+    共享设备给其他用户
+  </Card>
+
+  <Card title="设备转移" icon="right-left" href="/user-api/endpoint/device-transfer">
+    转移设备所有权
+  </Card>
+</CardGroup>
+
+## 认证方式
+
+User API 使用 **Supabase JWT Token** 认证，通过登录接口获取。
+
+```javascript
+// 1. 登录获取Token
+const { access_token } = await supabase.auth.signInWithPassword({
+  email: 'user@example.com',
+  password: 'password123'
+});
+
+// 2. 使用Token调用API
+const response = await fetch('/user-device-bind', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${access_token}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({ activation_code: 'RT4G-A3F2B1C9' })
+});
+```
+
+## 快速开始
+
+### 1. 绑定设备
+
+```javascript
+// 用户扫描设备包装上的激活码
+const activationCode = 'RT4G-A3F2B1C9';
+
+const response = await fetch('/user-device-bind', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${userToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    activation_code: activationCode,
+    device_nickname: '客厅捕鼠器'
+  })
+});
+
+const { device_id, thing_name, status } = await response.json();
+console.log(`Device ${thing_name} bound, status: ${status}`);
+```
+
+### 2. 完成设备设置
+
+```javascript
+// 开始设置流程
+const setupResponse = await fetch('/setup-sessions', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${userToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    device_id: device_id,
+    action: 'start'
+  })
+});
+
+// 更新设置状态
+await fetch('/setup-sessions', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${userToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    device_id: device_id,
+    action: 'update',
+    state: 'completed',
+    data: {
+      location: { room: '客厅' },
+      calibration: { sensitivity: 3 }
+    }
+  })
+});
+```
+
+### 3. 获取MQTT凭证并连接
+
+```javascript
+// 获取AWS临时凭证
+const credResponse = await fetch('/get-aws-credentials', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${userToken}` }
+});
+
+const { credentials, identityId } = await credResponse.json();
+
+// 使用凭证建立MQTT连接
+import { mqtt } from 'aws-iot-device-sdk-v2';
+
+const connection = mqtt.aws_iot_mqtt_connection_builder
+  .websockets()
+  .with_credentials(
+    credentials.AccessKeyId,
+    credentials.SecretKey,
+    credentials.SessionToken
+  )
+  .with_endpoint('your-iot-endpoint.amazonaws.com')
+  .build();
+
+await connection.connect();
+
+// 订阅设备Shadow更新
+await connection.subscribe(
+  `$aws/things/${thing_name}/shadow/update/documents`,
+  mqtt.QoS.AtLeastOnce,
+  (topic, payload) => {
+    const shadow = JSON.parse(payload.toString());
+    console.log('Device state:', shadow.current.state.reported);
+  }
+);
+```
+
+### 4. 控制设备
+
+```javascript
+// HTTP API控制（适合服务端）
+await fetch('/user-device-control', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${userToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    thing_name: thing_name,
+    command: 'setMode',
+    params: { mode: 'auto' }
+  })
+});
+
+// MQTT直连控制（适合Web/App，延迟更低）
+await connection.publish(
+  `$aws/things/${thing_name}/shadow/update`,
+  JSON.stringify({
+    state: {
+      desired: {
+        mode: 'auto',
+        reqId: `cmd_${Date.now()}_${Math.random()}`
+      }
+    }
+  }),
+  mqtt.QoS.AtLeastOnce
+);
+```
+
+## 设备生命周期
+
+```
+┌──────────────┐
+│ 工厂生产设备  │ (status: registered)
+└──────┬───────┘
+       │
+       ▼ 用户绑定 (activation_code)
+┌───────────���──┐
+│ 设备待设置    │ (status: pending)
+└──────┬───────┘
+       │
+       ▼ 完成 Setup Session
+┌──────────────┐
+│ 设备激活     │ (status: active)
+└──────┬───────┘
+       │
+       ├──► 共享给其他用户 (device-share)
+       │
+       └──► 转移所有权 (device-transfer)
+```
+
+## 权限层级
+
+### 租户层级
+
+```
+Owner > Admin > Member
+```
+
+- **Owner**: 租户所有者，完全控制权 + 计费管理
+- **Admin**: 管理员，可管理租户内所有设备
+- **Member**: 普通成员，仅管理自己的设备
+
+### 设备层级
+
+```
+Owner > Editor > Viewer
+```
+
+| 权限 | Owner | Editor | Viewer |
+|------|-------|--------|--------|
+| 查看状态 | ✅ | ✅ | ✅ |
+| 控制设备 | ✅ | ✅ | ❌ |
+| 共享设备 | ✅ | ❌ | ❌ |
+| 转移设备 | ✅ | ❌ | ❌ |
+
+## 实时通信架构
+
+User API 支持两种控制方式：
+
+### HTTP API控制
+
+```
+User App → Edge Function → Lambda → IoT Core → Device
+延迟: 200-500ms
+```
+
+**适用场景**: 服务端调用、批量操作、定时任务
+
+### MQTT WebSocket控制
+
+```
+User App ←→ IoT Core ←→ Device
+延迟: 50-100ms
+```
+
+**适用场景**: Web/App实时控制、实时遥测订阅
+
+<Note>
+**推荐做法**: Web和移动App使用MQTT直连，后端服务使用HTTP API。
+</Note>
+
+## 设备共享
+
+设备所有者可以将设备共享给其他用户：
+
+<Steps>
+  <Step title="1. 添加共享">
+    指定用户邮箱和权限角色（viewer/editor）
+  </Step>
+
+  <Step title="2. 对方接受">
+    被共享用户自动在设备列表中看到共享设备
+  </Step>
+
+  <Step title="3. 按权限使用">
+    - Viewer: 仅可查看设备状态
+    - Editor: 可查看和控制设备
+  </Step>
+
+  <Step title="4. 随时撤销">
+    所有者可随时移除共享
+  </Step>
+</Steps>
+
+```javascript
+// 共享设备给朋友（编辑权限）
+await fetch('/device-share', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${ownerToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    device_id: deviceId,
+    action: 'add',
+    target_email: 'friend@example.com',
+    role: 'editor',
+    expires_at: '2025-12-31T23:59:59Z' // 可选过期时间
+  })
+});
+```
+
+## 设备转移
+
+设备所有权可以安全地转移给其他用户：
+
+<Steps>
+  <Step title="1. 生成转移码">
+    原所有者调用 `action=generate` 获取8位转移码
+  </Step>
+
+  <Step title="2. 线下传递">
+    通过安全方式（面对面、加密通讯）传递转移码
+  </Step>
+
+  <Step title="3. 接受转移">
+    新所有者调用 `action=accept` 并提供转移码
+  </Step>
+
+  <Step title="4. 转移完成">
+    - 原所有者失去所有权限
+    - 新所有者获得完全控制权
+    - 所有共享记录被清除
+  </Step>
+</Steps>
+
+<Warning>
+**不可逆操作**: 设备转移后，原所有者立即失去所有权限。请谨慎操作！
+</Warning>
+
+```javascript
+// 原所有者：生成转移码
+const { transfer_code } = await fetch('/device-transfer', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${originalOwnerToken}` },
+  body: JSON.stringify({
+    device_id: deviceId,
+    action: 'generate'
+  })
+}).then(r => r.json());
+
+console.log(`Transfer code: ${transfer_code}`);
+// 将此码告知新所有者
+
+// 新所有者：接受转移
+await fetch('/device-transfer', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${newOwnerToken}` },
+  body: JSON.stringify({
+    device_id: deviceId,
+    action: 'accept',
+    transfer_code: transfer_code
+  })
+});
+```
+
+## 命令ACK机制
+
+发送控制命令后，如何确认设备已执行？
+
+### HTTP API方式
+
+```javascript
+// 1. 发送命令
+const { reqId } = await sendCommand(thingName, 'setMode', { mode: 'auto' });
+
+// 2. 轮询设备状态
+const checkAck = async () => {
+  const shadow = await getDeviceShadow(thingName);
+  return shadow.state.reported.lastAckedReqId === reqId;
+};
+
+// 每500ms检查一次，最多等待5秒
+for (let i = 0; i < 10; i++) {
+  if (await checkAck()) {
+    console.log('Command ACKed!');
+    break;
+  }
+  await sleep(500);
+}
+```
+
+### MQTT方式（推荐）
+
+```javascript
+// 1. 订阅Shadow更新
+mqttConnection.subscribe(
+  `$aws/things/${thingName}/shadow/update/documents`,
+  (message) => {
+    const reported = message.current.state.reported;
+    if (reported.lastAckedReqId === expectedReqId) {
+      console.log('Command ACKed in real-time!');
+    }
+  }
+);
+
+// 2. 发送命令
+const reqId = `cmd_${Date.now()}_${Math.random()}`;
+await mqttConnection.publish(
+  `$aws/things/${thingName}/shadow/update`,
+  JSON.stringify({
+    state: {
+      desired: { mode: 'auto', reqId }
+    }
+  })
+);
+```
+
+## 错误处理
+
+User API 返回统一的错误格式：
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human readable error message",
+    "statusCode": 400
+  }
+}
+```
+
+常见错误处理：
+
+```javascript
+try {
+  const response = await fetch('/user-device-bind', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ activation_code: code })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+
+    switch (error.error.code) {
+      case 'CODE_ALREADY_USED':
+        alert('该激活码已被使用，请联系客服');
+        break;
+      case 'INVALID_ACTIVATION_CODE':
+        alert('激活码无效，请检查后重试');
+        break;
+      case 'DEVICE_ALREADY_BOUND':
+        alert('设备已绑定到其他用户');
+        break;
+      default:
+        alert(`错误: ${error.error.message}`);
+    }
+  }
+} catch (err) {
+  console.error('Network error:', err);
+}
+```
+
+## SDK 示例
+
+### React Hooks
+
+```javascript
+// useDeviceControl.js
+import { useState } from 'react';
+
+export function useDeviceControl(thingName, userToken) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const sendCommand = async (command, params) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/user-device-control', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${userToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ thing_name: thingName, command, params })
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error.message);
+      }
+
+      return await response.json();
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return { sendCommand, loading, error };
+}
+
+// 使用
+function DeviceControlPanel({ thingName, token }) {
+  const { sendCommand, loading } = useDeviceControl(thingName, token);
+
+  const handleSetMode = async (mode) => {
+    await sendCommand('setMode', { mode });
+    alert('Mode changed!');
+  };
+
+  return (
+    <button onClick={() => handleSetMode('auto')} disabled={loading}>
+      Set Auto Mode
+    </button>
+  );
+}
+```
+
+## 最佳实践
+
+<AccordionGroup>
+  <Accordion title="Token管理">
+    - 将JWT Token存储在安全存储中（iOS Keychain、Android Keystore）
+    - Token过期后自动刷新
+    - 登出时清除Token
+  </Accordion>
+
+  <Accordion title="MQTT连接管理">
+    - 应用启动时建立MQTT连接
+    - 监听网络状态，断线后自动重连
+    - 实现指数退避重连策略
+    - 应用后台时断开连接以节省电量
+  </Accordion>
+
+  <Accordion title="设备状态同步">
+    - 使用MQTT订阅实时状态更新
+    - 本地缓存设备状态减少网络请求
+    - 定期同步确保数据一致性
+  </Accordion>
+
+  <Accordion title="错误处理">
+    - 对所有API调用进行错误处理
+    - 显示友好的错误提示
+    - 网络错误时支持重试
+    - 记录错误日志用于调试
+  </Accordion>
+</AccordionGroup>
+
+## 技术支持
+
+如有问题，请联系：
+
+- **技术文档**: [IoT System Architecture](/IOT_SYSTEM_ARCHITECTURE.md)
+- **邮件支持**: support@pestgg.com
+- **工单系统**: [https://support.pestgg.com](https://support.pestgg.com)

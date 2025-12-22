@@ -113,6 +113,58 @@
             ]
           }
         ]
+      },
+      {
+        "tab": "Factory API",
+        "groups": [
+          {
+            "group": "概览",
+            "pages": [
+              "factory-api/introduction"
+            ]
+          },
+          {
+            "group": "设备生产",
+            "pages": [
+              "factory-api/endpoint/manufacturing-create-devices",
+              "factory-api/endpoint/manufacturing-batches",
+              "factory-api/endpoint/manufacturing-activation-codes"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "User API",
+        "groups": [
+          {
+            "group": "概览",
+            "pages": [
+              "user-api/introduction"
+            ]
+          },
+          {
+            "group": "设备绑定与设置",
+            "pages": [
+              "user-api/endpoint/user-device-bind",
+              "user-api/endpoint/get-aws-credentials",
+              "user-api/endpoint/setup-sessions"
+            ]
+          },
+          {
+            "group": "设备控制",
+            "pages": [
+              "user-api/endpoint/user-device-control",
+              "user-api/endpoint/send-command"
+            ]
+          },
+          {
+            "group": "设备共享与转移",
+            "pages": [
+              "user-api/endpoint/device-share",
+              "user-api/endpoint/device-transfer"
+            ]
+          }
+        ]
       }
     ],
     "global": {

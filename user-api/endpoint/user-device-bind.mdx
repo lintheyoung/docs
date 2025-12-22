@@ -1,0 +1,236 @@
+---
+title: '绑定设备'
+api: 'POST /user-device-bind'
+---
+
+## 接口说明
+
+用户通过激活码绑定设备，建立设备所有权关系。
+
+## 请求参数
+
+<ParamField body="activation_code" type="string" required>
+  设备激活码，格式: `{MODEL}-{8位HEX}`
+
+  例如: `RT4G-A3F2B1C9`
+</ParamField>
+
+<ParamField body="device_nickname" type="string">
+  设备昵称，用于区分多个设备（可选）
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="device_id" type="string">
+  设备ID (UUID)
+</ResponseField>
+
+<ResponseField name="thing_name" type="string">
+  AWS IoT Thing名称
+</ResponseField>
+
+<ResponseField name="model" type="string">
+  设备型号
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  设备状态，绑定后为 `pending`（等待设备完成设置）
+</ResponseField>
+
+<ResponseField name="bound_at" type="string">
+  绑定时间 (ISO 8601)
+</ResponseField>
+
+<ResponseField name="tenant_id" type="string">
+  租户ID
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `UNAUTHORIZED` | 401 | 缺少或无效的认证Token |
+| `INVALID_ACTIVATION_CODE` | 400 | 激活码格式错误或不存在 |
+| `CODE_ALREADY_USED` | 409 | 激活码已被使用 |
+| `DEVICE_ALREADY_BOUND` | 409 | 设备已绑定到其他用户 |
+| `DATABASE_ERROR` | 500 | 数据库操作失败 |
+
+<RequestExample>
+```bash cURL
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-bind' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "activation_code": "RT4G-A3F2B1C9",
+    "device_nickname": "客厅捕鼠器"
+  }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-bind',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      activation_code: 'RT4G-A3F2B1C9',
+      device_nickname: '客厅捕鼠器'
+    })
+  }
+);
+
+const data = await response.json();
+console.log(`Device ${data.thing_name} bound successfully`);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-supabase-project.supabase.co/functions/v1/user-device-bind',
+    headers={
+        'Authorization': 'Bearer YOUR_JWT_TOKEN',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'activation_code': 'RT4G-A3F2B1C9',
+        'device_nickname': '客厅捕鼠器'
+    }
+)
+
+data = response.json()
+print(f"Device {data['thing_name']} bound successfully")
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+  "thing_name": "RT4G:001",
+  "model": "RT-Pro-4G",
+  "status": "pending",
+  "bound_at": "2024-12-22T10:30:00Z",
+  "tenant_id": "tenant_abc123"
+}
+```
+
+```json 错误响应 - 激活码无效
+{
+  "error": {
+    "code": "INVALID_ACTIVATION_CODE",
+    "message": "Activation code not found or invalid format",
+    "statusCode": 400
+  }
+}
+```
+
+```json 错误响应 - 激活码已使用
+{
+  "error": {
+    "code": "CODE_ALREADY_USED",
+    "message": "This activation code has already been used",
+    "statusCode": 409
+  }
+}
+```
+
+```json 错误响应 - 设备已绑定
+{
+  "error": {
+    "code": "DEVICE_ALREADY_BOUND",
+    "message": "Device is already bound to another user",
+    "statusCode": 409
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 需要有效的用户JWT Token
+- 普通用户权限即可
+
+### 绑定流程
+
+<Steps>
+  <Step title="扫描激活码">
+    用户扫描设备包装上的二维码或手动输入激活码
+  </Step>
+
+  <Step title="验证激活码">
+    系统验证激活码是否有效且未使用
+  </Step>
+
+  <Step title="建立所有权">
+    创建 `device_owners` 记录，将设备绑定到用户的租户
+  </Step>
+
+  <Step title="标记激活码">
+    将激活码标记为已使用（`is_used = true`）
+  </Step>
+
+  <Step title="更新设备状态">
+    设备状态从 `registered` 更新为 `pending`
+  </Step>
+
+  <Step title="开始设备设置">
+    用户可进入设备设置流程（Setup Session）
+  </Step>
+</Steps>
+
+### 状态转换
+
+```
+registered (工厂创建)
+    ↓
+  [用户绑定]
+    ↓
+pending (等待设置)
+    ↓
+  [完成设置]
+    ↓
+active (可正常使用)
+```
+
+### 激活码格式
+
+激活码格式为 `{MODEL}-{8位HEX字符}`：
+- 示例: `RT4G-A3F2B1C9`
+- 不区分大小写
+- 不包含易混淆字符（0/O, 1/I/l）
+
+<Note>
+**一次性使用**: 每个激活码只能使用一次，绑定后无法解绑重新使用。如需转移设备，请使用设备转移接口。
+</Note>
+
+<Warning>
+**绑定前确认**: 绑定操作不可撤销，请确认激活码正确后再提交。
+</Warning>
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="激活码已被使用怎么办？">
+    激活码只能使用一次。如果提示已使用，可能是：
+    1. 该设备已被其他用户绑定
+    2. 您已经绑定过该设备（检查设备列表）
+    3. 激活码被盗用（联系客服处理）
+  </Accordion>
+
+  <Accordion title="绑定后设备不在线怎么办？">
+    绑定后设备状态为 `pending`，需要完成以下步骤：
+    1. 设备通电并连接网络
+    2. 完成 Setup Session 流程
+    3. 设备状态变为 `active` 后才能正常使用
+  </Accordion>
+
+  <Accordion title="可以绑定多少台设备？">
+    设备数量限制取决于您的订阅计划，普通用户通常可绑定10台设备。
+  </Accordion>
+</AccordionGroup>

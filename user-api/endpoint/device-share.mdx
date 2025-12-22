@@ -1,0 +1,390 @@
+---
+title: '共享设备'
+api: 'POST /device-share'
+---
+
+## 接口说明
+
+设备所有者可以将设备共享给其他用户，授予查看或控制权限。
+
+## 请求参数
+
+<ParamField body="device_id" type="string" required>
+  设备ID (UUID)
+</ParamField>
+
+<ParamField body="action" type="string" required>
+  操作类型
+  - `add`: 添加共享
+  - `remove`: 移除共享
+  - `update`: 更新权限
+  - `list`: 列出共享列表
+</ParamField>
+
+<ParamField body="target_email" type="string">
+  目标用户邮箱（仅 `add`/`update` 时需要）
+</ParamField>
+
+<ParamField body="target_user_id" type="string">
+  目标用户ID（仅 `remove` 时需要）
+</ParamField>
+
+<ParamField body="role" type="string">
+  共享角色（仅 `add`/`update` 时需要）
+  - `viewer`: 查看者 - 可查看设备状态
+  - `editor`: 编辑者 - 可查看和控制设备
+</ParamField>
+
+<ParamField body="expires_at" type="string">
+  过期时间 (ISO 8601)（可选）
+
+  不传则永久有效
+</ParamField>
+
+## 响应数据
+
+### add/update/remove 操作
+
+<ResponseField name="success" type="boolean">
+  操作是否成功
+</ResponseField>
+
+<ResponseField name="share_id" type="string">
+  共享记录ID（仅 `add` 时返回）
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  操作结果描述
+</ResponseField>
+
+### list 操作
+
+<ResponseField name="shares" type="array">
+  共享列表
+
+  <Expandable title="Share 对象">
+    <ResponseField name="share_id" type="string">
+      共享记录ID
+    </ResponseField>
+
+    <ResponseField name="user_id" type="string">
+      被共享用户ID
+    </ResponseField>
+
+    <ResponseField name="user_email" type="string">
+      被共享用户邮箱
+    </ResponseField>
+
+    <ResponseField name="user_name" type="string">
+      被共享用户名称
+    </ResponseField>
+
+    <ResponseField name="role" type="string">
+      角色: `viewer` | `editor`
+    </ResponseField>
+
+    <ResponseField name="created_at" type="string">
+      共享创建时间 (ISO 8601)
+    </ResponseField>
+
+    <ResponseField name="expires_at" type="string">
+      过期时间 (ISO 8601)，null表示永久有效
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `UNAUTHORIZED` | 401 | 缺少或无效的认证Token |
+| `PERMISSION_DENIED` | 403 | 仅设备所有者可共享设备 |
+| `DEVICE_NOT_FOUND` | 404 | 设备不存在 |
+| `USER_NOT_FOUND` | 404 | 目标用户不存在 |
+| `SHARE_NOT_FOUND` | 404 | 共享记录不存在 |
+| `ALREADY_SHARED` | 409 | 已共享给该用户 |
+| `CANNOT_SHARE_TO_SELF` | 400 | 不能共享给自己 |
+| `INVALID_ROLE` | 400 | 无效的角色类型 |
+| `DATABASE_ERROR` | 500 | 数据库操作失败 |
+
+<RequestExample>
+```bash cURL - 添加共享
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/device-share' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "action": "add",
+    "target_email": "friend@example.com",
+    "role": "viewer"
+  }'
+```
+
+```bash cURL - 更新权限
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/device-share' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "action": "update",
+    "target_email": "friend@example.com",
+    "role": "editor"
+  }'
+```
+
+```bash cURL - 移除共享
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/device-share' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "action": "remove",
+    "target_user_id": "user_abc123"
+  }'
+```
+
+```bash cURL - 列出共享
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/device-share' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "action": "list"
+  }'
+```
+
+```javascript Node.js
+// 添加共享
+const addShare = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/device-share',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      device_id: 'd9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+      action: 'add',
+      target_email: 'friend@example.com',
+      role: 'viewer',
+      expires_at: '2025-12-31T23:59:59Z'
+    })
+  }
+);
+
+// 列出共享
+const listShares = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/device-share',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      device_id: 'd9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+      action: 'list'
+    })
+  }
+);
+
+const data = await listShares.json();
+console.log(`Device shared with ${data.shares.length} users`);
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 添加共享
+{
+  "success": true,
+  "share_id": "share_abc123",
+  "message": "Device successfully shared with friend@example.com"
+}
+```
+
+```json 成功响应 - 列出共享
+{
+  "shares": [
+    {
+      "share_id": "share_abc123",
+      "user_id": "user_xyz789",
+      "user_email": "friend@example.com",
+      "user_name": "张三",
+      "role": "viewer",
+      "created_at": "2024-12-22T10:00:00Z",
+      "expires_at": "2025-12-31T23:59:59Z"
+    },
+    {
+      "share_id": "share_def456",
+      "user_id": "user_abc456",
+      "user_email": "family@example.com",
+      "user_name": "李四",
+      "role": "editor",
+      "created_at": "2024-12-20T15:30:00Z",
+      "expires_at": null
+    }
+  ]
+}
+```
+
+```json 错误响应 - 权限不足
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "Only device owner can share devices",
+    "statusCode": 403
+  }
+}
+```
+
+```json 错误响应 - 用户不存在
+{
+  "error": {
+    "code": "USER_NOT_FOUND",
+    "message": "User with email friend@example.com not found",
+    "statusCode": 404
+  }
+}
+```
+
+```json 错误响应 - 已经共享
+{
+  "error": {
+    "code": "ALREADY_SHARED",
+    "message": "Device is already shared with this user",
+    "statusCode": 409
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+
+- 仅**设备所有者 (Owner)** 可以共享设备
+- Editor 和 Viewer 无权共享设备
+
+### 角色权限对比
+
+| 操作 | Owner | Editor | Viewer |
+|------|-------|--------|--------|
+| 查看设备状态 | ✅ | ✅ | ✅ |
+| 控制设备 | ✅ | ✅ | ❌ |
+| 修改设备配置 | ✅ | ✅ | ❌ |
+| 共享设备 | ✅ | ❌ | ❌ |
+| 转移设备 | ✅ | ❌ | ❌ |
+| 删除设备 | ✅ | ❌ | ❌ |
+
+### 共享流程
+
+<Steps>
+  <Step title="1. 输入邮箱">
+    所有者输入要共享给的用户邮箱
+  </Step>
+
+  <Step title="2. 选择角色">
+    选择 `viewer`（只读）或 `editor`（可控制）
+  </Step>
+
+  <Step title="3. 设置有效期">
+    可选设置过期时间，不设置则永久有效
+  </Step>
+
+  <Step title="4. 发送共享">
+    系统创建共享记录
+  </Step>
+
+  <Step title="5. 对方查看">
+    被共享用户在设备列表中可看到共享的设备
+  </Step>
+</Steps>
+
+### 共享限制
+
+- **共享数量**: 每个设备最多可共享给10个用户
+- **权限等级**: Viewer < Editor < Owner
+- **不可传递**: 被共享用户不能再次共享给他人
+- **设备转移**: 设备转移后，所有共享记录自动失效
+
+### 过期管理
+
+```javascript
+// 设置7天临时共享
+const expiresAt = new Date();
+expiresAt.setDate(expiresAt.getDate() + 7);
+
+await fetch('/device-share', {
+  method: 'POST',
+  headers: { 'Authorization': `Bearer ${token}` },
+  body: JSON.stringify({
+    device_id: deviceId,
+    action: 'add',
+    target_email: 'temp@example.com',
+    role: 'viewer',
+    expires_at: expiresAt.toISOString()
+  })
+});
+```
+
+<Note>
+**自动清理**: 过期的共享记录会在每日凌晨自动清理，被共享用户将无法再访问设备。
+</Note>
+
+### 使用场景
+
+<CardGroup cols={2}>
+  <Card title="家庭共享" icon="house">
+    将家里的设备共享给家人，授予 `editor` 权限方便家人控制
+  </Card>
+
+  <Card title="临时访客" icon="clock">
+    短期共享给访客，设置有效期和 `viewer` 权限仅供查看
+  </Card>
+
+  <Card title="物业管理" icon="building">
+    共享给物业或维修人员，授予 `editor` 权限进行维护
+  </Card>
+
+  <Card title="数据监控" icon="chart-line">
+    共享给数据分析团队，授予 `viewer` 权限仅供查看遥测数据
+  </Card>
+</CardGroup>
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="被共享用户看不到设备怎么办？">
+    可能的原因：
+    1. 共享记录已过期
+    2. 对方邮箱输入错误
+    3. 对方未注册账号（需要先注册）
+    4. 设备已被转移给其他人
+  </Accordion>
+
+  <Accordion title="如何批量共享多个设备？">
+    目前需要逐个调用接口。推荐写一个循环批量处理：
+    ```javascript
+    for (const deviceId of deviceIds) {
+      await shareDevice(deviceId, targetEmail, role);
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="可以修改已共享的权限吗？">
+    可以。使用 `action: "update"` 更新共享角色，无需先删除再添加。
+  </Accordion>
+
+  <Accordion title="Owner 转移后共享记录会怎样？">
+    设备转移给新所有者后，旧所有者创建的所有共享记录会自动失效。新所有者需要重新共享。
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**安全提示**: 共享设备前请确认对方身份，避免将设备控制权限授予不信任的用户。
+</Warning>

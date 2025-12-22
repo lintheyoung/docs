@@ -1,0 +1,265 @@
+---
+title: 'Factory API 介绍'
+description: 'PestGG IoT系统工厂端API - 设备批量生产和管理接口'
+---
+
+## 概述
+
+Factory API 专为设备制造商设计，提供批量设备创建、激活码管理等功能。所有接口均需要**管理员权限**。
+
+## 核心功能
+
+<CardGroup cols={2}>
+  <Card title="批量创建设备" icon="industry" href="/factory-api/endpoint/manufacturing-create-devices">
+    一次创建多台IoT设备，生成AWS证书和激活码
+  </Card>
+
+  <Card title="批次管理" icon="boxes-stacked" href="/factory-api/endpoint/manufacturing-batches">
+    查询和管理设备生产批次记录
+  </Card>
+
+  <Card title="激活码导出" icon="download" href="/factory-api/endpoint/manufacturing-activation-codes">
+    导出激活码用于打印二维码标签
+  </Card>
+
+  <Card title="设备溯源" icon="magnifying-glass">
+    通过批次ID追溯设备生产信息
+  </Card>
+</CardGroup>
+
+## 认证方式
+
+Factory API 使用 **Supabase JWT Token** 认证，调用者必须拥有 **Admin** 角色。
+
+```bash
+curl -X POST \
+  'https://your-project.supabase.co/functions/v1/manufacturing-create-devices' \
+  -H "Authorization: Bearer YOUR_ADMIN_JWT_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+## 快速开始
+
+### 1. 批量创建设备
+
+```javascript
+const response = await fetch('/manufacturing-create-devices', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${adminToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    model: 'RT-Pro-4G',
+    count: 100,
+    prefix: 'RT4G',
+    batch_name: '2024-Q1 Production'
+  })
+});
+
+const { batch_id, devices } = await response.json();
+console.log(`Created ${devices.length} devices in batch ${batch_id}`);
+```
+
+### 2. 导出激活码
+
+```javascript
+// 导出CSV格式激活码
+const response = await fetch(
+  '/manufacturing-activation-codes?batch_id=batch_1702900000&format=csv',
+  {
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${adminToken}` }
+  }
+);
+
+const blob = await response.blob();
+// 保存为activation_codes.csv，用于打印二维码
+```
+
+### 3. 查询批次信息
+
+```javascript
+const response = await fetch(
+  '/manufacturing-batches?page=1&limit=20&model=RT-Pro-4G',
+  {
+    method: 'GET',
+    headers: { 'Authorization': `Bearer ${adminToken}` }
+  }
+);
+
+const { batches, pagination } = await response.json();
+console.log(`Total batches: ${pagination.total}`);
+```
+
+## 设备生产流程
+
+<Steps>
+  <Step title="1. 调用批量创建接口">
+    指定型号、数量和批次信息
+  </Step>
+
+  <Step title="2. 获取设备凭证">
+    系统返回每台设备的证书、私钥和激活码
+  </Step>
+
+  <Step title="3. 烧录证书到设备">
+    将证书和私钥烧录到设备固件中
+  </Step>
+
+  <Step title="4. 打印激活码">
+    将激活码制作成二维码标签贴在包装上
+  </Step>
+
+  <Step title="5. 设备出厂">
+    设备状态为 `registered`，等待用户绑定
+  </Step>
+</Steps>
+
+## 数据流
+
+```
+Factory Admin
+    ↓ (调用批量创建接口)
+Edge Function
+    ↓ (创建IoT Thing)
+AWS IoT Core
+    ↓ (生成证书)
+Edge Function
+    ↓ (存储设备记录)
+Supabase Database
+    ↓ (返回凭证和激活码)
+Factory Admin
+    ↓ (烧录证书 + 打印激活码)
+Physical Device
+```
+
+## 激活码格式
+
+激活码采用 **型号前缀 + 8位HEX** 格式：
+
+```
+格式: {MODEL}-{8位HEX字符}
+示例: RT4G-A3F2B5C9
+
+特点:
+- 大写字母和数字
+- 不含易混淆字符 (0/O, 1/I/l)
+- 全局唯一
+- 一次性使用
+```
+
+## 证书管理
+
+<Warning>
+**私钥安全**: 设备私钥仅在批量创建时返回**一次**，系统不会存储。请务必安全保存并烧录到设备中。
+</Warning>
+
+Factory API 使用 **ECC P-256** 证书：
+
+- **算法**: ECDSA P-256
+- **格式**: PEM
+- **生成方式**: CSR（Certificate Signing Request）
+- **有效期**: 由AWS IoT管理，通常10年
+- **策略**: 自动附加 `IoTDevicePolicy`
+
+## 批次管理
+
+每次批量创建会生成一个批次记录，用于：
+
+- **生产溯源**: 追溯设备生产时间和批次
+- **质量追踪**: 记录批次成功率
+- **库存管理**: 统计激活码使用情况
+- **审计合规**: 满足生产审计要求
+
+批次状态：
+- `completed`: 全部设备创建成功
+- `partial`: 部分设备创建失败
+- `failed`: 全部设备创建失败
+
+## 权限控制
+
+Factory API 采用严格的权限控制：
+
+| 操作 | 所需角色 |
+|------|----------|
+| 批量创建设备 | Admin |
+| 查询批次 | Admin |
+| 导出激活码 | Admin |
+
+<Note>
+**角色管理**: 管理员角色在 `user_tenant_roles` 表中管理。普通用户无法访问Factory API。
+</Note>
+
+## 最佳实践
+
+<AccordionGroup>
+  <Accordion title="批量大小建议">
+    - 每批次建议 10-100 台设备
+    - 大批次（>100）建议拆分多次调用
+    - 避免单次创建过多导致超时
+  </Accordion>
+
+  <Accordion title="证书烧录流程">
+    1. 解析API返回的 `certificate_pem` 和 `private_key`
+    2. 通过JTAG或串口烧录到设备安全存储区
+    3. 验证烧录成功后擦除本地副本
+    4. 记录设备MAC地址与Thing名称的对应关系
+  </Accordion>
+
+  <Accordion title="激活码打印">
+    - 使用CSV导出功能批量导出
+    - 推荐使用QR码（二维码）格式
+    - 包含型号和激活码信息
+    - 打印在防水防磨损的标签上
+  </Accordion>
+
+  <Accordion title="批次命名规范">
+    建议使用统一的命名规范：
+    - `{年份}-{季度/月份}-{产线}-{序号}`
+    - 例如: `2024-Q1-LineA-001`
+  </Accordion>
+</AccordionGroup>
+
+## 错误处理
+
+Factory API 返回统一的错误格式：
+
+```json
+{
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human readable error message",
+    "statusCode": 400
+  }
+}
+```
+
+常见错误：
+
+| 错误码 | 说明 | 处理方式 |
+|--------|------|----------|
+| `UNAUTHORIZED` | Token无效或过期 | 重新登录获取Token |
+| `PERMISSION_DENIED` | 非管理员用户 | 联系系统管理员授权 |
+| `AWS_IOT_ERROR` | AWS IoT服务错误 | 检查AWS账号配额和配置 |
+| `INVALID_PARAMETERS` | 参数验证失败 | 检查请求参数格式 |
+
+## API Playground
+
+您可以在每个接口文档页面使用 **Try it** 功能测试API：
+
+1. 输入管理员JWT Token
+2. 填写请求参数
+3. 点击发送查看响应
+
+<Note>
+**测试环境**: 建议先在开发环境测试接口，验证通过后再用于生产环境。
+</Note>
+
+## 技术支持
+
+如有问题，请联系：
+
+- **技术文档**: [IoT System Architecture](/IOT_SYSTEM_ARCHITECTURE.md)
+- **邮件支持**: support@pestgg.com
+- **工单系统**: [https://support.pestgg.com](https://support.pestgg.com)

@@ -1,0 +1,347 @@
+---
+title: '设备设置会话'
+api: 'POST/GET /setup-sessions'
+---
+
+## 接口说明
+
+管理设备首次设置流程（Setup Session），引导用户完成设备配置。支持创建、查询和更新设置会话。
+
+## POST - 创建/更新设置会话
+
+### 请求参数
+
+<ParamField body="device_id" type="string" required>
+  设备ID (UUID)
+</ParamField>
+
+<ParamField body="action" type="string" required>
+  操作类型
+  - `start`: 开始新的设置会话
+  - `update`: 更新设置会话状态
+</ParamField>
+
+<ParamField body="state" type="string">
+  会话状态（仅 action=update 时需要）
+  - `awaiting_placement`: 等待放置
+  - `scanning`: 扫描环境
+  - `calibrating`: 校准中
+  - `awaiting_confirm`: 等待确认
+  - `completed`: 已完成
+</ParamField>
+
+<ParamField body="data" type="object">
+  会话数据（可选）
+
+  <Expandable title="Data 对象">
+    <ParamField body="location" type="object">
+      位置信息
+      - `room`: 房间名称
+      - `description`: 位置描述
+    </ParamField>
+
+    <ParamField body="environment" type="object">
+      环境信息
+      - `temperature`: 温度（°C）
+      - `humidity`: 湿度（%）
+      - `lightLevel`: 光照强度
+    </ParamField>
+
+    <ParamField body="calibration" type="object">
+      校准结果
+      - `sensitivity`: 灵敏度
+      - `triggerThreshold`: 触发阈值
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### 响应数据
+
+<ResponseField name="session_id" type="string">
+  会话ID (UUID)
+</ResponseField>
+
+<ResponseField name="device_id" type="string">
+  设备ID
+</ResponseField>
+
+<ResponseField name="state" type="string">
+  当前状态
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  会话数据
+</ResponseField>
+
+<ResponseField name="created_at" type="string">
+  创建时间 (ISO 8601)
+</ResponseField>
+
+<ResponseField name="updated_at" type="string">
+  更新时间 (ISO 8601)
+</ResponseField>
+
+<ResponseField name="expires_at" type="string">
+  过期时间 (ISO 8601)，默认24小时
+</ResponseField>
+
+## GET - 查询设置会话
+
+### 查询参数
+
+<ParamField query="device_id" type="string" required>
+  设备ID (UUID)
+</ParamField>
+
+### 响应数据
+
+返回设备当前的设置会话，如果不存在则返回null。
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `UNAUTHORIZED` | 401 | 缺少或无效的认证Token |
+| `PERMISSION_DENIED` | 403 | 无权访问该设备 |
+| `DEVICE_NOT_FOUND` | 404 | 设备不存在 |
+| `SESSION_NOT_FOUND` | 404 | 会话不存在 |
+| `SESSION_EXPIRED` | 410 | 会话已过期 |
+| `INVALID_STATE_TRANSITION` | 400 | 无效的状态转换 |
+| `DATABASE_ERROR` | 500 | 数据库操作失败 |
+
+<RequestExample>
+```bash cURL - 创建会话
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/setup-sessions' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "action": "start"
+  }'
+```
+
+```bash cURL - 更新会话
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/setup-sessions' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "action": "update",
+    "state": "scanning",
+    "data": {
+      "location": {
+        "room": "客厅",
+        "description": "沙发后面"
+      }
+    }
+  }'
+```
+
+```bash cURL - 查询会话
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/setup-sessions?device_id=d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```javascript Node.js
+// 创建会话
+const createResponse = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/setup-sessions',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      device_id: 'd9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+      action: 'start'
+    })
+  }
+);
+
+// 更新会话
+const updateResponse = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/setup-sessions',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      device_id: 'd9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+      action: 'update',
+      state: 'completed'
+    })
+  }
+);
+
+// 查询会话
+const getResponse = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/setup-sessions?device_id=d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+  {
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN'
+    }
+  }
+);
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 创建会话
+{
+  "session_id": "session_abc123",
+  "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+  "state": "awaiting_placement",
+  "data": {},
+  "created_at": "2024-12-22T10:00:00Z",
+  "updated_at": "2024-12-22T10:00:00Z",
+  "expires_at": "2024-12-23T10:00:00Z"
+}
+```
+
+```json 成功响应 - 更新会话
+{
+  "session_id": "session_abc123",
+  "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+  "state": "scanning",
+  "data": {
+    "location": {
+      "room": "客厅",
+      "description": "沙发后面"
+    }
+  },
+  "created_at": "2024-12-22T10:00:00Z",
+  "updated_at": "2024-12-22T10:05:00Z",
+  "expires_at": "2024-12-23T10:00:00Z"
+}
+```
+
+```json 成功响应 - 完成设置
+{
+  "session_id": "session_abc123",
+  "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+  "state": "completed",
+  "data": {
+    "location": {
+      "room": "客厅",
+      "description": "沙发后面"
+    },
+    "environment": {
+      "temperature": 22.5,
+      "humidity": 65,
+      "lightLevel": 300
+    },
+    "calibration": {
+      "sensitivity": 3,
+      "triggerThreshold": 50
+    }
+  },
+  "created_at": "2024-12-22T10:00:00Z",
+  "updated_at": "2024-12-22T10:15:00Z",
+  "expires_at": "2024-12-23T10:00:00Z"
+}
+```
+
+```json 错误响应 - 设备不存在
+{
+  "error": {
+    "code": "DEVICE_NOT_FOUND",
+    "message": "Device not found or you don't have permission",
+    "statusCode": 404
+  }
+}
+```
+
+```json 错误响应 - 会话已过期
+{
+  "error": {
+    "code": "SESSION_EXPIRED",
+    "message": "Setup session has expired, please start a new one",
+    "statusCode": 410
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 设置流程
+
+<Steps>
+  <Step title="1. 开始设置">
+    用户绑定设备后，调用 `action=start` 创建设置会话
+  </Step>
+
+  <Step title="2. 选择位置">
+    用户选择设备放置位置，更新 `state=awaiting_placement`
+  </Step>
+
+  <Step title="3. 扫描环境">
+    设备扫描环境参数，更新 `state=scanning`
+  </Step>
+
+  <Step title="4. 校准传感器">
+    设备进行传感器校准，更新 `state=calibrating`
+  </Step>
+
+  <Step title="5. 用户确认">
+    展示配置结果，等待用户确认，更新 `state=awaiting_confirm`
+  </Step>
+
+  <Step title="6. 完成设置">
+    用户确认后，更新 `state=completed`，设备状态变为 `active`
+  </Step>
+</Steps>
+
+### 状态转换规则
+
+```
+awaiting_placement → scanning → calibrating → awaiting_confirm → completed
+```
+
+- 只能按顺序前进，不能后退
+- 可以跳过中间状态直接完成
+- `completed` 是终态，不可再修改
+
+### 会话有效期
+
+- 默认有效期：**24小时**
+- 过期后需重新创建会话
+- 完成设置后会话保留，用于审计
+
+### 设备状态同步
+
+当会话状态变为 `completed` 时：
+1. 设备状态从 `pending` 更新为 `active`
+2. 设备可正常使用
+3. 用户可开始控制设备
+
+<Note>
+**设置超时**: 如果24小时内未完成设置，会话自动过期。用户需重新开始设置流程。
+</Note>
+
+<Warning>
+**数据完整性**: 完成设置前，请确保收集了必要的环境和校准数据，这些数据对设备运行至关重要。
+</Warning>
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="可以跳过中间步骤吗？">
+    可以。如果设备支持自动设置，可以直接从 `awaiting_placement` 跳到 `completed`。
+  </Accordion>
+
+  <Accordion title="设置失败怎么办？">
+    如果设置过程中出错，可以调用 `action=start` 重新开始，旧会话会被覆盖。
+  </Accordion>
+
+  <Accordion title="可以修改已完成的设置吗？">
+    不可以。完成后需要通过设备管理接口修改配置，不能通过Setup Session修改。
+  </Accordion>
+</AccordionGroup>

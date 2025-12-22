@@ -1,0 +1,415 @@
+---
+title: '控制设备'
+api: 'POST /user-device-control'
+---
+
+## 接口说明
+
+通过HTTP API发送设备控制命令，适用于服务端调用或批量操作。
+
+对于Web/App实时控制，推荐使用 **MQTT over WebSocket** 直接连接AWS IoT Core，延迟更低（<100ms）。
+
+## 请求参数
+
+<ParamField body="thing_name" type="string" required>
+  AWS IoT Thing名称，例如: `RT4G:001`
+</ParamField>
+
+<ParamField body="command" type="string" required>
+  控制命令类型
+  - `setMode`: 设置工作模式
+  - `setPower`: 开关机
+  - `setTrapState`: 设置陷阱状态
+  - `setSensitivity`: 设置灵敏度
+  - `triggerTest`: 触发测试
+  - `reset`: 重置设备
+</ParamField>
+
+<ParamField body="params" type="object" required>
+  命令参数，根据命令类型不同而异
+
+  <Expandable title="参数示例">
+    **setMode 参数**
+    - `mode`: `auto` | `manual` | `sleep`
+
+    **setPower 参数**
+    - `power`: `on` | `off`
+
+    **setTrapState 参数**
+    - `trapState`: `armed` | `disarmed` | `triggered`
+
+    **setSensitivity 参数**
+    - `sensitivity`: 1-5（整数）
+
+    **triggerTest 参数**
+    - 无需参数
+
+    **reset 参数**
+    - `resetType`: `soft` | `hard`
+  </Expandable>
+</ParamField>
+
+<ParamField body="shadow_name" type="string">
+  Named Shadow名称（可选）
+
+  用于控制网关下的子设备，例如: `child:trap01`
+
+  不传则控制Classic Shadow（网关自身）
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="success" type="boolean">
+  操作是否成功
+</ResponseField>
+
+<ResponseField name="reqId" type="string">
+  请求ID，用于追踪命令执行状态
+
+  格式: `cmd_{timestamp}_{random}`
+</ResponseField>
+
+<ResponseField name="timestamp" type="number">
+  命令发送时间（Unix时间戳，毫秒）
+</ResponseField>
+
+<ResponseField name="thing_name" type="string">
+  设备Thing名称
+</ResponseField>
+
+<ResponseField name="shadow_name" type="string">
+  Shadow名称（如果指定了）
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `UNAUTHORIZED` | 401 | 缺少或无效的认证Token |
+| `PERMISSION_DENIED` | 403 | 无权控制该设备（需要Owner或Editor权限） |
+| `DEVICE_NOT_FOUND` | 404 | 设备不存在 |
+| `DEVICE_OFFLINE` | 503 | 设备离线 |
+| `INVALID_COMMAND` | 400 | 无效的命令类型 |
+| `INVALID_PARAMS` | 400 | 命令参数验证失败 |
+| `AWS_IOT_ERROR` | 500 | AWS IoT服务调用失败 |
+| `COMMAND_TIMEOUT` | 504 | 命令超时（设备未ACK） |
+
+<RequestExample>
+```bash cURL - 设置工作模式
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-control' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "thing_name": "RT4G:001",
+    "command": "setMode",
+    "params": {
+      "mode": "auto"
+    }
+  }'
+```
+
+```bash cURL - 设置陷阱状态
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-control' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "thing_name": "RT4G:001",
+    "command": "setTrapState",
+    "params": {
+      "trapState": "armed"
+    }
+  }'
+```
+
+```bash cURL - 控制子设备
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-control' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "thing_name": "gateway:001",
+    "shadow_name": "child:trap01",
+    "command": "setPower",
+    "params": {
+      "power": "on"
+    }
+  }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-control',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      thing_name: 'RT4G:001',
+      command: 'setMode',
+      params: {
+        mode: 'auto'
+      }
+    })
+  }
+);
+
+const data = await response.json();
+console.log(`Command sent with reqId: ${data.reqId}`);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-supabase-project.supabase.co/functions/v1/user-device-control',
+    headers={
+        'Authorization': 'Bearer YOUR_JWT_TOKEN',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'thing_name': 'RT4G:001',
+        'command': 'setMode',
+        'params': {
+            'mode': 'auto'
+        }
+    }
+)
+
+data = response.json()
+print(f"Command sent with reqId: {data['reqId']}")
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "success": true,
+  "reqId": "cmd_1703002800123_abc456",
+  "timestamp": 1703002800123,
+  "thing_name": "RT4G:001"
+}
+```
+
+```json 成功响应 - 子设备
+{
+  "success": true,
+  "reqId": "cmd_1703002800456_def789",
+  "timestamp": 1703002800456,
+  "thing_name": "gateway:001",
+  "shadow_name": "child:trap01"
+}
+```
+
+```json 错误响应 - 权限不足
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "You need Owner or Editor permission to control this device",
+    "statusCode": 403
+  }
+}
+```
+
+```json 错误响应 - 设备离线
+{
+  "error": {
+    "code": "DEVICE_OFFLINE",
+    "message": "Device is currently offline",
+    "statusCode": 503
+  }
+}
+```
+
+```json 错误响应 - 无效命令
+{
+  "error": {
+    "code": "INVALID_COMMAND",
+    "message": "Unknown command type: invalidCommand",
+    "statusCode": 400
+  }
+}
+```
+
+```json 错误响应 - 参数错误
+{
+  "error": {
+    "code": "INVALID_PARAMS",
+    "message": "sensitivity must be between 1 and 5",
+    "statusCode": 400
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+
+| 角色 | 是否可控制 |
+|------|-----------|
+| Owner | ✅ 可控制 |
+| Editor | ✅ 可控制 |
+| Viewer | ❌ 仅可查看 |
+
+### 命令执行流程
+
+<Steps>
+  <Step title="1. 验证权限">
+    检查用户是否有权限控制该设备
+  </Step>
+
+  <Step title="2. 验证参数">
+    验证命令类型和参数合法性
+  </Step>
+
+  <Step title="3. 生成reqId">
+    生成唯一的请求ID用于追踪
+  </Step>
+
+  <Step title="4. 更新Shadow">
+    更新AWS IoT Device Shadow的 `desired` 状态
+  </Step>
+
+  <Step title="5. 等待ACK">
+    设备收到命令后更新 `reported` 状态，包含 `reqId` 作为ACK
+  </Step>
+
+  <Step title="6. 记录历史">
+    命令保存到 `commands` 表，用于审计
+  </Step>
+</Steps>
+
+### HTTP API vs MQTT WebSocket
+
+| 特性 | HTTP API | MQTT WebSocket |
+|------|----------|----------------|
+| **延迟** | 200-500ms | 50-100ms |
+| **实时性** | 一般 | 优秀 |
+| **适用场景** | 服务端调用、批量操作 | Web/App实时控制 |
+| **ACK机制** | 需要轮询查询 | 实时接收 |
+| **连接开销** | 无需连接 | 需要维持WebSocket |
+
+<Note>
+**推荐做法**: Web/App前端使用MQTT WebSocket直连，后端服务使用HTTP API。
+</Note>
+
+### 命令ACK检测
+
+HTTP API发送命令后，可通过以下方式检测设备是否执行：
+
+1. **轮询设备状态** - 查询设备Shadow的 `reported` 状态
+2. **订阅MQTT** - 订阅Shadow更新主题接收实时ACK
+3. **查询命令历史** - 查看 `commands` 表的 `acked_at` 字段
+
+```javascript
+// 方法1: 轮询设备状态
+const checkAck = async (reqId) => {
+  const response = await fetch(`/devices/${thingName}/shadow`);
+  const shadow = await response.json();
+
+  if (shadow.state.reported.lastAckedReqId === reqId) {
+    console.log('Command ACKed!');
+    return true;
+  }
+  return false;
+};
+
+// 方法2: MQTT订阅（推荐）
+mqttClient.subscribe(
+  `$aws/things/${thingName}/shadow/update/documents`,
+  (message) => {
+    const reported = message.current.state.reported;
+    if (reported.lastAckedReqId === reqId) {
+      console.log('Command ACKed in real-time!');
+    }
+  }
+);
+```
+
+### 支持的命令类型
+
+<AccordionGroup>
+  <Accordion title="setMode - 设置工作模式">
+    **参数**:
+    - `mode`: `auto` | `manual` | `sleep`
+
+    **说明**:
+    - `auto`: 自动模式，设备自主决策
+    - `manual`: 手动模式，需用户控制
+    - `sleep`: 休眠模式，降低功耗
+  </Accordion>
+
+  <Accordion title="setPower - 开关机">
+    **参数**:
+    - `power`: `on` | `off`
+
+    **说明**: 控制设备电源状态
+  </Accordion>
+
+  <Accordion title="setTrapState - 设置陷阱状态">
+    **参数**:
+    - `trapState`: `armed` | `disarmed` | `triggered`
+
+    **说明**:
+    - `armed`: 布防，准备捕获
+    - `disarmed`: 撤防，不触发
+    - `triggered`: 已触发（通常由设备自动设置）
+  </Accordion>
+
+  <Accordion title="setSensitivity - 设置灵敏度">
+    **参数**:
+    - `sensitivity`: 1-5（整数）
+
+    **说明**: 数值越大，触发越灵敏
+  </Accordion>
+
+  <Accordion title="triggerTest - 触发测试">
+    **参数**: 无
+
+    **说明**: 手动触发陷阱，用于测试功能是否正常
+  </Accordion>
+
+  <Accordion title="reset - 重置设备">
+    **参数**:
+    - `resetType`: `soft` | `hard`
+
+    **说明**:
+    - `soft`: 软重置，保留配置
+    - `hard`: 硬重置，恢复出厂设置
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**硬重置风险**: `reset` 命令的 `hard` 参数会清除所有设备配置，包括网络设置，设备可能离线。谨慎使用！
+</Warning>
+
+### 批量控制示例
+
+```javascript
+// 批量控制多个设备
+const devices = ['RT4G:001', 'RT4G:002', 'RT4G:003'];
+
+const results = await Promise.all(
+  devices.map(async (thingName) => {
+    const response = await fetch('/user-device-control', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        thing_name: thingName,
+        command: 'setMode',
+        params: { mode: 'sleep' }
+      })
+    });
+    return response.json();
+  })
+);
+
+console.log(`Controlled ${results.length} devices`);
+```

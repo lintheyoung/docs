@@ -1,0 +1,492 @@
+---
+title: '转移设备'
+api: 'POST /device-transfer'
+---
+
+## 接口说明
+
+设备所有者可以将设备所有权转移给其他用户。转移采用**安全码机制**，防止误操作和未授权转移。
+
+## 请求参数
+
+<ParamField body="device_id" type="string" required>
+  设备ID (UUID)
+</ParamField>
+
+<ParamField body="action" type="string" required>
+  操作类型
+  - `generate`: 生成转移码
+  - `accept`: 接受转移
+  - `cancel`: 取消转移
+  - `list`: 查询待转移列表
+</ParamField>
+
+<ParamField body="transfer_code" type="string">
+  转移码（仅 `accept` 时需要）
+
+  格式: 8位字符，不包含易混淆字符（0/O, 1/I/l）
+</ParamField>
+
+## 响应数据
+
+### generate 操作
+
+<ResponseField name="transfer_code" type="string">
+  转移码，例如: `A3F2B5C9`
+</ResponseField>
+
+<ResponseField name="expires_at" type="string">
+  过期时间 (ISO 8601)，默认24小时
+</ResponseField>
+
+<ResponseField name="device_id" type="string">
+  设备ID
+</ResponseField>
+
+<ResponseField name="thing_name" type="string">
+  设备Thing名称
+</ResponseField>
+
+### accept 操作
+
+<ResponseField name="success" type="boolean">
+  转移是否成功
+</ResponseField>
+
+<ResponseField name="device_id" type="string">
+  设备ID
+</ResponseField>
+
+<ResponseField name="previous_owner" type="string">
+  原所有者用户ID
+</ResponseField>
+
+<ResponseField name="new_owner" type="string">
+  新所有者用户ID（即当前用户）
+</ResponseField>
+
+<ResponseField name="transferred_at" type="string">
+  转移完成时间 (ISO 8601)
+</ResponseField>
+
+### list 操作
+
+<ResponseField name="pending_transfers" type="array">
+  待转移设备列表
+
+  <Expandable title="PendingTransfer 对象">
+    <ResponseField name="device_id" type="string">
+      设备ID
+    </ResponseField>
+
+    <ResponseField name="thing_name" type="string">
+      设备名称
+    </ResponseField>
+
+    <ResponseField name="transfer_code" type="string">
+      转移码
+    </ResponseField>
+
+    <ResponseField name="created_at" type="string">
+      创建时间
+    </ResponseField>
+
+    <ResponseField name="expires_at" type="string">
+      过期时间
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `UNAUTHORIZED` | 401 | 缺少或无效的认证Token |
+| `PERMISSION_DENIED` | 403 | 仅设备所有者可转移设备 |
+| `DEVICE_NOT_FOUND` | 404 | 设备不存在 |
+| `TRANSFER_NOT_FOUND` | 404 | 转移记录不存在或已过期 |
+| `INVALID_TRANSFER_CODE` | 400 | 转移码格式错误或不存在 |
+| `TRANSFER_EXPIRED` | 410 | 转移码已过期 |
+| `CANNOT_TRANSFER_TO_SELF` | 400 | 不能转移给自己 |
+| `PENDING_TRANSFER_EXISTS` | 409 | 已有待转移记录，请先取消 |
+| `DATABASE_ERROR` | 500 | 数据库操作失败 |
+
+<RequestExample>
+```bash cURL - 生成转移码
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/device-transfer' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "action": "generate"
+  }'
+```
+
+```bash cURL - 接受转移
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/device-transfer' \
+  -H "Authorization: Bearer NEW_OWNER_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "action": "accept",
+    "transfer_code": "A3F2B5C9"
+  }'
+```
+
+```bash cURL - 取消转移
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/device-transfer' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "action": "cancel"
+  }'
+```
+
+```bash cURL - 查询待转移列表
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/device-transfer' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "list"
+  }'
+```
+
+```javascript Node.js
+// 原所有者：生成转移码
+const generateResponse = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/device-transfer',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ORIGINAL_OWNER_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      device_id: 'd9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+      action: 'generate'
+    })
+  }
+);
+
+const { transfer_code } = await generateResponse.json();
+console.log(`Transfer code: ${transfer_code}`);
+// 将此码发送给新所有者
+
+// 新所有者：接受转移
+const acceptResponse = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/device-transfer',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer NEW_OWNER_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      device_id: 'd9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+      action: 'accept',
+      transfer_code: transfer_code
+    })
+  }
+);
+
+const result = await acceptResponse.json();
+console.log('Transfer completed!');
+```
+
+```python Python
+import requests
+
+# 原所有者：生成转移码
+generate_response = requests.post(
+    'https://your-supabase-project.supabase.co/functions/v1/device-transfer',
+    headers={
+        'Authorization': 'Bearer ORIGINAL_OWNER_TOKEN',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'device_id': 'd9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+        'action': 'generate'
+    }
+)
+
+transfer_code = generate_response.json()['transfer_code']
+print(f"Transfer code: {transfer_code}")
+
+# 新所有者：接受转移
+accept_response = requests.post(
+    'https://your-supabase-project.supabase.co/functions/v1/device-transfer',
+    headers={
+        'Authorization': 'Bearer NEW_OWNER_TOKEN',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'device_id': 'd9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+        'action': 'accept',
+        'transfer_code': transfer_code
+    }
+)
+
+print('Transfer completed!')
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 生成转移码
+{
+  "transfer_code": "A3F2B5C9",
+  "expires_at": "2024-12-23T10:00:00Z",
+  "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+  "thing_name": "RT4G:001"
+}
+```
+
+```json 成功响应 - 接受转移
+{
+  "success": true,
+  "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+  "previous_owner": "user_abc123",
+  "new_owner": "user_xyz789",
+  "transferred_at": "2024-12-22T11:30:00Z"
+}
+```
+
+```json 成功响应 - 查询待转移列表
+{
+  "pending_transfers": [
+    {
+      "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+      "thing_name": "RT4G:001",
+      "transfer_code": "A3F2B5C9",
+      "created_at": "2024-12-22T10:00:00Z",
+      "expires_at": "2024-12-23T10:00:00Z"
+    }
+  ]
+}
+```
+
+```json 错误响应 - 转移码无效
+{
+  "error": {
+    "code": "INVALID_TRANSFER_CODE",
+    "message": "Transfer code not found or invalid",
+    "statusCode": 400
+  }
+}
+```
+
+```json 错误响应 - 转移码已过期
+{
+  "error": {
+    "code": "TRANSFER_EXPIRED",
+    "message": "Transfer code has expired, please generate a new one",
+    "statusCode": 410
+  }
+}
+```
+
+```json 错误响应 - 权限不足
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "Only device owner can initiate transfer",
+    "statusCode": 403
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 转移流程
+
+<Steps>
+  <Step title="1. 原所有者生成转移码">
+    调用 `action=generate`，获得8位转移码
+  </Step>
+
+  <Step title="2. 线下传递转移码">
+    通过安全方式（面对面、加密通讯）将转移码告知新所有者
+  </Step>
+
+  <Step title="3. 新所有者接受转移">
+    新所有者调用 `action=accept`，输入转移码和设备ID
+  </Step>
+
+  <Step title="4. 系统执行转移">
+    - 删除原所有权记录
+    - 创建新所有权记录
+    - 删除所有共享记录
+    - 记录转移历史
+  </Step>
+
+  <Step title="5. 转移完成">
+    新所有者立即获得设备完全控制权
+  </Step>
+</Steps>
+
+### 转移的影响
+
+<Warning>
+**不可逆操作**: 设备转移后，原所有者将立即失去所有权限（包括查看权限）。请谨慎操作！
+</Warning>
+
+转移完成后的变化：
+
+| 项目 | 原所有者 | 新所有者 |
+|------|----------|----------|
+| 所有权 | ❌ 失去 | ✅ 获得 |
+| 访问权限 | ❌ 完全失去 | ✅ 完全控制 |
+| 共享记录 | ❌ 全部删除 | ✅ 可重新共享 |
+| 历史数据 | ⚠️ 保留审计记录 | ✅ 可查看全部历史 |
+| 设备配置 | - | ✅ 保留所有配置 |
+
+### 安全机制
+
+<CardGroup cols={2}>
+  <Card title="转移码机制" icon="key">
+    8位随机码，不包含易混淆字符，每次生成唯一
+  </Card>
+
+  <Card title="24小时有效期" icon="clock">
+    转移码24小时后自动过期，降低泄露风险
+  </Card>
+
+  <Card title="一次性使用" icon="lock">
+    转移码使用后立即失效，不可重复使用
+  </Card>
+
+  <Card title="取消机制" icon="ban">
+    生成后可随时取消，防止误操作
+  </Card>
+</CardGroup>
+
+### 转移码格式
+
+```
+格式: 8位大写字母和数字
+示例: A3F2B5C9
+排除: 0(零) O(欧) 1(一) I(艾) l(小写L)
+```
+
+### 使用场景
+
+<Tabs>
+  <Tab title="二手交易">
+    将设备出售给他人时，生成转移码交付给买家
+  </Tab>
+
+  <Tab title="搬家转手">
+    搬家时将设备留给房东或下一任租户
+  </Tab>
+
+  <Tab title="公司资产调拨">
+    公司内部将设备从一个部门转移到另一个部门
+  </Tab>
+
+  <Tab title="赠送亲友">
+    将设备赠送给朋友或家人
+  </Tab>
+</Tabs>
+
+### 转移前检查清单
+
+<Check>**确认新所有者身份** - 确保转移给正确的人</Check>
+<Check>**备份重要数据** - 转移后将失去访问权限</Check>
+<Check>**通知共享用户** - 共享记录将全部失效</Check>
+<Check>**线下确认** - 面对面或通过安全渠道传递转移码</Check>
+<Check>**及时接受** - 24小时内完成转移，过期需重新生成</Check>
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="转移后能撤回吗？">
+    不能。转移一旦完成不可撤回。如需再次获得设备，需要新所有者重新转移给您。
+  </Accordion>
+
+  <Accordion title="可以转移给没注册的用户吗？">
+    不可以。接收方必须已注册账号。建议先让对方注册，再进行转移。
+  </Accordion>
+
+  <Accordion title="转移码泄露了怎么办？">
+    立即调用 `action=cancel` 取消转移，然后重新生成新的转移码。
+  </Accordion>
+
+  <Accordion title="设备历史数据会丢失吗？">
+    不会。所有历史遥测数据和命令记录都会保留，新所有者可查看完整历史。
+  </Accordion>
+
+  <Accordion title="可以批量转移多个设备吗？">
+    需要逐个生成转移码。推荐写循环批量处理：
+    ```javascript
+    for (const deviceId of deviceIds) {
+      const { transfer_code } = await generateTransferCode(deviceId);
+      console.log(`${deviceId}: ${transfer_code}`);
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 最佳实践
+
+<CodeGroup>
+```javascript 生成带确认的转移
+// 1. 生成转移码
+const { transfer_code, expires_at } = await generateTransfer(deviceId);
+
+// 2. 显示确认对话框
+const confirmed = await showConfirmDialog({
+  title: '确认转移设备',
+  message: `您即将失去设备 ${deviceName} 的所有权限`,
+  transferCode: transfer_code,
+  expiresAt: expires_at
+});
+
+if (confirmed) {
+  // 3. 复制转移码到剪贴板
+  navigator.clipboard.writeText(transfer_code);
+
+  // 4. 显示QR码方便扫描
+  showQRCode(transfer_code);
+
+  alert('转移码已生成并复制，请安全地传递给新所有者');
+} else {
+  // 取消转移
+  await cancelTransfer(deviceId);
+}
+```
+
+```javascript 接受转移的UI流程
+// 1. 扫描或输入转移码
+const transferCode = await scanQRCodeOrInput();
+
+// 2. 查询转移信息（可选，用于显示设备详情）
+const transferInfo = await queryTransferInfo(transferCode);
+
+// 3. 显示确认对话框
+const confirmed = await showConfirmDialog({
+  title: '接受设备转移',
+  device: transferInfo.device_name,
+  from: transferInfo.previous_owner_name
+});
+
+if (confirmed) {
+  // 4. 接受转移
+  const result = await acceptTransfer(deviceId, transferCode);
+
+  if (result.success) {
+    alert('设备转移成功，您现在是设备所有者');
+    // 刷新设备列表
+    refreshDeviceList();
+  }
+}
+```
+</CodeGroup>
+
+<Note>
+**转移历史**: 所有转移记录都会保存到 `device_transfer_history` 表，用于审计和溯源。
+</Note>

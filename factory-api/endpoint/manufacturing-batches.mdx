@@ -1,0 +1,247 @@
+---
+title: '查询生产批次'
+api: 'GET /manufacturing-batches'
+---
+
+## 接口说明
+
+查询设备生产批次记录，支持分页和筛选。仅管理员可访问。
+
+## 查询参数
+
+<ParamField query="page" type="number" default="1">
+  页码，从1开始
+</ParamField>
+
+<ParamField query="limit" type="number" default="20">
+  每页数量，范围: 1-100
+</ParamField>
+
+<ParamField query="model" type="string">
+  按设备型号筛选，例如: `RT-Pro-4G`
+</ParamField>
+
+<ParamField query="status" type="string">
+  按批次状态筛选
+  - `completed`: 已完成
+  - `partial`: 部分失败
+  - `failed`: 全部失败
+</ParamField>
+
+<ParamField query="batch_id" type="string">
+  按批次ID精确查询
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="batches" type="array">
+  批次列表
+
+  <Expandable title="Batch 对象">
+    <ResponseField name="batch_id" type="string">
+      批次ID
+    </ResponseField>
+
+    <ResponseField name="batch_name" type="string">
+      批次名称
+    </ResponseField>
+
+    <ResponseField name="model" type="string">
+      设备型号
+    </ResponseField>
+
+    <ResponseField name="requested_count" type="number">
+      请求创建数量
+    </ResponseField>
+
+    <ResponseField name="created_count" type="number">
+      实际创建数量
+    </ResponseField>
+
+    <ResponseField name="status" type="string">
+      批次状态: `completed` | `partial` | `failed`
+    </ResponseField>
+
+    <ResponseField name="created_at" type="string">
+      创建时间 (ISO 8601)
+    </ResponseField>
+
+    <ResponseField name="created_by" type="string">
+      创建者用户ID
+    </ResponseField>
+
+    <ResponseField name="metadata" type="object">
+      批次元数据（自定义字段）
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  分页信息
+
+  <Expandable title="Pagination">
+    <ResponseField name="page" type="number">
+      当前页码
+    </ResponseField>
+
+    <ResponseField name="limit" type="number">
+      每页数量
+    </ResponseField>
+
+    <ResponseField name="total" type="number">
+      总记录数
+    </ResponseField>
+
+    <ResponseField name="total_pages" type="number">
+      总页数
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `UNAUTHORIZED` | 401 | 缺少或无效的认证Token |
+| `PERMISSION_DENIED` | 403 | 非管理员用户无权访问 |
+| `INVALID_PARAMETERS` | 400 | 参数验证失败 |
+| `DATABASE_ERROR` | 500 | 数据库查询失败 |
+
+<RequestExample>
+```bash cURL
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/manufacturing-batches?page=1&limit=20&model=RT-Pro-4G' \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+
+```javascript Node.js
+const response = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/manufacturing-batches?page=1&limit=20&model=RT-Pro-4G',
+  {
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer YOUR_ADMIN_TOKEN'
+    }
+  }
+);
+
+const data = await response.json();
+console.log(`Found ${data.pagination.total} batches`);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://your-supabase-project.supabase.co/functions/v1/manufacturing-batches',
+    headers={'Authorization': 'Bearer YOUR_ADMIN_TOKEN'},
+    params={
+        'page': 1,
+        'limit': 20,
+        'model': 'RT-Pro-4G'
+    }
+)
+
+data = response.json()
+print(f"Found {data['pagination']['total']} batches")
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "batches": [
+    {
+      "batch_id": "batch_1702900000",
+      "batch_name": "Production Batch 2024-Q1",
+      "model": "RT-Pro-4G",
+      "requested_count": 100,
+      "created_count": 100,
+      "status": "completed",
+      "created_at": "2024-12-18T10:00:00Z",
+      "created_by": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+      "metadata": {
+        "production_line": "Line A",
+        "firmware_version": "v2.1.0"
+      }
+    },
+    {
+      "batch_id": "batch_1702800000",
+      "batch_name": "Test Batch",
+      "model": "RT-Pro-4G",
+      "requested_count": 10,
+      "created_count": 8,
+      "status": "partial",
+      "created_at": "2024-12-17T15:30:00Z",
+      "created_by": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+      "metadata": {}
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 45,
+    "total_pages": 3
+  }
+}
+```
+
+```json 错误响应 - 权限不足
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "Admin role required",
+    "statusCode": 403
+  }
+}
+```
+
+```json 错误响应 - 参数错误
+{
+  "error": {
+    "code": "INVALID_PARAMETERS",
+    "message": "limit must be between 1 and 100",
+    "statusCode": 400
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 调用者必须拥有 **Admin** 角色
+
+### 筛选示例
+
+<CodeGroup>
+```bash 按型号筛选
+curl -X GET \
+  'https://your-project.supabase.co/functions/v1/manufacturing-batches?model=RT-Pro-4G' \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+
+```bash 按状态筛选
+curl -X GET \
+  'https://your-project.supabase.co/functions/v1/manufacturing-batches?status=completed' \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+
+```bash 查询特定批次
+curl -X GET \
+  'https://your-project.supabase.co/functions/v1/manufacturing-batches?batch_id=batch_1702900000' \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+</CodeGroup>
+
+### 状态说明
+
+| 状态 | 说明 |
+|------|------|
+| `completed` | 请求的设备数量全部创建成功 |
+| `partial` | 部分设备创建成功，部分失败 |
+| `failed` | 所有设备创建失败 |
+
+<Note>
+批次记录永久保存，用于设备溯源和生产审计。
+</Note>
