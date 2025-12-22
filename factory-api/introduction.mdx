@@ -5,7 +5,33 @@ description: 'PestGG IoT系统工厂端API - 设备批量生产和管理接口'
 
 ## 概述
 
-Factory API 专为设备制造商设计，提供批量设备创建、激活码管理等功能。所有接口均需要**管理员权限**。
+Factory API 专为设备制造商设计，提供批量设备创建、激活码管理等功能。支持创建**网关设备**和**子设备**（传感器、捕鼠器等）。所有接口均需要**管理员权限**。
+
+## 支持的设备类型
+
+系统支持以下IoT设备类型：
+
+<CardGroup cols={2}>
+  <Card title="网关设备" icon="router">
+    中心网关，管理所有子设备，支持WiFi/4G连接
+  </Card>
+
+  <Card title="智能捕鼠器" icon="trap">
+    智能捕鼠装置，通过网关连接云端
+  </Card>
+
+  <Card title="震动检测传感器" icon="wave-pulse">
+    检测震动和移动，实时上报异常
+  </Card>
+
+  <Card title="温湿度传感器" icon="temperature-half">
+    监测环境温湿度变化
+  </Card>
+
+  <Card title="红外人体传感器" icon="person-walking">
+    人体红外感应，检测人员进入
+  </Card>
+</CardGroup>
 
 ## 核心功能
 
@@ -40,28 +66,58 @@ curl -X POST \
 
 ## 快速开始
 
-### 1. 批量创建设备
+### 1. 创建网关设备
 
 ```javascript
-const response = await fetch('/manufacturing-create-devices', {
+const gatewayResponse = await fetch('/manufacturing-create-devices', {
   method: 'POST',
   headers: {
     'Authorization': `Bearer ${adminToken}`,
     'Content-Type': 'application/json'
   },
   body: JSON.stringify({
-    model: 'RT-Pro-4G',
-    count: 100,
-    prefix: 'RT4G',
-    batch_name: '2024-Q1 Production'
+    device_type: 'gateway',
+    model: 'RT-Gateway-Pro',
+    count: 10,
+    prefix: 'GATEWAY',
+    batch_name: 'Gateway Batch 2024-Q1'
   })
 });
 
-const { batch_id, devices } = await response.json();
-console.log(`Created ${devices.length} devices in batch ${batch_id}`);
+const { batch_id, devices } = await gatewayResponse.json();
+console.log(`Created ${devices.length} gateways in batch ${batch_id}`);
+// 记录第一个网关的Thing名称，用于创建子设备
+const firstGateway = devices[0].thing_name; // "GATEWAY:001"
 ```
 
-### 2. 导出激活码
+### 2. 创建子设备（智能捕鼠器）
+
+<Warning>
+**重要**: 必须先创建网关设备，再创建子设备。子设备需要指定所属的网关。
+</Warning>
+
+```javascript
+const trapResponse = await fetch('/manufacturing-create-devices', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${adminToken}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    device_type: 'smart_trap',
+    model: 'SmartTrap-v2',
+    count: 50,
+    prefix: 'TRAP',
+    gateway_thing_name: 'GATEWAY:001',  // 指定所属网关
+    batch_name: 'Smart Trap Batch 2024-Q1'
+  })
+});
+
+const trapData = await trapResponse.json();
+console.log(`Created ${trapData.created_count} smart traps for GATEWAY:001`);
+```
+
+### 3. 导出激活码
 
 ```javascript
 // 导出CSV格式激活码
@@ -95,26 +151,54 @@ console.log(`Total batches: ${pagination.total}`);
 ## 设备生产流程
 
 <Steps>
-  <Step title="1. 调用批量创建接口">
-    指定型号、数量和批次信息
+  <Step title="1. 创建网关设备">
+    首先批量创建网关设备，指定 `device_type: "gateway"`
   </Step>
 
-  <Step title="2. 获取设备凭证">
+  <Step title="2. 记录网关Thing名称">
+    保存每个网关的Thing名称（如 GATEWAY:001），用于创建子设备
+  </Step>
+
+  <Step title="3. 创建子设备">
+    为每个网关创建子设备，指定 `gateway_thing_name` 参数
+  </Step>
+
+  <Step title="4. 获取设备凭证">
     系统返回每台设备的证书、私钥和激活码
   </Step>
 
-  <Step title="3. 烧录证书到设备">
-    将证书和私钥烧录到设备固件中
+  <Step title="5. 烧录证书到设备">
+    将证书和私钥烧录到对应的硬件设备中
   </Step>
 
-  <Step title="4. 打印激活码">
-    将激活码制作成二维码标签贴在包装上
+  <Step title="6. 打印激活码">
+    为每个设备制作二维码标签贴在包装上
   </Step>
 
-  <Step title="5. 设备出厂">
-    设备状态为 `registered`，等待用户绑定
+  <Step title="7. 设备配对出厂">
+    网关和子设备配对打包，状态为 `registered`，等待用户绑定
   </Step>
 </Steps>
+
+## 网关与子设备关系
+
+```
+┌──────────────────┐
+│  GATEWAY:001     │ ← 网关设备（WiFi/4G连接云端）
+└────────┬─────────┘
+         │
+         ├─► TRAP:001 (智能捕鼠器)
+         ├─► TRAP:002 (智能捕鼠器)
+         ├─► VIBSENSOR:001 (震动传感器)
+         ├─► TEMPSENSOR:001 (温湿度传感器)
+         └─► PIRSENSOR:001 (红外传感器)
+              ↑
+         子设备通过BLE/Zigbee/LoRa连接网关
+```
+
+<Note>
+**设备关联**: 子设备在创建时通过 `gateway_thing_name` 字段与网关关联。用户绑定子设备时，其所属的网关必须已经绑定。
+</Note>
 
 ## 数据流
 
