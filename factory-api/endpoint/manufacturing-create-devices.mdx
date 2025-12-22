@@ -3,9 +3,16 @@ title: '批量创建设备'
 api: 'POST /manufacturing-create-devices'
 ---
 
-## 接���说明
+## 接口说明
 
-工厂批量创建IoT设备，生成AWS IoT Thing、证书和激活码。支持创建网关设备和子设备。仅管理员可访问。
+工厂批量创建IoT设备，生成AWS IoT Thing、证书和激活码。支持创建网关设备和子设备。
+
+<Note>
+**工厂生产阶段**：网关和子设备**独立创建**，不需要预先关联。
+**用户使用阶段**：用户绑定设备后，将子设备关联到网关使用。
+</Note>
+
+仅管理员可访问。
 
 ## 请求参数
 
@@ -42,12 +49,6 @@ api: 'POST /manufacturing-create-devices'
   批次名称，用于标识这批设备
 </ParamField>
 
-<ParamField body="gateway_thing_name" type="string">
-  父网关Thing名称（仅子设备需要）
-
-  创建子设备时必须指定其所属的网关，例如: `GATEWAY:001`
-</ParamField>
-
 ## 响应数据
 
 <ResponseField name="batch_id" type="string">
@@ -76,10 +77,6 @@ api: 'POST /manufacturing-create-devices'
 
     <ResponseField name="activation_code" type="string">
       激活码，格式: `{MODEL}-{8位HEX}`，例如: `GATEWAY-A3F2B1C9`
-    </ResponseField>
-
-    <ResponseField name="gateway_thing_name" type="string">
-      父网关Thing名称（仅子设备有此字段）
     </ResponseField>
 
     <ResponseField name="certificate_pem" type="string">
@@ -112,7 +109,6 @@ api: 'POST /manufacturing-create-devices'
 | `PERMISSION_DENIED` | 403 | 非管理员用户无权访问 |
 | `INVALID_PARAMETERS` | 400 | 参数验证失败（count超出范围等） |
 | `INVALID_DEVICE_TYPE` | 400 | 无效的设备类型 |
-| `GATEWAY_NOT_FOUND` | 404 | 创建子设备时，指定的网关不存在 |
 | `AWS_IOT_ERROR` | 500 | AWS IoT服务调用失败 |
 | `DATABASE_ERROR` | 500 | 数据库操作失败 |
 
@@ -141,7 +137,6 @@ curl -X POST \
     "model": "SmartTrap-v2",
     "count": 50,
     "prefix": "TRAP",
-    "gateway_thing_name": "GATEWAY:001",
     "batch_name": "Smart Trap Batch 2024-Q1"
   }'
 ```
@@ -156,7 +151,6 @@ curl -X POST \
     "model": "VibSensor-v1",
     "count": 30,
     "prefix": "VIBSENSOR",
-    "gateway_thing_name": "GATEWAY:001",
     "batch_name": "Vibration Sensor Batch 2024-Q1"
   }'
 ```
@@ -184,7 +178,7 @@ const gatewayResponse = await fetch(
 const gatewayData = await gatewayResponse.json();
 console.log(`Created ${gatewayData.created_count} gateways in batch ${gatewayData.batch_id}`);
 
-// 创建子设备（智能捕鼠器）
+// 创建子设备（智能捕鼠器）- 独立创建，不需要关联网关
 const trapResponse = await fetch(
   'https://your-supabase-project.supabase.co/functions/v1/manufacturing-create-devices',
   {
@@ -198,7 +192,6 @@ const trapResponse = await fetch(
       model: 'SmartTrap-v2',
       count: 50,
       prefix: 'TRAP',
-      gateway_thing_name: 'GATEWAY:001',
       batch_name: 'Smart Trap Batch 2024-Q1'
     })
   }
@@ -230,7 +223,7 @@ gateway_response = requests.post(
 gateway_data = gateway_response.json()
 print(f"Created {gateway_data['created_count']} gateways")
 
-# 创建子设备（温湿度传感器）
+# 创建子设备（温湿度传感器）- 独立创建
 sensor_response = requests.post(
     'https://your-supabase-project.supabase.co/functions/v1/manufacturing-create-devices',
     headers={
@@ -242,7 +235,6 @@ sensor_response = requests.post(
         'model': 'TempHum-v1',
         'count': 30,
         'prefix': 'TEMPSENSOR',
-        'gateway_thing_name': 'GATEWAY:001',
         'batch_name': 'Temp Sensor Batch 2024-Q1'
     }
 )
@@ -284,7 +276,6 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
     {
       "thing_name": "TRAP:001",
       "device_type": "smart_trap",
-      "gateway_thing_name": "GATEWAY:001",
       "activation_code": "TRAP-B5D3E2F1",
       "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
       "private_key": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEII...\n-----END EC PRIVATE KEY-----",
@@ -312,16 +303,6 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
     "code": "INVALID_DEVICE_TYPE",
     "message": "device_type must be one of: gateway, vibration_sensor, smart_trap, temp_humidity_sensor, pir_sensor",
     "statusCode": 400
-  }
-}
-```
-
-```json 错误响应 - 网关不存在
-{
-  "error": {
-    "code": "GATEWAY_NOT_FOUND",
-    "message": "Gateway GATEWAY:001 not found. Child devices must be created after gateway.",
-    "statusCode": 404
   }
 }
 ```
@@ -357,37 +338,64 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
 
 系统支持以下设备类型：
 
-| 设备类型 | device_type | 说明 | 是否需要网关 |
-|---------|-------------|------|-------------|
-| **网关设备** | `gateway` | 中心网关，管理子设备 | - |
-| **震动检测传感器** | `vibration_sensor` | 检测震动和移动 | ✅ 需要 |
-| **智能捕鼠器** | `smart_trap` | 智能捕鼠装置 | ✅ 需要 |
-| **温湿度传感器** | `temp_humidity_sensor` | 监测环境温湿度 | ✅ 需要 |
-| **红外人体传感器** | `pir_sensor` | 人体红外感应 | ✅ 需要 |
+| 设备类型 | device_type | 说明 | 连接方式 |
+|---------|-------------|------|---------|
+| **网关设备** | `gateway` | 中心网关，管理子设备 | WiFi/4G |
+| **震动检测传感器** | `vibration_sensor` | 检测震动和移动 | BLE/Zigbee/LoRa |
+| **智能捕鼠器** | `smart_trap` | 智能捕鼠装置 | BLE/Zigbee/LoRa |
+| **温湿度传感器** | `temp_humidity_sensor` | 监测环境温湿度 | BLE/Zigbee/LoRa |
+| **红外人体传感器** | `pir_sensor` | 人体红外感应 | BLE/Zigbee/LoRa |
 
-### 创建顺序要求
-
-<Warning>
-**重要**: 必须先创建网关设备，再创建子设备。子设备创建时必须指定 `gateway_thing_name` 参数。
-</Warning>
-
-推荐的创建流程：
+### 工厂生产流程
 
 <Steps>
-  <Step title="1. 创建网关设备">
-    先创建一批网关设备，记录生成的Thing名称（如 `GATEWAY:001`）
+  <Step title="1. 灵活创建设备">
+    网关和子设备可以**任意顺序**创建，不需要预先配对
   </Step>
 
-  <Step title="2. 创建子设备">
-    为每个网关创建对应的子设备，指定 `gateway_thing_name` 参数
+  <Step title="2. 获取设备凭证">
+    系统返回每台设备的证书、私钥和激活码
   </Step>
 
   <Step title="3. 烧录证书">
-    将每个设备的证书和私钥烧录到对应硬件中
+    将证书和私钥烧录到对应的硬件设备中
   </Step>
 
   <Step title="4. 打印激活码">
-    为每个设备生成二维码标签
+    为每个设备生成二维码标签贴在包装上
+  </Step>
+
+  <Step title="5. 灵活出货">
+    网关和子设备可以单独出货，也可以套装出货
+  </Step>
+</Steps>
+
+<Note>
+**灵活性优势**：
+- 工厂可以独立生产各类设备，无需配对
+- 仓库管理更灵活，可按需组合发货
+- 用户可以自由选择购买网关+子设备的组合
+</Note>
+
+### 用户使用流程
+
+用户购买设备后的使用流程：
+
+<Steps>
+  <Step title="1. 绑定网关">
+    用户通过激活码绑定网关设备
+  </Step>
+
+  <Step title="2. 绑定子设备">
+    用户通过激活码绑定子设备
+  </Step>
+
+  <Step title="3. 关联到网关">
+    用户在App中将子设备关联到网关（参见User API文档）
+  </Step>
+
+  <Step title="4. 正常使用">
+    子设备通过网关连接云端，开始正常工作
   </Step>
 </Steps>
 
@@ -402,21 +410,20 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
 </Note>
 
 <Note>
-**设备关联**: 子设备通过 `gateway_thing_name` 字段与网关关联。用户绑定子设备时，需要先绑定其所属的网关。
+**设备独立性**: 工厂生产时所有设备都是独立的AWS IoT Thing，拥有独立的证书和激活码。用户使用时才建立设备间的关联关系。
 </Note>
 
 ### 操作流程
 
 1. **验证管理员权限** - 检查JWT Token中的用户角色
 2. **验证设备类型** - 检查device_type是否有效
-3. **验证网关存在性** - 如果是子设备，检查指定的网关是否存在
-4. **创建AWS IoT Thing** - 为每个设备创建Thing对象
-5. **生成ECC P-256证书** - 使用CSR方式生成证书和私钥
-6. **附加IoT Policy** - 将设备策略附加到证书
-7. **生成激活码** - 创建唯一的激活码
-8. **存储设备记录** - 保存到 `devices` 表，包含device_type和gateway_thing_name
-9. **存储激活码** - 保存到 `device_activation_codes` 表
-10. **返回凭证** - 一次性返回所有设备凭证
+3. **创建AWS IoT Thing** - 为每个设备创建Thing对象
+4. **生成ECC P-256证书** - 使用CSR方式生成证书和私钥
+5. **附加IoT Policy** - 将设备策略附加到证书
+6. **生成激活码** - 创建唯一的激活码
+7. **存储设备记录** - 保存到 `devices` 表，记录device_type
+8. **存储激活码** - 保存到 `device_activation_codes` 表
+9. **返回凭证** - 一次性返回所有设备凭证
 
 ### 设备状态
 

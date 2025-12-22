@@ -86,17 +86,16 @@ const gatewayResponse = await fetch('/manufacturing-create-devices', {
 
 const { batch_id, devices } = await gatewayResponse.json();
 console.log(`Created ${devices.length} gateways in batch ${batch_id}`);
-// 记录第一个网关的Thing名称，用于创建子设备
-const firstGateway = devices[0].thing_name; // "GATEWAY:001"
 ```
 
-### 2. 创建子设备（智能捕鼠器）
+### 2. 创建子设备（独立创建，不需要关联）
 
-<Warning>
-**重要**: 必须先创建网关设备，再创建子设备。子设备需要指定所属的网关。
-</Warning>
+<Note>
+工厂生产时网关和子设备**独立创建**，无需预先配对。用户使用时再关联。
+</Note>
 
 ```javascript
+// 创建智能捕鼠器 - 独立创建，不需要指定网关
 const trapResponse = await fetch('/manufacturing-create-devices', {
   method: 'POST',
   headers: {
@@ -108,13 +107,12 @@ const trapResponse = await fetch('/manufacturing-create-devices', {
     model: 'SmartTrap-v2',
     count: 50,
     prefix: 'TRAP',
-    gateway_thing_name: 'GATEWAY:001',  // 指定所属网关
     batch_name: 'Smart Trap Batch 2024-Q1'
   })
 });
 
 const trapData = await trapResponse.json();
-console.log(`Created ${trapData.created_count} smart traps for GATEWAY:001`);
+console.log(`Created ${trapData.created_count} smart traps`);
 ```
 
 ### 3. 导出激活码
@@ -151,53 +149,76 @@ console.log(`Total batches: ${pagination.total}`);
 ## 设备生产流程
 
 <Steps>
-  <Step title="1. 创建网关设备">
-    首先批量创建网关设备，指定 `device_type: "gateway"`
+  <Step title="1. 灵活创建设备">
+    网关和子设备可**任意顺序**、**独立创建**，无需预先关联
   </Step>
 
-  <Step title="2. 记录网关Thing名称">
-    保存每个网关的Thing名称（如 GATEWAY:001），用于创建子设备
-  </Step>
-
-  <Step title="3. 创建子设备">
-    为每个网关创建子设备，指定 `gateway_thing_name` 参数
-  </Step>
-
-  <Step title="4. 获取设备凭证">
+  <Step title="2. 获取设备凭证">
     系统返回每台设备的证书、私钥和激活码
   </Step>
 
-  <Step title="5. 烧录证书到设备">
+  <Step title="3. 烧录证书到设备">
     将证书和私钥烧录到对应的硬件设备中
   </Step>
 
-  <Step title="6. 打印激活码">
+  <Step title="4. 打印激活码">
     为每个设备制作二维码标签贴在包装上
   </Step>
 
-  <Step title="7. 设备配对出厂">
-    网关和子设备配对打包，状态为 `registered`，等待用户绑定
+  <Step title="5. 灵活出货">
+    网关和子设备可单独出货，也可套装出货
   </Step>
 </Steps>
 
-## 网关与子设备关系
+## 生产与使用流程
+
+### 工厂生产阶段
 
 ```
-┌──────────────────┐
-│  GATEWAY:001     │ ← 网关设备（WiFi/4G连接云端）
-└────────┬─────────┘
-         │
-         ├─► TRAP:001 (智能捕鼠器)
-         ├─► TRAP:002 (智能捕鼠器)
-         ├─► VIBSENSOR:001 (震动传感器)
-         ├─► TEMPSENSOR:001 (温湿度传感器)
-         └─► PIRSENSOR:001 (红外传感器)
-              ↑
-         子设备通过BLE/Zigbee/LoRa连接网关
+┌─────────────────────────────────────────┐
+│         工厂独立生产                      │
+├─────────────────────────────────────────┤
+│                                         │
+│  批量创建网关                             │
+│  ↓                                      │
+│  GATEWAY:001, GATEWAY:002, ...          │
+│                                         │
+│  批量创建子设备（不关联网关）              │
+│  ↓                                      │
+│  TRAP:001, TRAP:002, ...                │
+│  SENSOR:001, SENSOR:002, ...            │
+│                                         │
+│  ⚠️ 无需预先配对                         │
+└─────────────────────────────────────────┘
+```
+
+### 用户使用阶段
+
+```
+┌─────────────────────────────────────────┐
+│         用户绑定和关联                    │
+├─────────────────────────────────────────┤
+│                                         │
+│  1. 用户扫码绑定网关                      │
+│     GATEWAY:001 → 用户A                  │
+│                                         │
+│  2. 用户扫码绑定子设备                    │
+│     TRAP:001 → 用户A                     │
+│                                         │
+│  3. 用户在App中将子设备关联到网关          │
+│     TRAP:001 → 关联到 GATEWAY:001        │
+│                                         │
+│  4. 开始使用                              │
+│     TRAP:001 通过 GATEWAY:001 连接云端    │
+└─────────────────────────────────────────┘
 ```
 
 <Note>
-**设备关联**: 子设备在创建时通过 `gateway_thing_name` 字段与网关关联。用户绑定子设备时，其所属的网关必须已经绑定。
+**灵活性优势**：
+- 工厂可以独立生产各类设备，无需配对
+- 仓库管理更灵活，可按需组合发货
+- 用户可以自由选择购买网关+子设备的组合
+- 用户可以随时添加新的子设备到现有网关
 </Note>
 
 ## 数据流
