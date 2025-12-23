@@ -1,0 +1,380 @@
+---
+title: '删除生产批次'
+api: 'DELETE /manufacturing-batches/{batch_id}'
+---
+
+## 接口说明
+
+删除指定的设备生产批次记录。删除批次时会同时删除该批次下所有设备的记录、证书和激活码。
+
+<Warning>
+**危险操作**：此操作不可逆，将永久删除批次及其关联的所有设备数据。请谨慎使用。
+</Warning>
+
+仅管理员可访问。
+
+## 路径参数
+
+<ParamField path="batch_id" type="string" required>
+  批次ID，格式: `batch_{timestamp}`
+
+  例如: `batch_1702900000`
+</ParamField>
+
+## 查询参数
+
+<ParamField query="force" type="boolean" default="false">
+  强制删除标志
+
+  - `false`: 仅删除未绑定的设备批次（默认）
+  - `true`: 强制删除，即使批次中有已绑定给用户的设备
+
+  <Warning>
+  使用 `force=true` 会删除已绑定设备，可能导致用户设备离线，请谨慎操作。
+  </Warning>
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="success" type="boolean">
+  删除是否成功
+</ResponseField>
+
+<ResponseField name="batch_id" type="string">
+  被删除的批次ID
+</ResponseField>
+
+<ResponseField name="deleted_devices_count" type="number">
+  删除的设备数量
+</ResponseField>
+
+<ResponseField name="deleted_certificates_count" type="number">
+  删除的证书数量
+</ResponseField>
+
+<ResponseField name="deleted_activation_codes_count" type="number">
+  删除的激活码数量
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  操作结果消息
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `UNAUTHORIZED` | 401 | 缺少或无效的认证Token |
+| `PERMISSION_DENIED` | 403 | 非管理员用户无权访问 |
+| `BATCH_NOT_FOUND` | 404 | 批次不存在 |
+| `BATCH_HAS_BOUND_DEVICES` | 409 | 批次中存在已绑定的设备，需要使用 force=true |
+| `AWS_IOT_ERROR` | 500 | AWS IoT 证书删除失败 |
+| `DATABASE_ERROR` | 500 | 数据库操作失败 |
+
+<RequestExample>
+```bash cURL - 删除未绑定的批次
+curl -X DELETE \
+  'https://your-supabase-project.supabase.co/functions/v1/manufacturing-batches/batch_1702900000' \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+
+```bash cURL - 强制删除批次（包括已绑定设备）
+curl -X DELETE \
+  'https://your-supabase-project.supabase.co/functions/v1/manufacturing-batches/batch_1702900000?force=true' \
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN"
+```
+
+```javascript Node.js - 删除批次
+const batchId = 'batch_1702900000';
+
+const response = await fetch(
+  `https://your-supabase-project.supabase.co/functions/v1/manufacturing-batches/${batchId}`,
+  {
+    method: 'DELETE',
+    headers: {
+      'Authorization': 'Bearer YOUR_ADMIN_TOKEN'
+    }
+  }
+);
+
+const data = await response.json();
+console.log(`Deleted ${data.deleted_devices_count} devices from batch ${data.batch_id}`);
+```
+
+```javascript Node.js - 强制删除批次
+const batchId = 'batch_1702900000';
+
+const response = await fetch(
+  `https://your-supabase-project.supabase.co/functions/v1/manufacturing-batches/${batchId}?force=true`,
+  {
+    method: 'DELETE',
+    headers: {
+      'Authorization': 'Bearer YOUR_ADMIN_TOKEN'
+    }
+  }
+);
+
+const data = await response.json();
+if (data.success) {
+  console.log(`Force deleted batch with ${data.deleted_devices_count} devices`);
+}
+```
+
+```python Python - 删除批次
+import requests
+
+batch_id = 'batch_1702900000'
+
+response = requests.delete(
+    f'https://your-supabase-project.supabase.co/functions/v1/manufacturing-batches/{batch_id}',
+    headers={'Authorization': 'Bearer YOUR_ADMIN_TOKEN'}
+)
+
+data = response.json()
+print(f"Deleted {data['deleted_devices_count']} devices from batch {data['batch_id']}")
+```
+
+```python Python - 强制删除批次
+import requests
+
+batch_id = 'batch_1702900000'
+
+response = requests.delete(
+    f'https://your-supabase-project.supabase.co/functions/v1/manufacturing-batches/{batch_id}',
+    headers={'Authorization': 'Bearer YOUR_ADMIN_TOKEN'},
+    params={'force': True}
+)
+
+data = response.json()
+if data['success']:
+    print(f"Force deleted batch with {data['deleted_devices_count']} devices")
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 删除未绑定批次
+{
+  "success": true,
+  "batch_id": "batch_1702900000",
+  "deleted_devices_count": 10,
+  "deleted_certificates_count": 10,
+  "deleted_activation_codes_count": 10,
+  "message": "Batch and all associated devices deleted successfully"
+}
+```
+
+```json 成功响应 - 强制删除批次
+{
+  "success": true,
+  "batch_id": "batch_1702900000",
+  "deleted_devices_count": 50,
+  "deleted_certificates_count": 50,
+  "deleted_activation_codes_count": 50,
+  "message": "Batch forcefully deleted including bound devices"
+}
+```
+
+```json 错误响应 - 批次不存在
+{
+  "error": {
+    "code": "BATCH_NOT_FOUND",
+    "message": "Batch with ID 'batch_1702900000' not found",
+    "statusCode": 404
+  }
+}
+```
+
+```json 错误响应 - 批次包含已绑定设备
+{
+  "error": {
+    "code": "BATCH_HAS_BOUND_DEVICES",
+    "message": "Batch contains 15 bound devices. Use force=true to delete anyway",
+    "statusCode": 409,
+    "details": {
+      "total_devices": 50,
+      "bound_devices": 15,
+      "unbound_devices": 35
+    }
+  }
+}
+```
+
+```json 错误响应 - 权限不足
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "Admin role required for batch deletion",
+    "statusCode": 403
+  }
+}
+```
+
+```json 错误响应 - AWS IoT 错误
+{
+  "error": {
+    "code": "AWS_IOT_ERROR",
+    "message": "Failed to delete IoT certificates",
+    "statusCode": 500,
+    "details": {
+      "deleted_devices": 5,
+      "failed_at_device": 6,
+      "reason": "Certificate deletion timeout"
+    }
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 调用者必须拥有 **Admin** 角色
+- 需要有效的 Supabase JWT Token
+
+### 删除流程
+
+<Steps>
+  <Step title="1. 验证批次存在">
+    检查指定的 batch_id 是否存在
+  </Step>
+
+  <Step title="2. 检查设备绑定状态">
+    如果 `force=false`，检查批次中是否有已绑定给用户的设备
+  </Step>
+
+  <Step title="3. 删除 AWS IoT 证书">
+    从 AWS IoT Core 删除所有设备的证书和 Thing 对象
+  </Step>
+
+  <Step title="4. 删除数据库记录">
+    删除激活码、设备记录和批次记录
+  </Step>
+
+  <Step title="5. 返回删除结果">
+    返回删除的设备数量和其他统计信息
+  </Step>
+</Steps>
+
+### 删除策略
+
+#### 默认删除（force=false）
+
+只能删除满足以下条件的批次：
+- 批次中所有设备都未绑定给用户
+- 所有激活码都未被使用
+
+如果批次中存在已绑定设备，将返回 `409 BATCH_HAS_BOUND_DEVICES` 错误。
+
+#### 强制删除（force=true）
+
+<Warning>
+强制删除会删除所有设备，包括已绑定给用户的设备。这将导致：
+- 用户无法继续使用这些设备
+- 设备从 AWS IoT Core 中移除
+- 用户的设备列表中可能出现无效设备
+- **此操作不可逆**
+</Warning>
+
+仅在以下场景使用强制删除：
+- 产品召回
+- 批量生产错误需要重新制造
+- 测试批次的清理
+- 设备已确认全部回收
+
+### 删除影响
+
+删除批次会同时删除：
+1. **AWS IoT Thing** - 设备在 AWS IoT Core 中的实体
+2. **AWS IoT Certificate** - 设备的身份证书和私钥
+3. **设备记录** - `devices` 表中的记录
+4. **激活码** - `device_activation_codes` 表中的记录
+5. **批次记录** - `manufacturing_batches` 表中的记录
+
+### 事务性保证
+
+删除操作使用数据库事务，确保：
+- 要么全部删除成功
+- 要么全部回滚（遇到错误时）
+- 不会出现部分删除的情况
+
+如果在删除 AWS 资源时失败，数据库记录也会回滚。
+
+### 最佳实践
+
+<Note>
+**删除前检查**：
+```bash
+# 1. 先查询批次详情
+GET /manufacturing-batches?batch_id=batch_1702900000
+
+# 2. 确认批次信息和设备数量
+# 3. 确认是否有已绑定设备
+# 4. 再执行删除操作
+DELETE /manufacturing-batches/batch_1702900000
+```
+</Note>
+
+<Note>
+**分批删除大批次**：
+如果批次包含大量设备（>100），建议：
+1. 在低峰时段执行
+2. 监控删除进度
+3. 做好日志记录
+</Note>
+
+<Note>
+**审计记录**：
+建议在删除前：
+1. 导出批次详情作为备份
+2. 记录删除原因和操作者
+3. 保存删除前的设备列表
+</Note>
+
+### 常见场景
+
+#### 场景1：删除测试批次
+
+```bash
+# 测试批次通常未绑定，直接删除
+DELETE /manufacturing-batches/batch_test_1702900000
+```
+
+#### 场景2：生产批次有部分设备已出货
+
+```bash
+# 先尝试删除
+DELETE /manufacturing-batches/batch_1702900000
+
+# 如果返回 409 错误，说明有已绑定设备
+# 根据业务需求决定是否强制删除
+DELETE /manufacturing-batches/batch_1702900000?force=true
+```
+
+#### 场景3：清理旧批次记录
+
+```bash
+# 1. 查询所有旧批次
+GET /manufacturing-batches?status=completed
+
+# 2. 逐个删除未绑定的批次
+for batch_id in old_batch_ids:
+  DELETE /manufacturing-batches/{batch_id}
+```
+
+### 注意事项
+
+<Warning>
+**不可恢复**：删除操作不可逆，无法恢复已删除的批次和设备数据。
+</Warning>
+
+<Warning>
+**AWS 资源**：删除会同时删除 AWS IoT Core 中的 Thing 和 Certificate，设备将无法再连接到 AWS IoT。
+</Warning>
+
+<Warning>
+**用户影响**：强制删除已绑定设备会影响终端用户，可能导致用户投诉和支持成本增加。
+</Warning>
+
+<Note>
+**速率限制**：AWS IoT 删除操作有速率限制，大批量删除可能需要较长时间。
+</Note>
