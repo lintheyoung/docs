@@ -40,9 +40,20 @@ api: 'POST /manufacturing-create-devices'
   设备名称前缀，默认使用型号。
 
   例如:
-  - `GATEWAY` 生成 `GATEWAY:001`, `GATEWAY:002`...
-  - `TRAP` 生成 `TRAP:001`, `TRAP:002`...
-  - `SENSOR` 生成 `SENSOR:001`, `SENSOR:002`...
+  - `IoT-Gateway` 生成 `IoT-Gateway-000001`, `IoT-Gateway-000002`...
+  - `IoT-Trap` 生成 `IoT-Trap-000001`, `IoT-Trap-000002`...
+  - `IoT-Sensor` 生成 `IoT-Sensor-000001`, `IoT-Sensor-000002`...
+</ParamField>
+
+<ParamField body="start_number" type="number" required>
+  起始编号，设备序列号从此编号开始递增。
+
+  范围: 1-999999
+
+  示例:
+  - `start_number: 1`, `count: 10` → 生成编号 000001 ~ 000010
+  - `start_number: 100`, `count: 5` → 生成编号 000100 ~ 000104
+  - `start_number: 5000`, `count: 20` → 生成编号 005000 ~ 005019
 </ParamField>
 
 <ParamField body="batch_name" type="string">
@@ -68,7 +79,9 @@ api: 'POST /manufacturing-create-devices'
 
   <Expandable title="Device 对象">
     <ResponseField name="thing_name" type="string">
-      AWS IoT Thing名称，例如: `GATEWAY:001`, `TRAP:001`
+      AWS IoT Thing名称，格式: `{prefix}-{6位数字编号}`
+
+      例如: `IoT-Gateway-000001`, `IoT-Trap-000100`
     </ResponseField>
 
     <ResponseField name="device_type" type="string">
@@ -122,7 +135,8 @@ curl -X POST \
     "device_type": "gateway",
     "model": "RT-Gateway-Pro",
     "count": 10,
-    "prefix": "GATEWAY",
+    "prefix": "IoT-Gateway",
+    "start_number": 1,
     "batch_name": "Gateway Production Batch 2024-Q1"
   }'
 ```
@@ -136,7 +150,8 @@ curl -X POST \
     "device_type": "smart_trap",
     "model": "SmartTrap-v2",
     "count": 50,
-    "prefix": "TRAP",
+    "prefix": "IoT-Trap",
+    "start_number": 100,
     "batch_name": "Smart Trap Batch 2024-Q1"
   }'
 ```
@@ -150,7 +165,8 @@ curl -X POST \
     "device_type": "vibration_sensor",
     "model": "VibSensor-v1",
     "count": 30,
-    "prefix": "VIBSENSOR",
+    "prefix": "IoT-VibSensor",
+    "start_number": 1,
     "batch_name": "Vibration Sensor Batch 2024-Q1"
   }'
 ```
@@ -169,7 +185,8 @@ const gatewayResponse = await fetch(
       device_type: 'gateway',
       model: 'RT-Gateway-Pro',
       count: 10,
-      prefix: 'GATEWAY',
+      prefix: 'IoT-Gateway',
+      start_number: 1,
       batch_name: 'Gateway Production Batch 2024-Q1'
     })
   }
@@ -177,6 +194,7 @@ const gatewayResponse = await fetch(
 
 const gatewayData = await gatewayResponse.json();
 console.log(`Created ${gatewayData.created_count} gateways in batch ${gatewayData.batch_id}`);
+// 设备名称: IoT-Gateway-000001 ~ IoT-Gateway-000010
 
 // 创建子设备（智能捕鼠器）- 独立创建，不需要关联网关
 const trapResponse = await fetch(
@@ -191,7 +209,8 @@ const trapResponse = await fetch(
       device_type: 'smart_trap',
       model: 'SmartTrap-v2',
       count: 50,
-      prefix: 'TRAP',
+      prefix: 'IoT-Trap',
+      start_number: 100,
       batch_name: 'Smart Trap Batch 2024-Q1'
     })
   }
@@ -199,6 +218,7 @@ const trapResponse = await fetch(
 
 const trapData = await trapResponse.json();
 console.log(`Created ${trapData.created_count} smart traps`);
+// 设备名称: IoT-Trap-000100 ~ IoT-Trap-000149
 ```
 
 ```python Python
@@ -215,13 +235,15 @@ gateway_response = requests.post(
         'device_type': 'gateway',
         'model': 'RT-Gateway-Pro',
         'count': 10,
-        'prefix': 'GATEWAY',
+        'prefix': 'IoT-Gateway',
+        'start_number': 1,
         'batch_name': 'Gateway Production Batch 2024-Q1'
     }
 )
 
 gateway_data = gateway_response.json()
 print(f"Created {gateway_data['created_count']} gateways")
+# 设备名称: IoT-Gateway-000001 ~ IoT-Gateway-000010
 
 # 创建子设备（温湿度传感器）- 独立创建
 sensor_response = requests.post(
@@ -234,13 +256,15 @@ sensor_response = requests.post(
         'device_type': 'temp_humidity_sensor',
         'model': 'TempHum-v1',
         'count': 30,
-        'prefix': 'TEMPSENSOR',
+        'prefix': 'IoT-TempSensor',
+        'start_number': 1,
         'batch_name': 'Temp Sensor Batch 2024-Q1'
     }
 )
 
 sensor_data = sensor_response.json()
 print(f"Created {sensor_data['created_count']} temperature sensors")
+# 设备名称: IoT-TempSensor-000001 ~ IoT-TempSensor-000030
 ```
 </RequestExample>
 
@@ -253,7 +277,7 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
   "created_count": 10,
   "devices": [
     {
-      "thing_name": "GATEWAY:001",
+      "thing_name": "IoT-Gateway-000001",
       "device_type": "gateway",
       "activation_code": "GATEWAY-A3F2B1C9",
       "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
@@ -261,12 +285,22 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
       "iot_endpoint": "a2b3c4d5e6f7g8.iot.ap-southeast-1.amazonaws.com",
       "certificate_id": "abc123def456ghi789...",
       "certificate_arn": "arn:aws:iot:ap-southeast-1:123456789012:cert/abc123..."
+    },
+    {
+      "thing_name": "IoT-Gateway-000002",
+      "device_type": "gateway",
+      "activation_code": "GATEWAY-B4E3F2D1",
+      "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
+      "private_key": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEII...\n-----END EC PRIVATE KEY-----",
+      "iot_endpoint": "a2b3c4d5e6f7g8.iot.ap-southeast-1.amazonaws.com",
+      "certificate_id": "def456ghi789jkl012...",
+      "certificate_arn": "arn:aws:iot:ap-southeast-1:123456789012:cert/def456..."
     }
   ]
 }
 ```
 
-```json 成功响应 - 创建子设备（智能捕鼠器）
+```json 成功响应 - 创建子设备（智能捕鼠器，起始编号100）
 {
   "batch_id": "batch_1702900001",
   "model": "SmartTrap-v2",
@@ -274,14 +308,24 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
   "created_count": 50,
   "devices": [
     {
-      "thing_name": "TRAP:001",
+      "thing_name": "IoT-Trap-000100",
       "device_type": "smart_trap",
       "activation_code": "TRAP-B5D3E2F1",
       "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
       "private_key": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEII...\n-----END EC PRIVATE KEY-----",
       "iot_endpoint": "a2b3c4d5e6f7g8.iot.ap-southeast-1.amazonaws.com",
-      "certificate_id": "def456ghi789jkl012...",
-      "certificate_arn": "arn:aws:iot:ap-southeast-1:123456789012:cert/def456..."
+      "certificate_id": "ghi789jkl012mno345...",
+      "certificate_arn": "arn:aws:iot:ap-southeast-1:123456789012:cert/ghi789..."
+    },
+    {
+      "thing_name": "IoT-Trap-000101",
+      "device_type": "smart_trap",
+      "activation_code": "TRAP-C6E4F3D2",
+      "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
+      "private_key": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEII...\n-----END EC PRIVATE KEY-----",
+      "iot_endpoint": "a2b3c4d5e6f7g8.iot.ap-southeast-1.amazonaws.com",
+      "certificate_id": "jkl012mno345pqr678...",
+      "certificate_arn": "arn:aws:iot:ap-southeast-1:123456789012:cert/jkl012..."
     }
   ]
 }
