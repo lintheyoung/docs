@@ -7,16 +7,30 @@ api: 'POST /user-device-bind'
 
 用户通过激活码绑定设备，建立设备所有权关系。
 
+<Note>
+**设备绑定顺序**：
+1. 先绑定网关设备（gateway）
+2. 再绑定子设备（smart_trap、vibration_sensor等），并指定所属网关
+</Note>
+
 ## 请求参数
 
 <ParamField body="activation_code" type="string" required>
   设备激活码，格式: `{MODEL}-{8位HEX}`
 
-  例如: `RT4G-A3F2B1C9`
+  例如: `GATEWAY-A3F2B1C9`, `TRAP-B5D3E2F1`
 </ParamField>
 
 <ParamField body="device_nickname" type="string">
   设备昵称，用于区分多个设备（可选）
+</ParamField>
+
+<ParamField body="gateway_id" type="string">
+  网关设备ID（仅子设备需要）
+
+  绑定子设备时必须指定所属的网关设备ID。网关设备绑定时不需要此参数。
+
+  示例: `d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b`
 </ParamField>
 
 ## 响应数据
@@ -27,6 +41,10 @@ api: 'POST /user-device-bind'
 
 <ResponseField name="thing_name" type="string">
   AWS IoT Thing名称
+</ResponseField>
+
+<ResponseField name="device_type" type="string">
+  设备类型: `gateway` | `vibration_sensor` | `smart_trap` | `temp_humidity_sensor` | `pir_sensor`
 </ResponseField>
 
 <ResponseField name="model" type="string">
@@ -45,6 +63,10 @@ api: 'POST /user-device-bind'
   租户ID
 </ResponseField>
 
+<ResponseField name="gateway_id" type="string">
+  所属网关ID（仅子设备有此字段）
+</ResponseField>
+
 ## 错误码
 
 | 错误码 | HTTP状态码 | 说明 |
@@ -53,22 +75,39 @@ api: 'POST /user-device-bind'
 | `INVALID_ACTIVATION_CODE` | 400 | 激活码格式错误或不存在 |
 | `CODE_ALREADY_USED` | 409 | 激活码已被使用 |
 | `DEVICE_ALREADY_BOUND` | 409 | 设备已绑定到其他用户 |
+| `GATEWAY_REQUIRED` | 400 | 绑定子设备时必须指定网关ID |
+| `GATEWAY_NOT_FOUND` | 404 | 指定的网关设备不存在 |
+| `GATEWAY_NOT_OWNED` | 403 | 指定的网关不属于当前用户 |
+| `INVALID_DEVICE_TYPE` | 400 | 设备类型不匹配（如将网关作为子设备绑定） |
 | `DATABASE_ERROR` | 500 | 数据库操作失败 |
 
 <RequestExample>
-```bash cURL
+```bash cURL - 绑定网关设备
 curl -X POST \
   'https://your-supabase-project.supabase.co/functions/v1/user-device-bind' \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "activation_code": "RT4G-A3F2B1C9",
-    "device_nickname": "客厅捕鼠器"
+    "activation_code": "GATEWAY-A3F2B1C9",
+    "device_nickname": "家庭网关"
   }'
 ```
 
-```javascript Node.js
-const response = await fetch(
+```bash cURL - 绑定子设备（智能捕鼠器）
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-bind' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "activation_code": "TRAP-B5D3E2F1",
+    "device_nickname": "客厅捕鼠器",
+    "gateway_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b"
+  }'
+```
+
+```javascript Node.js - 完整流程：先绑定网关，再绑定子设备
+// 步骤1: 绑定网关设备
+const gatewayResponse = await fetch(
   'https://your-supabase-project.supabase.co/functions/v1/user-device-bind',
   {
     method: 'POST',
@@ -77,45 +116,97 @@ const response = await fetch(
       'Content-Type': 'application/json'
     },
     body: JSON.stringify({
-      activation_code: 'RT4G-A3F2B1C9',
-      device_nickname: '客厅捕鼠器'
+      activation_code: 'GATEWAY-A3F2B1C9',
+      device_nickname: '家庭网关'
     })
   }
 );
 
-const data = await response.json();
-console.log(`Device ${data.thing_name} bound successfully`);
+const gateway = await gatewayResponse.json();
+console.log(`Gateway ${gateway.thing_name} bound, ID: ${gateway.device_id}`);
+
+// 步骤2: 绑定子设备到网关下
+const trapResponse = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-bind',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      activation_code: 'TRAP-B5D3E2F1',
+      device_nickname: '客厅捕鼠器',
+      gateway_id: gateway.device_id  // 使用刚绑定的网关ID
+    })
+  }
+);
+
+const trap = await trapResponse.json();
+console.log(`Smart trap ${trap.thing_name} bound to gateway ${gateway.thing_name}`);
 ```
 
-```python Python
+```python Python - 完整流程：先绑定网关，再绑定子设备
 import requests
 
-response = requests.post(
+# 步骤1: 绑定网关设备
+gateway_response = requests.post(
     'https://your-supabase-project.supabase.co/functions/v1/user-device-bind',
     headers={
         'Authorization': 'Bearer YOUR_JWT_TOKEN',
         'Content-Type': 'application/json'
     },
     json={
-        'activation_code': 'RT4G-A3F2B1C9',
-        'device_nickname': '客厅捕鼠器'
+        'activation_code': 'GATEWAY-A3F2B1C9',
+        'device_nickname': '家庭网关'
     }
 )
 
-data = response.json()
-print(f"Device {data['thing_name']} bound successfully")
+gateway = gateway_response.json()
+print(f"Gateway {gateway['thing_name']} bound, ID: {gateway['device_id']}")
+
+# 步骤2: 绑定子设备到网关下
+trap_response = requests.post(
+    'https://your-supabase-project.supabase.co/functions/v1/user-device-bind',
+    headers={
+        'Authorization': 'Bearer YOUR_JWT_TOKEN',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'activation_code': 'TRAP-B5D3E2F1',
+        'device_nickname': '客厅捕鼠器',
+        'gateway_id': gateway['device_id']  # 使用刚绑定的网关ID
+    }
+)
+
+trap = trap_response.json()
+print(f"Smart trap {trap['thing_name']} bound to gateway {gateway['thing_name']}")
 ```
 </RequestExample>
 
 <ResponseExample>
-```json 成功响应
+```json 成功响应 - 绑定网关设备
 {
   "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
-  "thing_name": "RT4G:001",
-  "model": "RT-Pro-4G",
+  "thing_name": "IoT-Gateway-000001",
+  "device_type": "gateway",
+  "model": "RT-Gateway-Pro",
   "status": "pending",
-  "bound_at": "2024-12-22T10:30:00Z",
+  "bound_at": "2024-12-23T10:30:00Z",
   "tenant_id": "tenant_abc123"
+}
+```
+
+```json 成功响应 - 绑定子设备（智能捕鼠器）
+{
+  "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+  "thing_name": "IoT-Trap-000100",
+  "device_type": "smart_trap",
+  "model": "SmartTrap-v2",
+  "status": "pending",
+  "bound_at": "2024-12-23T10:35:00Z",
+  "tenant_id": "tenant_abc123",
+  "gateway_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b"
 }
 ```
 
@@ -148,6 +239,39 @@ print(f"Device {data['thing_name']} bound successfully")
   }
 }
 ```
+
+```json 错误响应 - 子设备缺少网关ID
+{
+  "error": {
+    "code": "GATEWAY_REQUIRED",
+    "message": "gateway_id is required when binding child devices",
+    "statusCode": 400,
+    "details": {
+      "device_type": "smart_trap"
+    }
+  }
+}
+```
+
+```json 错误响应 - 网关不存在
+{
+  "error": {
+    "code": "GATEWAY_NOT_FOUND",
+    "message": "Gateway device not found",
+    "statusCode": 404
+  }
+}
+```
+
+```json 错误响应 - 网关不属于当前用户
+{
+  "error": {
+    "code": "GATEWAY_NOT_OWNED",
+    "message": "The specified gateway does not belong to current user",
+    "statusCode": 403
+  }
+}
+```
 </ResponseExample>
 
 ## 使用说明
@@ -158,34 +282,85 @@ print(f"Device {data['thing_name']} bound successfully")
 
 ### 绑定流程
 
+#### 网关设备绑定流程
+
 <Steps>
-  <Step title="扫描激活码">
-    用户扫描设备包装上的二维码或手动输入激活码
+  <Step title="1. 扫描网关激活码">
+    用户扫描网关设备包装上的二维码或手动输入激活码
   </Step>
 
-  <Step title="验证激活码">
-    系统验证激活码是否有效且未使用
+  <Step title="2. 验证激活码">
+    系统验证激活码是否有效、未使用且设备类型为 `gateway`
   </Step>
 
-  <Step title="建立所有权">
-    创建 `device_owners` 记录，将设备绑定到用户的租户
+  <Step title="3. 建立所有权">
+    创建 `device_owners` 记录，将网关绑定到用户的租户
   </Step>
 
-  <Step title="标记激活码">
+  <Step title="4. 标记激活码">
     将激活码标记为已使用（`is_used = true`）
   </Step>
 
-  <Step title="更新设备状态">
-    设备状态从 `registered` 更新为 `pending`
+  <Step title="5. 更新设备状态">
+    网关状态从 `registered` 更新为 `pending`
   </Step>
 
-  <Step title="开始设备设置">
-    用户可进入设备设置流程（Setup Session）
+  <Step title="6. 返回网关信息">
+    返回网关的 `device_id`，用于后续绑定子设备
   </Step>
 </Steps>
 
+#### 子设备绑定流程
+
+<Steps>
+  <Step title="1. 确保已绑定网关">
+    子设备必须关联到已绑定的网关设备
+  </Step>
+
+  <Step title="2. 扫描子设备激活码">
+    用户扫描子设备（捕鼠器、传感器等）包装上的激活码
+  </Step>
+
+  <Step title="3. 指定所属网关">
+    请求中提供 `gateway_id`（网关设备的ID）
+  </Step>
+
+  <Step title="4. 验证网关归属">
+    系统验证指定的网关是否属于当前用户
+  </Step>
+
+  <Step title="5. 建立设备关联">
+    将子设备绑定到用户租户，并关联到指定网关
+  </Step>
+
+  <Step title="6. 更新设备状态">
+    子设备状态从 `registered` 更新为 `pending`
+  </Step>
+
+  <Step title="7. 完成绑定">
+    子设备可通过网关连接云端，进入设置流程
+  </Step>
+</Steps>
+
+### 设备架构
+
+```
+┌──────────────────────┐
+│   网关设备 (Gateway)  │  ← 用户先绑定网关
+│   IoT-Gateway-000001 │
+└──────────┬───────────┘
+           │
+           ├──► 智能捕鼠器 (IoT-Trap-000100)     ← 然后绑定子设备
+           ├──► 震动传感器 (IoT-VibSensor-000001)
+           ├──► 温湿度传感器 (IoT-TempSensor-000001)
+           └──► 红外传感器 (IoT-PIRSensor-000001)
+
+所有子设备通过网关连接云端
+```
+
 ### 状态转换
 
+#### 网关设备
 ```
 registered (工厂创建)
     ↓
@@ -196,12 +371,29 @@ pending (等待设置)
   [完成设置]
     ↓
 active (可正常使用)
+    ↓
+  [子设备通过网关通信]
+```
+
+#### 子设备
+```
+registered (工厂创建)
+    ↓
+  [用户绑定 + 指定网关]
+    ↓
+pending (等待设置)
+    ↓
+  [完成设置]
+    ↓
+active (通过网关连接云端)
 ```
 
 ### 激活码格式
 
 激活码格式为 `{MODEL}-{8位HEX字符}`：
-- 示例: `RT4G-A3F2B1C9`
+- 网关示例: `GATEWAY-A3F2B1C9`
+- 捕鼠器示例: `TRAP-B5D3E2F1`
+- 传感器示例: `VIBSENSOR-C6E4F3D2`
 - 不区分大小写
 - 不包含易混淆字符（0/O, 1/I/l）
 
@@ -213,9 +405,44 @@ active (可正常使用)
 **绑定前确认**: 绑定操作不可撤销，请确认激活码正确后再提交。
 </Warning>
 
+<Warning>
+**子设备必须指定网关**: 绑定子设备时必须提供 `gateway_id`，且该网关必须已绑定到当前用户账户下。
+</Warning>
+
 ### 常见问题
 
 <AccordionGroup>
+  <Accordion title="必须先绑定网关吗？">
+    是的。子设备（捕鼠器、传感器等）必须关联到网关才能工作。正确顺序：
+    1. 先绑定网关设备，获取 `gateway_id`
+    2. 再绑定子设备，指定 `gateway_id`
+    3. 子设备通过网关连接到云端
+  </Accordion>
+
+  <Accordion title="一个网关可以连接多少个子设备？">
+    一个网关通常可以连接 20-50 个子设备，具体取决于：
+    - 网关型号和性能
+    - 子设备类型和数量
+    - 通信协议（BLE、Zigbee、LoRa）
+    - 建议查看网关设备说明书了解具体限制
+  </Accordion>
+
+  <Accordion title="子设备可以换网关吗？">
+    可以，但需要：
+    1. 先从原网关解绑子设备
+    2. 重新绑定到新网关
+    3. 或联系技术支持协助迁移
+  </Accordion>
+
+  <Accordion title="绑定子设备时提示 GATEWAY_REQUIRED？">
+    这表示您正在绑定的是子设备（非网关），必须提供 `gateway_id` 参数。
+
+    解决方法：
+    1. 先绑定一个网关设备
+    2. 使用网关的 `device_id` 作为 `gateway_id`
+    3. 重新绑定子设备
+  </Accordion>
+
   <Accordion title="激活码已被使用怎么办？">
     激活码只能使用一次。如果提示已使用，可能是：
     1. 该设备已被其他用户绑定
@@ -225,12 +452,31 @@ active (可正常使用)
 
   <Accordion title="绑定后设备不在线怎么办？">
     绑定后设备状态为 `pending`，需要完成以下步骤：
-    1. 设备通电并连接网络
+
+    **网关设备**：
+    1. 网关通电并连接WiFi/4G
     2. 完成 Setup Session 流程
-    3. 设备状态变为 `active` 后才能正常使用
+    3. 网关状态变为 `active`
+
+    **子设备**：
+    1. 确保网关已在线（`active` 状态）
+    2. 子设备通电并靠近网关
+    3. 子设备自动通过网关连接云端
+    4. 完成 Setup Session 流程
   </Accordion>
 
   <Accordion title="可以绑定多少台设备？">
-    设备数量限制取决于您的订阅计划，普通用户通常可绑定10台设备。
+    设备数量限制取决于您的订阅计划：
+    - 免费版：1个网关 + 5个子设备
+    - 基础版：1个网关 + 20个子设备
+    - 专业版：3个网关 + 100个子设备
+    - 企业版：不限制
+  </Accordion>
+
+  <Accordion title="网关设备需要一直在线吗？">
+    是的。网关是子设备与云端通信的桥梁，必须保持在线。
+    - 网关离线：所有子设备无法上报数据
+    - 网关恢复：子设备自动重新连接
+    - 建议网关接入稳定的电源和网络
   </Accordion>
 </AccordionGroup>
