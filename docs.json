@@ -144,9 +144,10 @@
             ]
           },
           {
-            "group": "设备绑定与设置",
+            "group": "设备绑定与管理",
             "pages": [
               "user-api/endpoint/user-device-bind",
+              "user-api/endpoint/list-devices",
               "user-api/endpoint/get-aws-credentials",
               "user-api/endpoint/setup-sessions"
             ]

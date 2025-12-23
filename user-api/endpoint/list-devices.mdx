@@ -1,0 +1,840 @@
+---
+title: '获取设备列表'
+api: 'GET /user-devices'
+---
+
+## 接口说明
+
+获取当前用户租户下的所有设备信息，包括网关设备和子设备。返回设备的层级关系、状态、类型等详细信息。
+
+## 查询参数
+
+<ParamField query="device_type" type="string">
+  按设备类型筛选
+  - `gateway`: 仅返回网关设备
+  - `smart_trap`: 仅返回智能捕鼠器
+  - `vibration_sensor`: 仅返回震动传感器
+  - `temp_humidity_sensor`: 仅返回温湿度传感器
+  - `pir_sensor`: 仅返回红外传感器
+  - 不传则返回所有设备
+</ParamField>
+
+<ParamField query="status" type="string">
+  按设备状态筛选
+  - `registered`: 已注册（工厂创建）
+  - `pending`: 待设置（已绑定未完成设置）
+  - `active`: 激活（可正常使用）
+  - `inactive`: 停用
+  - `offline`: 离线
+  - 不传则返回所有状态
+</ParamField>
+
+<ParamField query="gateway_id" type="string">
+  按网关筛选，返回指定网关下的所有子设备
+
+  示例: `d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b`
+</ParamField>
+
+<ParamField query="include_shared" type="boolean" default="true">
+  是否包含其他用户共享给我的设备
+  - `true`: 包含共享设备（默认）
+  - `false`: 仅返回自己绑定的设备
+</ParamField>
+
+<ParamField query="page" type="number" default="1">
+  页码，从1开始
+</ParamField>
+
+<ParamField query="limit" type="number" default="20">
+  每页数量，范围: 1-100
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="devices" type="array">
+  设备列表
+
+  <Expandable title="Device 对象">
+    <ResponseField name="device_id" type="string">
+      设备ID (UUID)
+    </ResponseField>
+
+    <ResponseField name="thing_name" type="string">
+      AWS IoT Thing名称，例如: `IoT-Gateway-000001`
+    </ResponseField>
+
+    <ResponseField name="device_type" type="string">
+      设备类型: `gateway` | `vibration_sensor` | `smart_trap` | `temp_humidity_sensor` | `pir_sensor`
+    </ResponseField>
+
+    <ResponseField name="model" type="string">
+      设备型号，例如: `RT-Gateway-Pro`, `SmartTrap-v2`
+    </ResponseField>
+
+    <ResponseField name="device_nickname" type="string">
+      设备昵称
+    </ResponseField>
+
+    <ResponseField name="status" type="string">
+      设备状态: `registered` | `pending` | `active` | `inactive` | `offline`
+    </ResponseField>
+
+    <ResponseField name="online" type="boolean">
+      是否在线
+    </ResponseField>
+
+    <ResponseField name="gateway_id" type="string">
+      所属网关ID（仅子设备有此字段）
+    </ResponseField>
+
+    <ResponseField name="gateway_info" type="object">
+      所属网关信息（仅子设备有此字段）
+
+      <Expandable title="GatewayInfo">
+        <ResponseField name="device_id" type="string">
+          网关设备ID
+        </ResponseField>
+
+        <ResponseField name="thing_name" type="string">
+          网关Thing名称
+        </ResponseField>
+
+        <ResponseField name="device_nickname" type="string">
+          网关昵称
+        </ResponseField>
+
+        <ResponseField name="online" type="boolean">
+          网关是否在线
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="child_devices" type="array">
+      子设备列表（仅网关设备有此字段）
+
+      包含该网关下所有子设备的简要信息
+    </ResponseField>
+
+    <ResponseField name="child_count" type="number">
+      子设备数量（仅网关设备有此字段）
+    </ResponseField>
+
+    <ResponseField name="bound_at" type="string">
+      绑定时间 (ISO 8601)
+    </ResponseField>
+
+    <ResponseField name="last_seen" type="string">
+      最后上线时间 (ISO 8601)
+    </ResponseField>
+
+    <ResponseField name="firmware_version" type="string">
+      固件版本
+    </ResponseField>
+
+    <ResponseField name="owner_info" type="object">
+      设备所有者信息
+
+      <Expandable title="OwnerInfo">
+        <ResponseField name="user_id" type="string">
+          所有者用户ID
+        </ResponseField>
+
+        <ResponseField name="email" type="string">
+          所有者邮箱
+        </ResponseField>
+
+        <ResponseField name="is_me" type="boolean">
+          是否是当前用户
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="my_role" type="string">
+      我对此设备的权限角色: `owner` | `editor` | `viewer`
+    </ResponseField>
+
+    <ResponseField name="metadata" type="object">
+      设备元数据（自定义字段）
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="pagination" type="object">
+  分页信息
+
+  <Expandable title="Pagination">
+    <ResponseField name="page" type="number">
+      当前页码
+    </ResponseField>
+
+    <ResponseField name="limit" type="number">
+      每页数量
+    </ResponseField>
+
+    <ResponseField name="total" type="number">
+      总设备数
+    </ResponseField>
+
+    <ResponseField name="total_pages" type="number">
+      总页数
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="summary" type="object">
+  设备统计摘要
+
+  <Expandable title="Summary">
+    <ResponseField name="total_devices" type="number">
+      总设备数
+    </ResponseField>
+
+    <ResponseField name="gateways_count" type="number">
+      网关数量
+    </ResponseField>
+
+    <ResponseField name="child_devices_count" type="number">
+      子设备数量
+    </ResponseField>
+
+    <ResponseField name="online_count" type="number">
+      在线设备数
+    </ResponseField>
+
+    <ResponseField name="offline_count" type="number">
+      离线设备数
+    </ResponseField>
+
+    <ResponseField name="by_type" type="object">
+      按设备类型统计
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `UNAUTHORIZED` | 401 | 缺少或无效的认证Token |
+| `INVALID_PARAMETERS` | 400 | 查询参数验证失败 |
+| `GATEWAY_NOT_FOUND` | 404 | 指定的网关不存在 |
+| `DATABASE_ERROR` | 500 | 数据库查询失败 |
+
+<RequestExample>
+```bash cURL - 获取所有设备
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/user-devices' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```bash cURL - 仅获取网关设备
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/user-devices?device_type=gateway' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```bash cURL - 获取指定网关的所有子设备
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/user-devices?gateway_id=d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```bash cURL - 获取在线设备
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/user-devices?status=active' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```javascript Node.js - 获取所有设备
+const response = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/user-devices',
+  {
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN'
+    }
+  }
+);
+
+const data = await response.json();
+console.log(`Total devices: ${data.summary.total_devices}`);
+console.log(`Gateways: ${data.summary.gateways_count}`);
+console.log(`Child devices: ${data.summary.child_devices_count}`);
+
+// 遍历设备
+data.devices.forEach(device => {
+  console.log(`${device.device_nickname} (${device.device_type}): ${device.status}`);
+
+  if (device.device_type === 'gateway' && device.child_devices) {
+    console.log(`  └─ Has ${device.child_count} child devices`);
+  }
+
+  if (device.gateway_info) {
+    console.log(`  └─ Connected to gateway: ${device.gateway_info.device_nickname}`);
+  }
+});
+```
+
+```javascript Node.js - 按网关组织设备
+// 获取所有设备
+const { devices } = await fetch('/user-devices').then(r => r.json());
+
+// 构建网关->子设备的层级结构
+const gateways = devices.filter(d => d.device_type === 'gateway');
+
+gateways.forEach(gateway => {
+  console.log(`\n📡 ${gateway.device_nickname} (${gateway.online ? '在线' : '离线'})`);
+
+  const children = devices.filter(d => d.gateway_id === gateway.device_id);
+  children.forEach(child => {
+    console.log(`  └─ ${child.device_nickname} (${child.device_type})`);
+  });
+});
+```
+
+```python Python - 获取所有设备
+import requests
+
+response = requests.get(
+    'https://your-supabase-project.supabase.co/functions/v1/user-devices',
+    headers={'Authorization': 'Bearer YOUR_JWT_TOKEN'}
+)
+
+data = response.json()
+print(f"Total devices: {data['summary']['total_devices']}")
+print(f"Gateways: {data['summary']['gateways_count']}")
+print(f"Child devices: {data['summary']['child_devices_count']}")
+
+# 遍历设备
+for device in data['devices']:
+    status_icon = '🟢' if device['online'] else '🔴'
+    print(f"{status_icon} {device['device_nickname']} ({device['device_type']})")
+
+    if device['device_type'] == 'gateway':
+        print(f"  └─ {device['child_count']} child devices")
+```
+
+```python Python - 按网关分组显示
+import requests
+from collections import defaultdict
+
+response = requests.get(
+    'https://your-supabase-project.supabase.co/functions/v1/user-devices',
+    headers={'Authorization': 'Bearer YOUR_JWT_TOKEN'}
+)
+
+devices = response.json()['devices']
+
+# 分组：网关和子设备
+gateways = [d for d in devices if d['device_type'] == 'gateway']
+children_by_gateway = defaultdict(list)
+
+for device in devices:
+    if 'gateway_id' in device:
+        children_by_gateway[device['gateway_id']].append(device)
+
+# 显示层级结构
+for gateway in gateways:
+    status = '🟢 在线' if gateway['online'] else '🔴 离线'
+    print(f"\n📡 {gateway['device_nickname']} ({status})")
+
+    children = children_by_gateway.get(gateway['device_id'], [])
+    for child in children:
+        child_status = '🟢' if child['online'] else '🔴'
+        print(f"  {child_status} └─ {child['device_nickname']} ({child['device_type']})")
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 获取所有设备
+{
+  "devices": [
+    {
+      "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+      "thing_name": "IoT-Gateway-000001",
+      "device_type": "gateway",
+      "model": "RT-Gateway-Pro",
+      "device_nickname": "家庭网关",
+      "status": "active",
+      "online": true,
+      "child_count": 3,
+      "child_devices": [
+        {
+          "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+          "thing_name": "IoT-Trap-000100",
+          "device_type": "smart_trap",
+          "device_nickname": "客厅捕鼠器",
+          "online": true
+        },
+        {
+          "device_id": "b2c3d4e5-6f7g-8h9i-0j1k-2l3m4n5o6p7q",
+          "thing_name": "IoT-VibSensor-000001",
+          "device_type": "vibration_sensor",
+          "device_nickname": "厨房震动传感器",
+          "online": true
+        },
+        {
+          "device_id": "c3d4e5f6-7g8h-9i0j-1k2l-3m4n5o6p7q8r",
+          "thing_name": "IoT-TempSensor-000001",
+          "device_type": "temp_humidity_sensor",
+          "device_nickname": "卧室温湿度传感器",
+          "online": false
+        }
+      ],
+      "bound_at": "2024-12-23T10:30:00Z",
+      "last_seen": "2024-12-23T18:45:00Z",
+      "firmware_version": "v2.1.0",
+      "owner_info": {
+        "user_id": "user_abc123",
+        "email": "user@example.com",
+        "is_me": true
+      },
+      "my_role": "owner",
+      "metadata": {
+        "location": "客厅",
+        "installation_date": "2024-12-20"
+      }
+    },
+    {
+      "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+      "thing_name": "IoT-Trap-000100",
+      "device_type": "smart_trap",
+      "model": "SmartTrap-v2",
+      "device_nickname": "客厅捕鼠器",
+      "status": "active",
+      "online": true,
+      "gateway_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+      "gateway_info": {
+        "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+        "thing_name": "IoT-Gateway-000001",
+        "device_nickname": "家庭网关",
+        "online": true
+      },
+      "bound_at": "2024-12-23T10:35:00Z",
+      "last_seen": "2024-12-23T18:45:00Z",
+      "firmware_version": "v1.5.0",
+      "owner_info": {
+        "user_id": "user_abc123",
+        "email": "user@example.com",
+        "is_me": true
+      },
+      "my_role": "owner",
+      "metadata": {
+        "location": "客厅",
+        "bait_type": "peanut_butter"
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 4,
+    "total_pages": 1
+  },
+  "summary": {
+    "total_devices": 4,
+    "gateways_count": 1,
+    "child_devices_count": 3,
+    "online_count": 3,
+    "offline_count": 1,
+    "by_type": {
+      "gateway": 1,
+      "smart_trap": 1,
+      "vibration_sensor": 1,
+      "temp_humidity_sensor": 1
+    }
+  }
+}
+```
+
+```json 成功响应 - 仅获取网关设备
+{
+  "devices": [
+    {
+      "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+      "thing_name": "IoT-Gateway-000001",
+      "device_type": "gateway",
+      "model": "RT-Gateway-Pro",
+      "device_nickname": "家庭网关",
+      "status": "active",
+      "online": true,
+      "child_count": 3,
+      "child_devices": [
+        {
+          "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+          "thing_name": "IoT-Trap-000100",
+          "device_type": "smart_trap",
+          "device_nickname": "客厅捕鼠器",
+          "online": true
+        }
+      ],
+      "bound_at": "2024-12-23T10:30:00Z",
+      "last_seen": "2024-12-23T18:45:00Z",
+      "owner_info": {
+        "user_id": "user_abc123",
+        "email": "user@example.com",
+        "is_me": true
+      },
+      "my_role": "owner"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 1,
+    "total_pages": 1
+  },
+  "summary": {
+    "total_devices": 1,
+    "gateways_count": 1,
+    "child_devices_count": 0,
+    "online_count": 1,
+    "offline_count": 0,
+    "by_type": {
+      "gateway": 1
+    }
+  }
+}
+```
+
+```json 成功响应 - 获取指定网关的子设备
+{
+  "devices": [
+    {
+      "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+      "thing_name": "IoT-Trap-000100",
+      "device_type": "smart_trap",
+      "device_nickname": "客厅捕鼠器",
+      "status": "active",
+      "online": true,
+      "gateway_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+      "gateway_info": {
+        "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+        "thing_name": "IoT-Gateway-000001",
+        "device_nickname": "家庭网关",
+        "online": true
+      },
+      "my_role": "owner"
+    },
+    {
+      "device_id": "b2c3d4e5-6f7g-8h9i-0j1k-2l3m4n5o6p7q",
+      "thing_name": "IoT-VibSensor-000001",
+      "device_type": "vibration_sensor",
+      "device_nickname": "厨房震动传感器",
+      "status": "active",
+      "online": true,
+      "gateway_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+      "gateway_info": {
+        "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+        "thing_name": "IoT-Gateway-000001",
+        "device_nickname": "家庭网关",
+        "online": true
+      },
+      "my_role": "owner"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 3,
+    "total_pages": 1
+  },
+  "summary": {
+    "total_devices": 3,
+    "gateways_count": 0,
+    "child_devices_count": 3,
+    "online_count": 2,
+    "offline_count": 1,
+    "by_type": {
+      "smart_trap": 1,
+      "vibration_sensor": 1,
+      "temp_humidity_sensor": 1
+    }
+  }
+}
+```
+
+```json 错误响应 - 未授权
+{
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Missing or invalid authentication token",
+    "statusCode": 401
+  }
+}
+```
+
+```json 错误响应 - 网关不存在
+{
+  "error": {
+    "code": "GATEWAY_NOT_FOUND",
+    "message": "Gateway device not found or not accessible",
+    "statusCode": 404
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 需要有效的用户JWT Token
+- 返回当前用户租户下的所有设备
+- 包含用户自己绑定的设备 + 其他用户共享给自己的设备
+
+### 设备层级关系
+
+返回的设备列表展示了完整的层级关系：
+
+**网关设备字段**：
+- `child_count`: 子设备数量
+- `child_devices`: 子设备简要信息数组
+
+**子设备字段**：
+- `gateway_id`: 所属网关的设备ID
+- `gateway_info`: 所属网关的详细信息
+
+### 数据展示建议
+
+#### 列表视图
+```
+📡 家庭网关 (在线) - 3个子设备
+  └─ 🟢 客厅捕鼠器
+  └─ 🟢 厨房震动传感器
+  └─ 🔴 卧室温湿度传感器
+```
+
+#### 卡片视图
+```
+┌─────────────────────────┐
+│ 📡 家庭网关             │
+│ 状态: 🟢 在线           │
+│ 子设备: 3个             │
+│ 最后上线: 5分钟前       │
+└─────────────────────────┘
+
+┌─────────────────────────┐
+│ 🪤 客厅捕鼠器           │
+│ 状态: 🟢 在线           │
+│ 网关: 家庭网关          │
+│ 最后上线: 1分钟前       │
+└─────────────────────────┘
+```
+
+### 筛选场景
+
+<Tabs>
+  <Tab title="查看所有设备">
+    ```javascript
+    GET /user-devices
+    ```
+    返回租户下所有设备（网关 + 子设备）
+  </Tab>
+
+  <Tab title="仅查看网关">
+    ```javascript
+    GET /user-devices?device_type=gateway
+    ```
+    用于管理网关列表
+  </Tab>
+
+  <Tab title="查看某网关的子设备">
+    ```javascript
+    GET /user-devices?gateway_id={gateway_id}
+    ```
+    展示指定网关下的所有子设备
+  </Tab>
+
+  <Tab title="查看离线设备">
+    ```javascript
+    GET /user-devices?status=offline
+    ```
+    快速定位问题设备
+  </Tab>
+
+  <Tab title="仅自己的设备">
+    ```javascript
+    GET /user-devices?include_shared=false
+    ```
+    排除其他用户共享的设备
+  </Tab>
+</Tabs>
+
+### 前端实现示例
+
+#### React 组件示例
+
+```jsx
+import { useState, useEffect } from 'react';
+
+function DeviceList() {
+  const [devices, setDevices] = useState([]);
+  const [summary, setSummary] = useState({});
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
+
+  const fetchDevices = async () => {
+    const response = await fetch('/user-devices', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await response.json();
+    setDevices(data.devices);
+    setSummary(data.summary);
+    setLoading(false);
+  };
+
+  // 按网关分组
+  const gateways = devices.filter(d => d.device_type === 'gateway');
+
+  return (
+    <div>
+      <h2>我的设备 ({summary.total_devices})</h2>
+      <p>在线: {summary.online_count} | 离线: {summary.offline_count}</p>
+
+      {gateways.map(gateway => (
+        <div key={gateway.device_id} className="gateway-card">
+          <h3>
+            {gateway.online ? '🟢' : '🔴'} {gateway.device_nickname}
+          </h3>
+          <p>{gateway.child_count} 个子设备</p>
+
+          <div className="child-devices">
+            {gateway.child_devices?.map(child => (
+              <div key={child.device_id} className="child-device">
+                {child.online ? '🟢' : '🔴'} {child.device_nickname}
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+```
+
+### 性能优化建议
+
+<Note>
+**分页加载**: 设备数量较多时，建议使用分页参数 `page` 和 `limit`
+</Note>
+
+<Note>
+**缓存策略**: 设备列表变化不频繁，建议客户端缓存5-10分钟
+</Note>
+
+<Note>
+**增量更新**: 使用MQTT订阅设备状态变化，实时更新在线状态，避免频繁轮询
+</Note>
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="为什么看不到某些设备？">
+    可能的原因：
+    1. 设备属于其他租户（不同账号）
+    2. 设备尚未绑定到您的账号
+    3. 您没有该设备的访问权限
+    4. 使用了筛选参数过滤掉了
+  </Accordion>
+
+  <Accordion title="child_devices 和单独查询子设备有什么区别？">
+    - `child_devices`: 网关对象中内嵌的简要子设备列表，方便快速展示层级
+    - 单独查询: 使用 `gateway_id` 参数获取完整的子设备详细信息
+
+    建议：列表页用 `child_devices`，详情页再单独查询
+  </Accordion>
+
+  <Accordion title="如何实时更新设备在线状态？">
+    两种方式：
+    1. **轮询**: 每30-60秒调用一次此接口（不推荐）
+    2. **MQTT订阅**（推荐）:
+       ```javascript
+       // 订阅设备状态变化
+       subscribe('$aws/events/presence/connected/+');
+       subscribe('$aws/events/presence/disconnected/+');
+       ```
+  </Accordion>
+
+  <Accordion title="设备很多时如何提高加载速度？">
+    1. 使用分页: `limit=20` 每页仅加载20个设备
+    2. 按需加载: 先加载网关，点击后再加载子设备
+    3. 使用筛选: 按 `device_type` 或 `status` 减少返回数据
+    4. 启用客户端缓存
+  </Accordion>
+
+  <Accordion title="共享设备如何区分？">
+    查看 `owner_info.is_me` 字段：
+    - `true`: 自己绑定的设备
+    - `false`: 其他用户共享给我的设备
+
+    同时 `my_role` 表示您对此设备的权限级别。
+  </Accordion>
+</AccordionGroup>
+
+## 最佳实践
+
+### 移动端 App
+
+```javascript
+// 1. App启动时加载设备列表
+const { devices, summary } = await fetchDevices();
+localStorage.setItem('devices', JSON.stringify(devices));
+localStorage.setItem('devices_timestamp', Date.now());
+
+// 2. 建立MQTT连接，订阅设备状态
+devices.forEach(device => {
+  subscribeToDevice(device.thing_name);
+});
+
+// 3. 定期刷新（30分钟）
+setInterval(async () => {
+  const { devices } = await fetchDevices();
+  updateLocalCache(devices);
+}, 30 * 60 * 1000);
+```
+
+### Web Dashboard
+
+```javascript
+// 使用状态管理（Redux/Zustand）
+const useDeviceStore = create((set) => ({
+  devices: [],
+  summary: {},
+
+  fetchDevices: async (filters) => {
+    const params = new URLSearchParams(filters);
+    const response = await fetch(`/user-devices?${params}`);
+    const data = await response.json();
+    set({ devices: data.devices, summary: data.summary });
+  },
+
+  updateDeviceStatus: (deviceId, online) => {
+    set(state => ({
+      devices: state.devices.map(d =>
+        d.device_id === deviceId ? { ...d, online } : d
+      )
+    }));
+  }
+}));
+```
+
+### 设备树状图
+
+```javascript
+// 构建层级树结构用于UI展示
+function buildDeviceTree(devices) {
+  const gateways = devices.filter(d => d.device_type === 'gateway');
+
+  return gateways.map(gateway => ({
+    ...gateway,
+    children: devices.filter(d => d.gateway_id === gateway.device_id)
+  }));
+}
+
+// 使用
+const tree = buildDeviceTree(devices);
+<TreeView data={tree} />
+```
