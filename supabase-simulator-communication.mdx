@@ -11,7 +11,7 @@ description: "详细介绍 Supabase 后端和 Python 模拟器如何通信，包
 
 PestGG IoT 系统采用 **AWS IoT Core + Supabase** 双路架构：
 
-- **实时路径**：设备 ⇄ AWS IoT Core (MQTT) ⇄ Web UI - 延迟 <100ms
+- **实时路径**：设备 ⇄ AWS IoT Core (MQTT) ⇄ Web UI - 延迟 < 100ms
 - **持久路径**：设备 → AWS IoT Core → Projector Lambda → Supabase - 延迟 1-3秒
 
 ### 通信架构
