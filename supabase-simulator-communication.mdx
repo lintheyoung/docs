@@ -14,34 +14,19 @@ PestGG IoT 系统采用 **AWS IoT Core + Supabase** 双路架构：
 - **实时路径**：设备 ⇄ AWS IoT Core (MQTT) ⇄ Web UI - 延迟 <100ms
 - **持久路径**：设备 → AWS IoT Core → Projector Lambda → Supabase - 延迟 1-3秒
 
+### 通信架构
+
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        通信架构总览                                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│   Python Simulator        AWS IoT Core          Supabase Backend            │
-│   (设备模拟器)                                    (业务逻辑)                  │
-│          │                    │                        │                     │
-│          │  MQTT 证书认证      │                        │                     │
-│          │──────────────────►│                        │                     │
-│          │                    │                        │                     │
-│          │  Shadow Update     │                        │                     │
-│          │  (reported)        │                        │                     │
-│          │──────────────────►│                        │                     │
-│          │                    │  IoT Rule              │                     │
-│          │                    │───────────────────────►│                     │
-│          │                    │  (Shadow documents)    │                     │
-│          │                    │                        │                     │
-│          │                    │                        │  Projector Lambda   │
-│          │                    │                        │  同步状态到数据库    │
-│          │                    │                        │                     │
-│          │  Shadow Delta      │                        │                     │
-│          │  (desired)         │                        │                     │
-│          │◄───────────────────│                        │                     │
-│          │                    │                        │                     │
-│          │  执行命令           │                        │                     │
-│          │                    │                        │                     │
-└─────────────────────────────────────────────────────────────────────────────┘
+Python Simulator (设备模拟器)
+       │
+       ├── MQTT 证书认证 ──► AWS IoT Core
+       │                            │
+       ├── Shadow Update (reported)  │
+       │                            ├── IoT Rule ──► Projector Lambda ──► Supabase
+       │                            │
+       ◄── Shadow Delta (desired)    │
+       │                            │
+       └── 执行命令                  │
 ```
 
 ## 1. MQTT 频道订阅
@@ -81,16 +66,18 @@ def subscribe_to_shadow_deltas(self):
 ### 1.3 主题格式说明
 
 #### Classic Shadow（网关自身状态）
-```
+
+```text
 $aws/things/{thingName}/shadow/update
 ```
 
 #### Named Shadow（子设备状态）
-```
+
+```text
 $aws/things/{thingName}/shadow/name/{shadowName}/update
 ```
 
-示例：
+**示例：**
 - 网关 Thing: `IoT-Gateway-000011`
 - 子设备 Shadow: `vibration-sensor-001`
 - Delta 主题: `$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update/delta`
@@ -167,205 +154,64 @@ def every_second(self):
 
 ### 3.1 工厂生产阶段
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        工厂生产设备                                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  Admin Portal         Edge Function          AWS IoT Core    Database       │
-│      │                   │                       │              │            │
-│      │ POST              │                       │              │            │
-│      │ /manufacturing-   │                       │              │            │
-│      │ create-devices    │                       │              │            │
-│      │ {                 │                       │              │            │
-│      │   model: "RT-Pro",│                       │              │            │
-│      │   count: 10       │                       │              │            │
-│      │ }                 │                       │              │            │
-│      │──────────────────►│                       │              │            │
-│      │                   │                       │              │            │
-│      │                   │ 1. CreateThing       │              │            │
-│      │                   │─────────────────────►│              │            │
-│      │                   │   Thing Created      │              │            │
-│      │                   │◄─────────────────────│              │            │
-│      │                   │                       │              │            │
-│      │                   │ 2. CreateCertificate │              │            │
-│      │                   │─────────────────────►│              │            │
-│      │                   │   Cert + Key         │              │            │
-│      │                   │◄─────────────────────│              │            │
-│      │                   │                       │              │            │
-│      │                   │ 3. AttachPolicy      │              │            │
-│      │                   │─────────────────────►│              │            │
-│      │                   │                       │              │            │
-│      │                   │ 4. Insert to DB      │              │            │
-│      │                   │─────────────────────────────────────►│            │
-│      │                   │                       │              │            │
-│      │   {               │                       │              │            │
-│      │     "thing_name": │                       │              │            │
-│      │       "IoT-Gateway-000011",              │              │            │
-│      │     "activation_code":                   │              │            │
-│      │       "RT4G-A3F2B1C9",                  │              │            │
-│      │     "certificate_pem": "...",            │              │            │
-│      │     "private_key": "..."  ⚠️ 仅此一次   │              │            │
-│      │   }             │                       │              │            │
-│      │◄──────────────────│                       │              │            │
-│      │                   │                       │              │            │
-└─────────────────────────────────────────────────────────────────────────────┘
+**流程步骤：**
 
-⚠️ 重要：private_key 只在创建时返回，必须安全保存！
-```
+1. **Admin Portal** 调用 `POST /manufacturing-create-devices`
+2. **Edge Function** 调用 AWS IoT API 创建 Thing
+3. **AWS IoT Core** 生成设备证书和私钥
+4. **Edge Function** 将设备信息保存到 Supabase 数据库
+5. **返回** 设备凭证（仅此一次返回私钥）
+
+**重要**：private_key 只在创建时返回，必须安全保存！
 
 ### 3.2 用户绑定阶段
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                        用户绑定设备                                           │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  User App           Edge Function          Database                        │
-│      │                   │                       │                          │
-│      │ POST              │                       │                          │
-│      │ /user-device-bind │                       │                          │
-│      │ {                 │                       │                          │
-│      │   "activation_code":                    │                          │
-│      │     "RT4G-A3F2B1C9"                    │                          │
-│      │ }                │                       │                          │
-│      │──────────────────►│                       │                          │
-│      │                   │                       │                          │
-│      │                   │ 1. Query code        │                          │
-│      │                   │─────────────────────►│                          │
-│      │                   │   Code details       │                          │
-│      │                   │◄─────────────────────│                          │
-│      │                   │                       │                          │
-│      │                   │ 2. Check not used    │                          │
-│      │                   │─────────────────────►│                          │
-│      │                   │                       │                          │
-│      │                   │ 3. Get user tenant   │                          │
-│      │                   │─────────────────────►│                          │
-│      │                   │                       │                          │
-│      │                   │ 4. Create ownership  │                          │
-│      │                   │─────────────────────►│                          │
-│      │                   │                       │                          │
-│      │                   │ 5. Mark code used    │                          │
-│      │                   │─────────────────────►│                          │
-│      │                   │                       │                          │
-│      │                   │ 6. Update device     │                          │
-│      │                   │    status = 'pending'│                          │
-│      │                   │─────────────────────►│                          │
-│      │                   │                       │                          │
-│      │   {               │                       │                          │
-│      │     "device_id": "xxx",                 │                          │
-│      │     "status": "pending"                 │                          │
-│      │   }             │                       │                          │
-│      │◄──────────────────│                       │                          │
-│      │                   │                       │                          │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+**流程步骤：**
+
+1. **User App** 调用 `POST /user-device-bind`，传入激活码
+2. **Edge Function** 查询激活码并验证未使用
+3. **Edge Function** 创建设备所有权记录（device_owners）
+4. **Edge Function** 标记激活码已使用
+5. **Edge Function** 更新设备状态为 `pending`
+6. **返回** 绑定成功，包含 device_id
 
 ### 3.3 设备通信阶段
 
 #### 3.3.1 设备启动流程
 
-```
-Python Simulator                    AWS IoT Core
-      │                                   │
-      │ 1. 使用证书连接                   │
-      │─────────────────────────────────►│
-      │                                   │
-      │    连接成功                        │
-      │◄─────────────────────────────────│
-      │                                   │
-      │ 2. 订阅 Shadow Delta              │
-      │   $aws/things/.../update/delta   │
-      │─────────────────────────────────►│
-      │                                   │
-      │ 3. 发送 Shadow GET                │
-      │   获取当前状态（上线补偿）          │
-      │─────────────────────────────────►│
-      │                                   │
-      │    返回当前 Shadow 状态            │
-      │◄─────────────────────────────────│
-      │                                   │
-      │ 4. 检查是否有待执行命令            │
-      │   (desired.reqId != reported.     │
-      │    lastAckedReqId)                │
-      │                                   │
-      │ 5. 开始定期上报遥测数据            │
-      │   (10秒间隔)                       │
-      │─────────────────────────────────►│
-      │                                   │
-```
+1. 使用证书连接到 AWS IoT Core
+2. 连接成功后，订阅 Shadow Delta 主题
+3. 发送 Shadow GET 请求获取当前状态（上线补偿）
+4. 检查是否有待执行命令（desired.reqId != reported.lastAckedReqId）
+5. 开始定期上报遥测数据（10秒间隔）
 
 #### 3.3.2 命令下发流程
 
-```
-User App         Supabase          AWS IoT Core      Python Simulator
-  │                 │                    │                   │
-  │ POST            │                    │                   │
-  │ /user-device-   │                    │                   │
-  │ control         │                    │                   │
-  │────────────────►│                    │                   │
-  │                 │                    │                   │
-  │                 │ Update Shadow      │                   │
-  │                 │ desired            │                   │
-  │                 │───────────────────►│                   │
-  │                 │                    │                   │
-  │                 │                    │ Publish Delta     │
-  │                 │                    │───────────────────►│
-  │                 │                    │                   │
-  │                 │                    │         ┌─────────┐│
-  │                 │                    │         │ 接收    ││
-  │                 │                    │         │ Delta  ││
-  │                 │                    │         └─────────┘│
-  │                 │                    │                   │
-  │                 │                    │    执行命令        │
-  │                 │                    │                   │
-  │                 │                    │    Update Shadow   │
-  │                 │                    │    reported (ACK)  │
-  │                 │                    │◄──────────────────│
-  │                 │                    │                   │
-  │                 │  IoT Rule          │                   │
-  │                 │───────────────────►│                   │
-  │                 │  (Lambda)          │                   │
-  │                 │                    │                   │
-  │                 │  Update DB         │                   │
-  │                 │◄───────────────────│                   │
-  │                 │                    │                   │
-  │  实时更新        │                    │                   │
-  │◄────────────────│                    │                   │
-  │  (MQTT/WebSocket)                    │                   │
-```
+**流程步骤：**
+
+1. **User App** 发送 POST 请求到 `/user-device-control`
+2. **Supabase** 更新 Shadow desired 状态
+3. **AWS IoT Core** 发布 Delta 消息
+4. **Python Simulator** 接收 Delta，执行命令
+5. **Python Simulator** 更新 Shadow reported 状态（ACK）
+6. **Projector Lambda** 将状态同步到 Supabase
+7. **User App** 实时接收更新（MQTT/WebSocket）
 
 #### 3.3.3 遥测上报流程
 
-```
-Python Simulator      AWS IoT Core      IoT Rule          Projector Lambda    Supabase
-      │                    │                  │                      │                 │
-      │ Update Shadow      │                  │                      │                 │
-      │ reported           │                  │                      │                 │
-      │───────────────────►│                  │                      │                 │
-      │                    │                  │                      │                 │
-      │                    │ Shadow Update    │                      │                 │
-      │                    │ documents        │                      │                 │
-      │                    │─────────────────►│                      │                 │
-      │                    │                  │                      │                 │
-      │                    │                  │ Trigger              │                 │
-      │                    │                  │─────────────────────►│                 │
-      │                    │                  │                      │                 │
-      │                    │                  │                      │ 1. Parse topic  │
-      │                    │                  │                      │ 2. Archive to S3 │
-      │                    │                  │                      │ 3. Update DB    │
-      │                    │                  │                      │─────────────────►│
-      │                    │                  │                      │                 │
-      │                    │                  │                      │   telemetry_last │
-      │                    │                  │                      │   device_status  │
-      │                    │                  │                      │                 │
-```
+**流程步骤：**
+
+1. **Python Simulator** 更新 Shadow reported 状态
+2. **AWS IoT Core** 发布 Shadow Update documents 事件
+3. **IoT Rule** 触发 Projector Lambda
+4. **Projector Lambda** 解析主题，存档到 S3，更新 Supabase
+5. **Supabase** 更新 telemetry_last 和 device_status 表
 
 ## 4. Python 模拟器配置
 
 ### 4.1 目录结构
 
-```
+```text
 PythonDeviceSim/
 ├── config.py                      # 配置文件
 ├── aws_iot_client.py              # AWS IoT MQTT 客户端
@@ -502,7 +348,7 @@ def execute_command(self, req_id, command):
 
     # 发送 ACK
     ack_state = {
-        'lastAckedReqId': req_id,  # ⚠️ 关键：包含 reqId
+        'lastAckedReqId': req_id,  # 关键：包含 reqId
         'vibration_threshold': self.vibration_threshold,
         'timestamp': int(time.time())
     }
