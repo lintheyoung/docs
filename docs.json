@@ -131,6 +131,12 @@
               "factory-api/endpoint/manufacturing-delete-batch",
               "factory-api/endpoint/manufacturing-activation-codes"
             ]
+          },
+          {
+            "group": "开发工具",
+            "pages": [
+              "factory-api/endpoint/dev-reset-all-devices"
+            ]
           }
         ]
       },
