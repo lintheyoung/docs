@@ -44,6 +44,12 @@
               "ai-tools/claude-code",
               "ai-tools/windsurf"
             ]
+          },
+          {
+            "group": "IoT Architecture",
+            "pages": [
+              "supabase-simulator-communication"
+            ]
           }
         ]
       },
