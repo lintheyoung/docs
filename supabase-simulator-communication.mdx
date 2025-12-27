@@ -14,10 +14,32 @@ PestGG IoT 系统采用 **AWS IoT Core + Supabase** 双路架构：
 - **实时路径**：设备 ⇄ AWS IoT Core (MQTT) ⇄ Web UI - 延迟 < 100ms
 - **持久路径**：设备 → AWS IoT Core → Projector Lambda → Supabase - 延迟 1-3秒
 
+### 网关与子设备架构
+
+**重要概念**：
+
+- **网关（Gateway）**：拥有独立 AWS 证书的硬件设备，可直接连接 AWS IoT Core
+- **子设备（Sub-device）**：无独立证书，通过网关间接连接到云端（如捕鼠器 Trap、振动传感器等）
+- **激活码（Activation Code）**：网关和子设备都有激活码，用于绑定到 Supabase 平台
+
+**通信链路**：
+
+```
+子设备 → 网关（证书认证）→ AWS IoT Core → Supabase
+```
+
+- 子设备无法直接连接 AWS IoT Core
+- 只有网关拥有 AWS 证书，证书直接绑定到硬件设备
+- 网关负责转发子设备的数据和命令
+
 ### 通信架构
 
 ```
-Python Simulator (设备模拟器)
+子设备（Trap/Sensor）
+       │
+       │ (本地通信，如 BLE)
+       ▼
+网关（Gateway）
        │
        ├── MQTT 证书认证 ──► AWS IoT Core
        │                            │
@@ -26,7 +48,7 @@ Python Simulator (设备模拟器)
        │                            │
        ◄── Shadow Delta (desired)    │
        │                            │
-       └── 执行命令                  │
+       └── 执行命令并转发给子设备      │
 ```
 
 ## 1. MQTT 频道订阅
@@ -67,34 +89,49 @@ def subscribe_to_shadow_deltas(self):
 
 #### Classic Shadow（网关自身状态）
 
+网关使用 Classic Shadow 管理自身的连接状态和系统信息。Classic Shadow 用于拥有独立 AWS 证书的设备。
+
 ```text
 $aws/things/{thingName}/shadow/update
 ```
 
 #### Named Shadow（子设备状态）
 
+子设备使用 Named Shadow。网关下的每一个子设备（如不同的捕鼠器 Trap）都拥有一个独立的 Named Shadow。这样即使网关离线，云端依然能通过这些独立的命名影子清晰地管理每一个子设备的状态，而不会互相干扰。
+
+**关键特点**：
+- 子设备没有独立的 AWS 证书
+- 子设备通过网关的证书间接连接到 AWS IoT Core
+- 每个子设备有独立的 Named Shadow，便于状态管理
+
 ```text
 $aws/things/{thingName}/shadow/name/{shadowName}/update
 ```
 
 **示例：**
-- 网关 Thing: `IoT-Gateway-000011`
-- 子设备 Shadow: `vibration-sensor-001`
+- 网关 Thing: `IoT-Gateway-000011`（拥有证书）
+- 子设备 Shadow: `vibration-sensor-001`（无证书，通过网关通信）
 - Delta 主题: `$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update/delta`
 
 ## 2. 连接硬性要求
 
 ### 2.1 证书认证
 
-设备必须使用工厂生产时生成的 X.509 证书连接 AWS IoT Core：
+**重要**：只有网关拥有 AWS 证书，子设备没有独立证书。
+
+网关必须使用工厂生产时生成的 X.509 证书连接 AWS IoT Core：
 
 | 配置项 | 说明 | 示例 |
 |-------|------|------|
-| **证书文件** | 设备证书 | `IoT-Gateway-000011.cert.pem` |
-| **私钥文件** | 设备私钥（保密） | `IoT-Gateway-000011.private.key` |
+| **证书文件** | 网关证书（绑定到硬件） | `IoT-Gateway-000011.cert.pem` |
+| **私钥文件** | 网关私钥（保密） | `IoT-Gateway-000011.private.key` |
 | **根 CA** | Amazon 根 CA | `AmazonRootCA1.pem` |
 | **IoT Endpoint** | 区域终端节点 | `a1f8xc5wo59rp8-ats.iot.ap-southeast-1.amazonaws.com` |
 | **端口** | MQTT over TLS | `8883` |
+
+**证书与激活码的区别**：
+- **AWS 证书**：只有网关拥有，用于连接 AWS IoT Core，直接绑定到硬件设备
+- **激活码**：网关和子设备都有，用于绑定到 Supabase 平台，关联用户账号
 
 ### 2.2 连接参数
 
@@ -110,14 +147,16 @@ MQTT_QOS_COMMAND = 0    # 命令响应 QoS
 
 ### 2.3 设备标识
 
-每个设备需要正确配置以下标识：
+网关和子设备需要正确配置以下标识：
 
 ```python
 # config.py 设备标识配置
 
+# 网关配置（拥有 AWS 证书）
 GATEWAY_THING = "IoT-Gateway-000011"  # AWS IoT Thing 名称
 GATEWAY_DEVICE_ID = "435204e6-21c9-447d-ab6f-888c99b91926"  # Supabase UUID
 
+# 子设备配置（无 AWS 证书，通过网关通信）
 VIRTUAL_DEVICE = {
     'device_id': '09aa8ad8-f23e-4e75-bcbe-332efeb431ce',  # 子设备 UUID
     'shadow_name': 'vibration-sensor-001',  # Named Shadow 名称
@@ -126,9 +165,10 @@ VIRTUAL_DEVICE = {
 ```
 
 **重要**：
-- `thing_name` 必须与 AWS IoT 中注册的 Thing 名称一致
-- `device_id` 必须是 Supabase `devices` 表中的 UUID
-- `shadow_name` 用于区分同一网关下的不同子设备
+- **网关**：`thing_name` 必须与 AWS IoT 中注册的 Thing 名称一致，拥有对应的证书文件
+- **子设备**：`device_id` 必须是 Supabase `devices` 表中的 UUID，通过网关的证书间接连接
+- **Named Shadow**：`shadow_name` 用于区分同一网关下的不同子设备
+- **激活码**：网关和子设备都有激活码，用于用户绑定到 Supabase 平台
 
 ### 2.4 心跳要求
 
@@ -157,55 +197,75 @@ def every_second(self):
 **流程步骤：**
 
 1. **Admin Portal** 调用 `POST /manufacturing-create-devices`
-2. **Edge Function** 调用 AWS IoT API 创建 Thing
-3. **AWS IoT Core** 生成设备证书和私钥
-4. **Edge Function** 将设备信息保存到 Supabase 数据库
-5. **返回** 设备凭证（仅此一次返回私钥）
+2. **Edge Function** 调用 AWS IoT API 创建 Thing（网关）或子设备记录
+3. **AWS IoT Core** 为网关生成设备证书和私钥（子设备不生成证书）
+4. **Edge Function** 将设备信息保存到 Supabase 数据库，生成激活码
+5. **返回** 设备凭证（网关返回证书和私钥，子设备只返回激活码）
 
-**重要**：private_key 只在创建时返回，必须安全保存！
+**重要**：
+- 网关的 private_key 只在创建时返回，必须安全保存并烧录到硬件
+- 子设备不生成 AWS 证书，只生成激活码
+- 网关和子设备都有激活码，用于用户绑定
 
 ### 3.2 用户绑定阶段
 
 **流程步骤：**
 
-1. **User App** 调用 `POST /user-device-bind`，传入激活码
+1. **User App** 调用 `POST /user-device-bind`，传入激活码（网关或子设备）
 2. **Edge Function** 查询激活码并验证未使用
 3. **Edge Function** 创建设备所有权记录（device_owners）
 4. **Edge Function** 标记激活码已使用
 5. **Edge Function** 更新设备状态为 `pending`
 6. **返回** 绑定成功，包含 device_id
 
+**说明**：
+- 网关和子设备都通过激活码绑定到用户账号
+- 绑定过程与设备类型无关，统一使用激活码机制
+
 ### 3.3 设备通信阶段
 
-#### 3.3.1 设备启动流程
+#### 3.3.1 设备启动流程（网关）
 
-1. 使用证书连接到 AWS IoT Core
-2. 连接成功后，订阅 Shadow Delta 主题
+1. 网关使用证书连接到 AWS IoT Core
+2. 连接成功后，订阅自身的 Classic Shadow 和所有子设备的 Named Shadow Delta 主题
 3. 发送 Shadow GET 请求获取当前状态（上线补偿）
 4. 检查是否有待执行命令（desired.reqId != reported.lastAckedReqId）
 5. 开始定期上报遥测数据（10秒间隔）
 
-#### 3.3.2 命令下发流程
+#### 3.3.2 命令下发流程（子设备）
 
 **流程步骤：**
 
-1. **User App** 发送 POST 请求到 `/user-device-control`
-2. **Supabase** 更新 Shadow desired 状态
-3. **AWS IoT Core** 发布 Delta 消息
-4. **Python Simulator** 接收 Delta，执行命令
-5. **Python Simulator** 更新 Shadow reported 状态（ACK）
-6. **Projector Lambda** 将状态同步到 Supabase
-7. **User App** 实时接收更新（MQTT/WebSocket）
+1. **User App** 发送 POST 请求到 `/user-device-control`，指定子设备
+2. **Supabase** 更新子设备的 Named Shadow desired 状态
+3. **AWS IoT Core** 发布 Delta 消息到网关订阅的主题
+4. **网关** 接收 Delta，识别目标子设备
+5. **网关** 通过本地通信（如 BLE）将命令转发给子设备
+6. **子设备** 执行命令
+7. **网关** 更新子设备的 Named Shadow reported 状态（ACK）
+8. **Projector Lambda** 将状态同步到 Supabase
+9. **User App** 实时接收更新（MQTT/WebSocket）
 
-#### 3.3.3 遥测上报流程
+**关键点**：
+- 子设备无法直接接收云端命令
+- 网关负责接收命令并转发给子设备
+- 网关代理子设备更新 Shadow 状态
+
+#### 3.3.3 遥测上报流程（子设备）
 
 **流程步骤：**
 
-1. **Python Simulator** 更新 Shadow reported 状态
-2. **AWS IoT Core** 发布 Shadow Update documents 事件
-3. **IoT Rule** 触发 Projector Lambda
-4. **Projector Lambda** 解析主题，存档到 S3，更新 Supabase
-5. **Supabase** 更新 telemetry_last 和 device_status 表
+1. **子设备** 生成遥测数据，通过本地通信发送给网关
+2. **网关** 更新子设备的 Named Shadow reported 状态
+3. **AWS IoT Core** 发布 Shadow Update documents 事件
+4. **IoT Rule** 触发 Projector Lambda
+5. **Projector Lambda** 解析主题，存档到 S3，更新 Supabase
+6. **Supabase** 更新 telemetry_last 和 device_status 表
+
+**关键点**：
+- 子设备通过网关间接上报数据
+- 网关使用子设备的 Named Shadow 上报状态
+- 云端通过 Named Shadow 区分不同子设备的数据
 
 ## 4. Python 模拟器配置
 
