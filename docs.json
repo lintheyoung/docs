@@ -44,12 +44,6 @@
               "ai-tools/claude-code",
               "ai-tools/windsurf"
             ]
-          },
-          {
-            "group": "IoT Architecture",
-            "pages": [
-              "supabase-simulator-communication"
-            ]
           }
         ]
       },
@@ -170,6 +164,17 @@
             "pages": [
               "user-api/endpoint/device-share",
               "user-api/endpoint/device-transfer"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "IoT API",
+        "groups": [
+          {
+            "group": "通信架构",
+            "pages": [
+              "supabase-simulator-communication"
             ]
           }
         ]
