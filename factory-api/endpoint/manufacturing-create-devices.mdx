@@ -43,17 +43,11 @@ api: 'POST /manufacturing-create-devices'
   - `IoT-Gateway` 生成 `IoT-Gateway-000001`, `IoT-Gateway-000002`...
   - `IoT-Trap` 生成 `IoT-Trap-000001`, `IoT-Trap-000002`...
   - `IoT-Sensor` 生成 `IoT-Sensor-000001`, `IoT-Sensor-000002`...
-</ParamField>
 
-<ParamField body="start_number" type="number" required>
-  起始编号，设备序列号从此编号开始递增。
-
-  范围: 1-999999
-
-  示例:
-  - `start_number: 1`, `count: 10` → 生成编号 000001 ~ 000010
-  - `start_number: 100`, `count: 5` → 生成编号 000100 ~ 000104
-  - `start_number: 5000`, `count: 20` → 生成编号 005000 ~ 005019
+  **自动编号规则**:
+  - 系统会自动查询该型号（model）下已有设备的最大编号
+  - 新设备从最大编号+1开始递增
+  - 例如：型号 `RT-Gateway-Pro` 已有 000001-000010，下次创建自动从 000011 开始
 </ParamField>
 
 <ParamField body="batch_name" type="string">
@@ -136,7 +130,6 @@ curl -X POST \
     "model": "RT-Gateway-Pro",
     "count": 10,
     "prefix": "IoT-Gateway",
-    "start_number": 1,
     "batch_name": "Gateway Production Batch 2024-Q1"
   }'
 ```
@@ -151,7 +144,6 @@ curl -X POST \
     "model": "SmartTrap-v2",
     "count": 50,
     "prefix": "IoT-Trap",
-    "start_number": 100,
     "batch_name": "Smart Trap Batch 2024-Q1"
   }'
 ```
@@ -166,7 +158,6 @@ curl -X POST \
     "model": "VibSensor-v1",
     "count": 30,
     "prefix": "IoT-VibSensor",
-    "start_number": 1,
     "batch_name": "Vibration Sensor Batch 2024-Q1"
   }'
 ```
@@ -186,7 +177,6 @@ const gatewayResponse = await fetch(
       model: 'RT-Gateway-Pro',
       count: 10,
       prefix: 'IoT-Gateway',
-      start_number: 1,
       batch_name: 'Gateway Production Batch 2024-Q1'
     })
   }
@@ -194,7 +184,7 @@ const gatewayResponse = await fetch(
 
 const gatewayData = await gatewayResponse.json();
 console.log(`Created ${gatewayData.created_count} gateways in batch ${gatewayData.batch_id}`);
-// 设备名称: IoT-Gateway-000001 ~ IoT-Gateway-000010
+// 设备名称: 系统自动从该型号的最大编号+1开始，例如 IoT-Gateway-000001 ~ IoT-Gateway-000010
 
 // 创建子设备（智能捕鼠器）- 独立创建，不需要关联网关
 const trapResponse = await fetch(
@@ -210,7 +200,6 @@ const trapResponse = await fetch(
       model: 'SmartTrap-v2',
       count: 50,
       prefix: 'IoT-Trap',
-      start_number: 100,
       batch_name: 'Smart Trap Batch 2024-Q1'
     })
   }
@@ -218,7 +207,7 @@ const trapResponse = await fetch(
 
 const trapData = await trapResponse.json();
 console.log(`Created ${trapData.created_count} smart traps`);
-// 设备名称: IoT-Trap-000100 ~ IoT-Trap-000149
+// 设备名称: 系统自动编号，例如 IoT-Trap-000001 ~ IoT-Trap-000050
 ```
 
 ```python Python
@@ -236,14 +225,13 @@ gateway_response = requests.post(
         'model': 'RT-Gateway-Pro',
         'count': 10,
         'prefix': 'IoT-Gateway',
-        'start_number': 1,
         'batch_name': 'Gateway Production Batch 2024-Q1'
     }
 )
 
 gateway_data = gateway_response.json()
 print(f"Created {gateway_data['created_count']} gateways")
-# 设备名称: IoT-Gateway-000001 ~ IoT-Gateway-000010
+# 设备名称: 系统自动编号，例如 IoT-Gateway-000001 ~ IoT-Gateway-000010
 
 # 创建子设备（温湿度传感器）- 独立创建
 sensor_response = requests.post(
@@ -257,14 +245,13 @@ sensor_response = requests.post(
         'model': 'TempHum-v1',
         'count': 30,
         'prefix': 'IoT-TempSensor',
-        'start_number': 1,
         'batch_name': 'Temp Sensor Batch 2024-Q1'
     }
 )
 
 sensor_data = sensor_response.json()
 print(f"Created {sensor_data['created_count']} temperature sensors")
-# 设备名称: IoT-TempSensor-000001 ~ IoT-TempSensor-000030
+# 设备名称: 系统自动编号，例如 IoT-TempSensor-000001 ~ IoT-TempSensor-000030
 ```
 </RequestExample>
 
@@ -300,7 +287,7 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
 }
 ```
 
-```json 成功响应 - 创建子设备（智能捕鼠器，起始编号100）
+```json 成功响应 - 创建子设备（智能捕鼠器）
 {
   "batch_id": "batch_1702900001",
   "model": "SmartTrap-v2",
@@ -308,7 +295,7 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
   "created_count": 50,
   "devices": [
     {
-      "thing_name": "IoT-Trap-000100",
+      "thing_name": "IoT-Trap-000001",
       "device_type": "smart_trap",
       "activation_code": "TRAP-B5D3E2F1",
       "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
@@ -318,7 +305,7 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
       "certificate_arn": "arn:aws:iot:ap-southeast-1:123456789012:cert/ghi789..."
     },
     {
-      "thing_name": "IoT-Trap-000101",
+      "thing_name": "IoT-Trap-000002",
       "device_type": "smart_trap",
       "activation_code": "TRAP-C6E4F3D2",
       "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
