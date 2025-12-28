@@ -78,6 +78,11 @@ interface ResetRequest {
 }
 ```
 
+**说明**:
+- `gateway_devices`: 网关设备数量（拥有独立的 AWS IoT 资源）
+- `child_devices`: 子设备数量（通过网关通信，无独立 AWS IoT 资源）
+- 两种设备在制造时是分开的，互相不可见
+
 ### 2. 实际删除响应 (dry_run: false 或未传)
 
 #### 成功响应 (200)
@@ -355,7 +360,15 @@ graph TD
 5. `devices` (设备)
 6. `manufacturing_batches` (批次)
 
-### 3. AWS IoT 资源删除
+### 3. 设备类型说明
+
+**重要**: 在制造设备时，子设备和网关设备是分开制造的，互相不可见：
+- **网关设备 (Gateway)**: 独立制造，拥有独立的 AWS IoT 资源（Thing、Certificate）
+- **子设备 (Child Devices)**: 独立制造，没有独立的 AWS IoT 资源，通过网关进行通信
+
+此接口会同时删除两种类型的设备数据。
+
+### 4. AWS IoT 资源删除
 
 在 `mode: 'full'` 模式下：
 - 只删除网关设备 (gateway) 的 AWS 资源
@@ -366,13 +379,13 @@ graph TD
   3. 删除 Certificate
   4. 删除 Thing
 
-### 4. 环境检查
+### 5. 环境检查
 
 - 接口会检测环境变量 `ENVIRONMENT`
 - 在生产环境 (`production`) 会输出警告日志
 - 建议在生产环境禁用此接口（代码中已预留禁用逻辑）
 
-### 5. 错误处理
+### 6. 错误处理
 
 - 如果部分 AWS 资源删除失败，不会中断流程
 - 失败的资源会记录在 `warnings` 字段中
