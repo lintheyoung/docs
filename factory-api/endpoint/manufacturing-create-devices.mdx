@@ -334,25 +334,30 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
       "thing_name": "IoT-Trap-000001",
       "device_type": "smart_trap",
       "activation_code": "TRAP-B5D3E2F1",
-      "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
-      "private_key": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEII...\n-----END EC PRIVATE KEY-----",
-      "iot_endpoint": "a2b3c4d5e6f7g8.iot.ap-southeast-1.amazonaws.com",
-      "certificate_id": "ghi789jkl012mno345...",
-      "certificate_arn": "arn:aws:iot:ap-southeast-1:123456789012:cert/ghi789..."
+      "certificate_pem": "",
+      "private_key": "",
+      "iot_endpoint": "",
+      "certificate_id": "",
+      "certificate_arn": ""
     },
     {
       "thing_name": "IoT-Trap-000002",
       "device_type": "smart_trap",
       "activation_code": "TRAP-C6E4F3D2",
-      "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
-      "private_key": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEII...\n-----END EC PRIVATE KEY-----",
-      "iot_endpoint": "a2b3c4d5e6f7g8.iot.ap-southeast-1.amazonaws.com",
-      "certificate_id": "jkl012mno345pqr678...",
-      "certificate_arn": "arn:aws:iot:ap-southeast-1:123456789012:cert/jkl012..."
+      "certificate_pem": "",
+      "private_key": "",
+      "iot_endpoint": "",
+      "certificate_id": "",
+      "certificate_arn": ""
     }
   ]
 }
 ```
+
+<Note>
+**子设备响应说明**：子设备不需要 AWS IoT 凭证（通过网关连接），因此证书相关字段返回空字符串。
+</Note>
+
 
 ```json 错误响应 - 权限不足
 {
