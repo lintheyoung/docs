@@ -108,6 +108,42 @@ api: 'POST /manufacturing-create-devices'
   </Expandable>
 </ResponseField>
 
+## 凭证分发与下载
+
+<Warning>
+**私钥安全警告**: `private_key` 字段仅在此接口响应中返回一次，系统不会存储到数据库。如果在创建时未保存私钥，将无法找回，需要重新创建设备。
+</Warning>
+
+### 可重复下载的凭证
+
+| 凭证类型 | 存储位置 | 说明 |
+|---------|---------|------|
+| 激活码 | `device_activation_codes` 表 | 可通过 `/manufacturing-activation-codes` 接口导出 |
+| 设备证书（公钥） | `devices.metadata.certificatePem` | 存储在设备元数据中，可查询 |
+| IoT 端点 | `devices.metadata.iotEndpoint` | AWS IoT Core 端点地址 |
+| 根证书 | 固定内容 | Amazon Root CA 1 公开证书，随时可获取 |
+
+### 不可重复下载的凭证
+
+| 凭证类型 | 原因 | 影响 |
+|---------|------|------|
+| **私钥** | 不存储到数据库 | 仅在创建时返回一次，丢失后需重新创建设备 |
+
+### 凭证分发方式
+
+1. **API 响应**（创建时）
+   - 在批次创建完成后，响应中包含所有设备的完整凭证
+   - 必须立即保存私钥，后续无法找回
+
+2. **ZIP 文件下载**（推荐）
+   - 管理后台会自动将证书打包成 ZIP 文件
+   - 文件结构：`IoT-Gateway-000001.private.key`、`IoT-Gateway-000001.cert.pem`、`AmazonRootCA1.pem`
+
+3. **激活码导出**
+   - 通过 `/manufacturing-activation-codes` 接口导出
+   - 支持 JSON 或 CSV 格式
+   - 可按 batch_id、model、is_used 状态过滤
+
 ## 错误码
 
 | 错误码 | HTTP状态码 | 说明 |
@@ -369,35 +405,46 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
 
 系统支持以下设备类型：
 
-| 设备类型 | device_type | 说明 | 连接方式 |
-|---------|-------------|------|---------|
-| **网关设备** | `gateway` | 中心网关，管理子设备 | WiFi/4G |
-| **震动检测传感器** | `vibration_sensor` | 检测震动和移动 | BLE/Zigbee/LoRa |
-| **智能捕鼠器** | `smart_trap` | 智能捕鼠装置 | BLE/Zigbee/LoRa |
-| **温湿度传感器** | `temp_humidity_sensor` | 监测环境温湿度 | BLE/Zigbee/LoRa |
-| **红外人体传感器** | `pir_sensor` | 人体红外感应 | BLE/Zigbee/LoRa |
+| 设备类型 | device_type | 说明 | 连接方式 | 批次限制 |
+|---------|-------------|------|---------|---------|
+| **网关设备** | `gateway` | 中心网关，管理子设备 | WiFi/4G | 1-100 台 |
+| **震动检测传感器** | `vibration_sensor` | 检测震动和移动 | 通过网关 | 见子设备接口 |
+| **智能捕鼠器** | `smart_trap` | 智能捕鼠装置 | 通过网关 | 见子设备接口 |
+| **温湿度传感器** | `temp_humidity_sensor` | 监测环境温湿度 | 通过网关 | 见子设备接口 |
+| **红外人体传感器** | `pir_sensor` | 人体红外感应 | 通过网关 | 见子设备接口 |
 
-### 工厂生产流程
+<Note>
+**重要区别**：
+- **网关设备**：使用本接口创建，生成完整的 AWS IoT 凭证（Thing、证书、私钥）
+- **子设备**：使用 `/manufacturing-create-child-devices` 接口创建，仅生成激活码和序列号，批次限制 1-1000 台
+- 子设备通过网关连接云端，不需要独立的 AWS IoT 证书
+</Note>
+
+### 网关设备生产流程
 
 <Steps>
-  <Step title="1. 灵活创建设备">
-    网关和子设备可以**任意顺序**创建，不需要预先配对
+  <Step title="1. 创建批次">
+    调用本接口创建网关设备批次（1-100 台）
   </Step>
 
-  <Step title="2. 获取设备凭证">
-    系统返回每台设备的证书、私钥和激活码
+  <Step title="2. 立即保存私钥">
+    从 API 响应中提取所有设备的 `private_key`，私钥仅返回一次
   </Step>
 
-  <Step title="3. 烧录证书">
+  <Step title="3. 下载证书包">
+    管理后台自动生成 ZIP 文件，包含所有设备的证书和私钥
+  </Step>
+
+  <Step title="4. 烧录凭证">
     将证书和私钥烧录到对应的硬件设备中
   </Step>
 
-  <Step title="4. 打印激活码">
+  <Step title="5. 打印激活码">
     为每个设备生成二维码标签贴在包装上
   </Step>
 
-  <Step title="5. 灵活出货">
-    网关和子设备可以单独出货，也可以套装出货
+  <Step title="6. 灵活出货">
+    网关设备可以单独出货，也可以与子设备套装出货
   </Step>
 </Steps>
 
@@ -433,15 +480,26 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
 ### 重要提示
 
 <Warning>
-**私钥安全**: `private_key` 字段仅在此接口响应中返回一次，系统不会存储。请务必安全保存并烧录到设备中。
+**私钥安全**: `private_key` 字段仅在此接口响应中返回一次，系统不会存储到数据库。如果在创建时未保存私钥，将无法找回，需要重新创建设备。
+</Warning>
+
+<Warning>
+**私钥丢失后果**：
+- 私钥丢失后无法找回
+- 需要在 AWS IoT 中吊销旧证书
+- 需要重新创建设备并生成新的证书和私钥
+- 需要更换设备上的凭证
 </Warning>
 
 <Note>
-**激活码格式**: 激活码格式为 `{MODEL}-{8位HEX}`，例如 `GATEWAY-A3F2B1C9`。用户后续通过此码绑定设备。
+**激活码格式**: 激活码格式为 `{MODEL}-{8位HEX}`，例如 `GATEWAY-A3F2B1C9`。用户后续通过此码绑定设备。激活码使用后 `is_used` 会标记为 `true`，无法再次使用。
 </Note>
 
 <Note>
-**设备独立性**: 工厂生产时所有设备都是独立的AWS IoT Thing，拥有独立的证书和激活码。用户使用时才建立设备间的关联关系。
+**网关设备特性**:
+- 本接口仅用于创建网关设备，生成完整的 AWS IoT 凭证
+- 网关设备拥有独立的 AWS IoT Thing、证书和私钥
+- 批次限制：1-100 台设备
 </Note>
 
 ### 操作流程
