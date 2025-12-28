@@ -73,9 +73,26 @@ api: 'POST /manufacturing-create-devices'
 
   <Expandable title="Device 对象">
     <ResponseField name="thing_name" type="string">
-      AWS IoT Thing名称，格式: `{prefix}-{6位数字编号}`
+      AWS IoT Thing名称（仅网关设备），格式: `{prefix}-{6位数字编号}`
 
-      例如: `IoT-Gateway-000001`, `IoT-Trap-000100`
+      例如: `IoT-Gateway-000001`
+
+      子设备此字段为 `null`
+    </ResponseField>
+
+    <ResponseField name="shadow_name" type="string">
+      Named Shadow名称（仅子设备），格式: `{prefix}-{6位数字编号}`
+
+      例如: `vibration-sensor-001`
+
+      网关设备此字段为 `null`
+    </ResponseField>
+
+    <ResponseField name="name" type="string">
+      设备显示名称
+
+      - 网关设备: 与 `thing_name` 相同
+      - 子设备: 与 `shadow_name` 相同
     </ResponseField>
 
     <ResponseField name="device_type" type="string">
@@ -301,6 +318,8 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
   "devices": [
     {
       "thing_name": "IoT-Gateway-000001",
+      "shadow_name": null,
+      "name": "IoT-Gateway-000001",
       "device_type": "gateway",
       "activation_code": "GATEWAY-A3F2B1C9",
       "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
@@ -311,6 +330,8 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
     },
     {
       "thing_name": "IoT-Gateway-000002",
+      "shadow_name": null,
+      "name": "IoT-Gateway-000002",
       "device_type": "gateway",
       "activation_code": "GATEWAY-B4E3F2D1",
       "certificate_pem": "-----BEGIN CERTIFICATE-----\nMIIBxTCCAW...\n-----END CERTIFICATE-----",
@@ -331,7 +352,9 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
   "created_count": 50,
   "devices": [
     {
-      "thing_name": "IoT-Trap-000001",
+      "thing_name": null,
+      "shadow_name": "smart-trap-001",
+      "name": "smart-trap-001",
       "device_type": "smart_trap",
       "activation_code": "TRAP-B5D3E2F1",
       "certificate_pem": "",
@@ -341,7 +364,9 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
       "certificate_arn": ""
     },
     {
-      "thing_name": "IoT-Trap-000002",
+      "thing_name": null,
+      "shadow_name": "smart-trap-002",
+      "name": "smart-trap-002",
       "device_type": "smart_trap",
       "activation_code": "TRAP-C6E4F3D2",
       "certificate_pem": "",
@@ -355,7 +380,10 @@ print(f"Created {sensor_data['created_count']} temperature sensors")
 ```
 
 <Note>
-**子设备响应说明**：子设备不需要 AWS IoT 凭证（通过网关连接），因此证书相关字段返回空字符串。
+**子设备响应说明**：
+- 子设备不需要 AWS IoT 凭证（通过网关连接），因此证书相关字段返回空字符串
+- `thing_name` 为 `null`，`shadow_name` 和 `name` 使用 Named Shadow 名称
+- 网关设备的 `shadow_name` 为 `null`，`thing_name` 和 `name` 使用 Thing 名称
 </Note>
 
 
