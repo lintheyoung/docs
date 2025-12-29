@@ -161,8 +161,7 @@
           {
             "group": "设备控制",
             "pages": [
-              "user-api/endpoint/user-device-control",
-              "user-api/endpoint/send-command"
+              "user-api/endpoint/user-device-control"
             ]
           },
           {
