@@ -18,26 +18,28 @@ PestGG IoT 系统采用 **AWS IoT Core + Supabase** 双路架构：
 
 **重要概念**：
 
-- **网关（Gateway）**：拥有独立 AWS 证书的硬件设备，可直接连接 AWS IoT Core
-- **子设备（Sub-device）**：无独立证书，通过网关间接连接到云端（如捕鼠器 Trap、振动传感器等）
+- **网关（Gateway）**：拥有独立 AWS 证书和网络连接的硬件设备，可直接连接 AWS IoT Core
+- **子设备（Sub-device）**：无网络连接、无 AWS 证书的设备（如捕鼠器 Trap、振动传感器等），通过本地通信（BLE/Zigbee）连接到网关
 - **激活码（Activation Code）**：网关和子设备都有激活码，用于绑定到 Supabase 平台
 
 **通信链路**：
 
 ```
-子设备 → 网关（证书认证）→ AWS IoT Core → Supabase
+子设备（本地通信）→ 网关（AWS 证书）→ AWS IoT Core → Supabase
 ```
 
-- 子设备无法直接连接 AWS IoT Core
-- 只有网关拥有 AWS 证书，证书直接绑定到硬件设备
+- 子设备不能直接联网，没有网卡和 AWS 证书
+- 子设备通过本地通信（如 BLE、Zigbee）连接到网关
 - 网关负责转发子设备的数据和命令
+- 子设备通过 Named Shadow 区分不同设备（每个子设备有独立的 shadow_name）
+- 子设备只需要激活码绑定到用户账号
 
 ### 通信架构
 
 ```
 子设备（Trap/Sensor）
        │
-       │ (本地通信，如 BLE)
+       │ 本地通信（BLE/Zigbee）
        ▼
 网关（Gateway）
        │
@@ -48,8 +50,14 @@ PestGG IoT 系统采用 **AWS IoT Core + Supabase** 双路架构：
        │                            │
        ◄── Shadow Delta (desired)    │
        │                            │
-       └── 执行命令并转发给子设备      │
+       └── 转发命令给子设备            │
 ```
+
+**说明**：
+- 网关使用 Classic Shadow 管理自身状态
+- 网关使用 Named Shadow 管理每个子设备的状态
+- 云端命令通过网关的 Named Shadow Delta 下发
+- 网关接收到命令后，通过本地通信转发给对应的子设备
 
 ## 1. MQTT 频道订阅
 
@@ -97,21 +105,23 @@ $aws/things/{thingName}/shadow/update
 
 #### Named Shadow（子设备状态）
 
-子设备使用 Named Shadow。网关下的每一个子设备（如不同的捕鼠器 Trap）都拥有一个独立的 Named Shadow。这样即使网关离线，云端依然能通过这些独立的命名影子清晰地管理每一个子设备的状态，而不会互相干扰。
+子设备使用 Named Shadow。每一个子设备（如不同的捕鼠器 Trap）都拥有一个独立的 Named Shadow。子设备通过本地通信连接到网关，网关使用 Named Shadow 管理子设备状态。
 
 **关键特点**：
-- 子设备没有独立的 AWS 证书
-- 子设备通过网关的证书间接连接到 AWS IoT Core
-- 每个子设备有独立的 Named Shadow，便于状态管理
+- 子设备无网络连接，无 AWS 证书
+- 子设备通过本地通信（BLE/Zigbee）连接到网关
+- 网关使用 Named Shadow 管理每个子设备的状态
+- 每个子设备有独立的 Named Shadow，通过 shadow_name 区分
+- 子设备只需要激活码绑定到用户账号
 
 ```text
 $aws/things/{thingName}/shadow/name/{shadowName}/update
 ```
 
 **示例：**
-- 网关 Thing: `IoT-Gateway-000011`（拥有证书）
-- 子设备 Shadow: `vibration-sensor-001`（无证书，通过网关通信）
-- Delta 主题: `$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update/delta`
+- 网关 Thing: `IoT-Gateway-000011`（拥有证书和网络连接）
+- 子设备 Shadow: `vibration-sensor-001`（无证书，通过网关本地通信）
+- Delta 主题: `$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update/delta`（网关订阅此主题接收子设备命令）
 
 ## 2. 连接硬性要求
 
