@@ -81,6 +81,12 @@ openapi: 'GET /user-devices'
 
     <ResponseField name="online" type="boolean">
       是否在线
+
+      **判定规则**：
+      - `last_seen` 不为 null
+      - 且距离当前时间 < 300 秒（5 分钟）
+
+      后端已计算好，前端可直接使用
     </ResponseField>
 
     <ResponseField name="gateway_id" type="string">
@@ -125,6 +131,8 @@ openapi: 'GET /user-devices'
 
     <ResponseField name="last_seen" type="string">
       最后上线时间 (ISO 8601)
+
+      设备最后一次上报数据的时间，用于计算在线状态。如果设备从未上报数据，则为 `null`
     </ResponseField>
 
     <ResponseField name="owner_info" type="object">
@@ -742,14 +750,19 @@ function DeviceList() {
   </Accordion>
 
   <Accordion title="如何实时更新设备在线状态？">
-    两种方式：
-    1. **轮询**: 每30-60秒调用一次此接口（不推荐）
-    2. **MQTT订阅**（推荐）:
+    **推荐方式**：直接使用后端返回的 `online` 字段，该字段基于 `last_seen` 时间计算（5分钟内有数据则在线）。
+
+    如需实时更新，有两种方式：
+    1. **定期刷新**：每30-60秒调用一次此接口
+    2. **前端计算**：基于 `last_seen` 字段在前端实时计算在线状态
        ```javascript
-       // 订阅设备状态变化
-       subscribe('$aws/events/presence/connected/+');
-       subscribe('$aws/events/presence/disconnected/+');
+       function isOnline(lastSeen) {
+         if (!lastSeen) return false;
+         const diff = Date.now() - new Date(lastSeen).getTime();
+         return diff < 300000; // 5分钟 = 300秒
+       }
        ```
+    3. **MQTT订阅**（最佳）：订阅设备心跳主题接收实时更新
   </Accordion>
 
   <Accordion title="设备很多时如何提高加载速度？">
