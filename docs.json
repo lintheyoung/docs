@@ -236,7 +236,8 @@
     }
   },
   "openapi": [
-    "/rattrap-api/openapi.json"
+    "/rattrap-api/openapi.json",
+    "/user-api/openapi.json"
   ],
   "api": {
     "auth": {

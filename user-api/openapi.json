@@ -1,0 +1,143 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "RatTrap User API",
+    "version": "1.0.0",
+    "description": "用户设备管理和控制 API"
+  },
+  "servers": [
+    {
+      "url": "https://lrsppxarhxvxcflougbp.supabase.co/functions/v1",
+      "description": "Production"
+    }
+  ],
+  "paths": {
+    "/user-device-control": {
+      "post": {
+        "summary": "控制设备",
+        "description": "通过HTTP API发送设备控制命令",
+        "operationId": "userDeviceControl",
+        "tags": ["设备控制"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["thing_name", "command", "params"],
+                "properties": {
+                  "thing_name": {
+                    "type": "string",
+                    "description": "AWS IoT Thing名称",
+                    "example": "IoT-Gateway-000011"
+                  },
+                  "command": {
+                    "type": "string",
+                    "description": "控制命令类型",
+                    "enum": ["setMode", "setPower", "setTrapState", "setSensitivity", "triggerTest", "reset"]
+                  },
+                  "params": {
+                    "type": "object",
+                    "description": "命令参数"
+                  },
+                  "shadow_name": {
+                    "type": "string",
+                    "description": "Named Shadow名称（用于控制子设备）",
+                    "example": "vibration-sensor-001"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "reqId": {
+                      "type": "string"
+                    },
+                    "timestamp": {
+                      "type": "number"
+                    },
+                    "thing_name": {
+                      "type": "string"
+                    },
+                    "shadow_name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "设备不存在"
+          }
+        }
+      }
+    },
+    "/user-device-bind": {
+      "post": {
+        "summary": "绑定设备",
+        "description": "用户通过激活码绑定设备",
+        "operationId": "userDeviceBind",
+        "tags": ["设备绑定"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["activation_code"],
+                "properties": {
+                  "activation_code": {
+                    "type": "string",
+                    "description": "设备激活码"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}
