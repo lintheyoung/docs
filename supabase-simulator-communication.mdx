@@ -167,18 +167,44 @@ GATEWAY_THING = "IoT-Gateway-000011"  # AWS IoT Thing 名称
 GATEWAY_DEVICE_ID = "435204e6-21c9-447d-ab6f-888c99b91926"  # Supabase UUID
 
 # 子设备配置（无 AWS 证书，通过网关通信）
+# ⚠️ 重要：shadow_name 需要在用户绑定后从数据库查询获取
+# 不能使用工厂创建时的初始值，因为绑定时会重新生成
 VIRTUAL_DEVICE = {
     'device_id': '09aa8ad8-f23e-4e75-bcbe-332efeb431ce',  # 子设备 UUID
-    'shadow_name': 'vibration-sensor-001',  # Named Shadow 名称
+    'shadow_name': 'vibration-sensor-001',  # ⚠️ 示例值，实际需要从数据库查询
     'type': 'vibration_sensor'
 }
+
+# 推荐做法：从数据库查询子设备的最新 shadow_name
+# SELECT shadow_name, thing_name FROM devices WHERE id = '09aa8ad8-f23e-4e75-bcbe-332efeb431ce';
 ```
 
 **重要**：
 - **网关**：`thing_name` 必须与 AWS IoT 中注册的 Thing 名称一致，拥有对应的证书文件
-- **子设备**：`device_id` 必须是 Supabase `devices` 表中的 UUID，通过网关的证书间接连接
-- **Named Shadow**：`shadow_name` 用于区分同一网关下的不同子设备
+- **子设备**：`device_id` 必须是 Supabase `devices` 表中的 UUID，通过网关转发通信
 - **激活码**：网关和子设备都有激活码，用于用户绑定到 Supabase 平台
+
+**子设备的 thing_name 字段**：
+- **工厂创建时**：`null`（子设备没有独立的 AWS IoT Thing）
+- **用户绑定后**：继承网关的 `thing_name`（用于标识子设备属于哪个网关）
+- **用途**：子设备通过网关的 thing_name 和自己的 shadow_name 组合来唯一标识
+
+**子设备的 shadow_name 字段**：
+- **工厂创建时**：生成初始值，格式为 `{type}-{序号}`（如 `vibration-sensor-001`）
+- **用户绑定时**：调用数据库函数重新生成唯一的 shadow_name，避免同一网关下冲突
+- **用途**：用于区分同一网关下的不同子设备
+
+**子设备的 name 字段**：
+- **工厂创建时**：使用初始 shadow_name 作为默认名称
+- **用户绑定时**：可以指定自定义名称（custom_name），否则保留默认名称
+- **用途**：用于前端显示的友好名称，用户可以修改
+
+**示例**：
+- 网关 thing_name: `IoT-Gateway-000011`
+- 子设备绑定前 thing_name: `null`
+- 子设备绑定后 thing_name: `IoT-Gateway-000011`（继承自网关）
+- 子设备 shadow_name: `vibration-sensor-001`（绑定时重新生成）
+- 子设备完整标识：`$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update`
 
 ### 2.4 心跳要求
 
@@ -219,22 +245,56 @@ def every_second(self):
 
 ### 3.2 用户绑定阶段
 
+#### 3.2.1 网关绑定流程
+
 **流程步骤：**
 
-1. **User App** 调用 `POST /user-device-bind`，传入激活码（网关或子设备）
+1. **User App** 调用 `POST /user-device-bind`，传入网关激活码
 2. **Edge Function** 查询激活码并验证未使用
 3. **Edge Function** 创建设备所有权记录（device_owners）
 4. **Edge Function** 标记激活码已使用
 5. **Edge Function** 更新设备状态为 `pending`
 6. **返回** 绑定成功，包含 device_id
 
-**说明**：
-- 网关和子设备都通过激活码绑定到用户账号
-- 绑定过程与设备类型无关，统一使用激活码机制
+#### 3.2.2 子设备绑定流程
 
-### 3.3 设备通信阶段
+**重要**：子设备的 shadow_name 在用户绑定时会重新生成
 
-#### 3.3.1 设备启动流程（网关）
+**流程步骤：**
+
+1. **User App** 调用 `POST /user-bind-child-device`，传入网关 ID 和子设备激活码
+2. **Edge Function** 查询激活码并验证未使用
+3. **Edge Function** 验证子设备状态为 `inactive`（可绑定状态）
+4. **Edge Function** 调用数据库函数 `generate_next_shadow_name` 自动生成唯一的 shadow_name
+5. **Edge Function** 更新子设备记录：
+   - `parent_id`: 网关 UUID
+   - `thing_name`: 继承网关的 thing_name
+   - `shadow_name`: 新生成的唯一 shadow_name（可能与工厂创建时不同）
+   - `name`: 使用 custom_name（如果提供）或保留默认名称
+   - `tenant_id`: 继承网关的 tenant_id
+   - `status`: 从 `inactive` 变为 `active`
+6. **Edge Function** 标记激活码已使用
+7. **返回** 绑定成功，包含新的 shadow_name
+
+**注意**：Python 模拟器或实际设备需要在绑定后从数据库查询最新的 shadow_name，不能使用工厂创建时的初始值。
+
+### 3.3 设备状态流转
+
+**网关设备状态**：
+1. `registered` - 工厂创建完成
+2. `pending` - 用户绑定成功，等待设备首次连接
+3. `active` - 设备已连接并正常工作
+4. `offline` - 设备离线（超过心跳时间）
+
+**子设备状态**：
+1. `registered` - 工厂创建完成
+2. `inactive` - 等待用户绑定到网关
+3. `active` - 用户绑定成功，设备可用
+4. `offline` - 设备离线（通过网关检测）
+
+### 3.4 设备通信阶段
+
+#### 3.4.1 设备启动流程（网关）
 
 1. 网关使用证书连接到 AWS IoT Core
 2. 连接成功后，订阅自身的 Classic Shadow 和所有子设备的 Named Shadow Delta 主题
@@ -242,26 +302,31 @@ def every_second(self):
 4. 检查是否有待执行命令（desired.reqId != reported.lastAckedReqId）
 5. 开始定期上报遥测数据（10秒间隔）
 
-#### 3.3.2 命令下发流程（子设备）
+#### 3.4.2 命令下发流程（子设备）
 
 **流程步骤：**
 
 1. **User App** 发送 POST 请求到 `/user-device-control`，指定子设备
-2. **Supabase** 更新子设备的 Named Shadow desired 状态
-3. **AWS IoT Core** 发布 Delta 消息到网关订阅的主题
-4. **网关** 接收 Delta，识别目标子设备
-5. **网关** 通过本地通信（如 BLE）将命令转发给子设备
-6. **子设备** 执行命令
-7. **网关** 更新子设备的 Named Shadow reported 状态（ACK）
-8. **Projector Lambda** 将状态同步到 Supabase
-9. **User App** 实时接收更新（MQTT/WebSocket）
+2. **Edge Function** 查询子设备记录，获取 thing_name（继承自网关）和 shadow_name
+3. **Supabase** 更新子设备的 Named Shadow desired 状态
+4. **AWS IoT Core** 发布 Delta 消息到网关订阅的主题
+5. **网关** 接收 Delta，识别目标子设备
+6. **网关** 通过本地通信（如 BLE）将命令转发给子设备
+7. **子设备** 执行命令
+8. **网关** 更新子设备的 Named Shadow reported 状态（ACK）
+9. **Projector Lambda** 将状态同步到 Supabase
+10. **User App** 实时接收更新（MQTT/WebSocket）
 
 **关键点**：
+- 子设备的 thing_name 是从网关继承的（绑定时设置）
+- Edge Function 查询子设备记录时，会同时获取 thing_name 和 shadow_name
+- Lambda 使用 thing_name 定位网关，使用 shadow_name 定位子设备
+- 完整的 Shadow 路径：`$aws/things/{thing_name}/shadow/name/{shadow_name}/update`
 - 子设备无法直接接收云端命令
 - 网关负责接收命令并转发给子设备
 - 网关代理子设备更新 Shadow 状态
 
-#### 3.3.3 遥测上报流程（子设备）
+#### 3.4.3 遥测上报流程（子设备）
 
 **流程步骤：**
 
@@ -302,11 +367,16 @@ MQTT_ENDPOINT = "a1f8xc5wo59rp8-ats.iot.ap-southeast-1.amazonaws.com"
 GATEWAY_DEVICE_ID = "435204e6-21c9-447d-ab6f-888c99b91926"
 
 # 虚拟设备配置
+# ⚠️ 重要：shadow_name 需要在用户绑定后从数据库查询获取
+# 不能使用工厂创建时的初始值，因为绑定时会重新生成
 VIRTUAL_DEVICE = {
     'device_id': '09aa8ad8-f23e-4e75-bcbe-332efeb431ce',
-    'shadow_name': 'vibration-sensor-001',
+    'shadow_name': 'vibration-sensor-001',  # ⚠️ 示例值，实际需要从数据库查询
     'type': 'vibration_sensor'
 }
+
+# 推荐做法：从数据库查询子设备的最新 shadow_name
+# SELECT shadow_name, thing_name FROM devices WHERE id = '09aa8ad8-f23e-4e75-bcbe-332efeb431ce';
 
 # MQTT 配置
 MQTT_PORT = 8883
