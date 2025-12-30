@@ -1,0 +1,564 @@
+---
+title: '网关批量注册子设备'
+openapi: 'POST /gateway-devices-register'
+---
+
+## 接口说明
+
+网关设备批量注册子设备，使用 AWS IoT Named Shadows 管理子设备。该接口通常由网关设备固件调用，用于上报连接的子设备信息。
+
+<Note>
+**使用场景**：
+- 网关首次连接时，批量上报所有连接的子设备
+- 网关发现新的子设备时，增量注册
+- 更新已存在子设备的信息（固件版本、位置等）
+</Note>
+
+## 核心概念
+
+### Named Shadow 机制
+
+- **网关设备**：使用 Classic Shadow（`$aws/things/{thing_name}/shadow/update`）
+- **子设备**：使用 Named Shadow（`$aws/things/{thing_name}/shadow/name/{shadow_name}/update`）
+- **优势**：一个网关 Thing 可以管理多个子设备 Shadow，减少 IoT Thing 创建成本
+
+### 幂等性设计
+
+- 相同 `shadowName` 的设备会更新现有记录，而非创建新设备
+- 支持多次调用以更新设备信息
+- 新设备创建，已存在设备更新
+
+## 请求参数
+
+<ParamField body="gatewayId" type="string" required>
+  网关设备的 UUID
+
+  必须是已绑定到当前用户且类型为 `gateway` 的设备。
+
+  示例: `550e8400-e29b-41d4-a716-446655440000`
+</ParamField>
+
+<ParamField body="devices" type="array" required>
+  子设备列表（1-100个）
+
+  每个子设备包含以下字段：
+
+  <Expandable title="设备对象结构">
+    <ParamField body="devices[].shadowName" type="string" required>
+      Named Shadow 名称
+
+      **格式规则**：
+      - 长度：1-128 字符
+      - 字符集：字母、数字、连字符、下划线
+      - 正则：`/^[a-zA-Z0-9_-]{1,128}$/`
+
+      **示例**：
+      - `vibration_sensor_001`
+      - `smart-trap-02`
+      - `PIR_SENSOR_01`
+    </ParamField>
+
+    <ParamField body="devices[].name" type="string" required>
+      设备显示名称
+
+      用户可读的设备名称，支持中文。
+
+      示例: `1号震动传感器`, `客厅捕鼠器`
+    </ParamField>
+
+    <ParamField body="devices[].type" type="string" required>
+      设备类型
+
+      **支持的类型**：
+      - `vibration_sensor` - 震动传感器
+      - `smart_trap` - 智能陷阱
+      - `temp_humidity_sensor` - 温湿度传感器
+      - `pir_sensor` - PIR 传感器
+    </ParamField>
+
+    <ParamField body="devices[].metadata" type="object">
+      设备元数据（可选）
+
+      可以包含固件版本、硬件版本、位置等信息。
+
+      **示例**：
+      ```json
+      {
+        "firmware_version": "v1.2.3",
+        "hardware_version": "v2.0",
+        "location": "房间A",
+        "battery_level": 85
+      }
+      ```
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="gateway" type="object">
+  网关设备信息
+
+  <Expandable title="网关对象">
+    <ResponseField name="gateway.id" type="string">
+      网关设备 UUID
+    </ResponseField>
+
+    <ResponseField name="gateway.thingName" type="string">
+      网关的 AWS IoT Thing 名称
+    </ResponseField>
+
+    <ResponseField name="gateway.name" type="string">
+      网关显示名称
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="devices" type="array">
+  注册的子设备列表
+
+  <Expandable title="设备对象">
+    <ResponseField name="devices[].id" type="string">
+      子设备 UUID
+    </ResponseField>
+
+    <ResponseField name="devices[].shadowName" type="string">
+      Named Shadow 名称
+    </ResponseField>
+
+    <ResponseField name="devices[].name" type="string">
+      设备显示名称
+    </ResponseField>
+
+    <ResponseField name="devices[].type" type="string">
+      设备类型
+    </ResponseField>
+
+    <ResponseField name="devices[].status" type="string">
+      设备状态（注册后为 `active`）
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="summary" type="object">
+  操作摘要
+
+  <Expandable title="摘要对象">
+    <ResponseField name="summary.total" type="number">
+      总设备数量
+    </ResponseField>
+
+    <ResponseField name="summary.created" type="number">
+      新创建的设备数量
+    </ResponseField>
+
+    <ResponseField name="summary.updated" type="number">
+      更新的设备数量
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `UNAUTHORIZED` | 401 | 缺少或无效的认证Token |
+| `VALIDATION_ERROR` | 400 | 参数验证失败（shadowName格式、重复等） |
+| `GATEWAY_NOT_FOUND` | 404 | 网关设备不存在或类型不正确 |
+| `PERMISSION_DENIED` | 403 | 无权限管理该网关的设备 |
+| `DATABASE_ERROR` | 500 | 数据库操作失败 |
+
+<RequestExample>
+```bash cURL - 批量注册3个子设备
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/gateway-devices-register' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "gatewayId": "550e8400-e29b-41d4-a716-446655440000",
+    "devices": [
+      {
+        "shadowName": "vibration_sensor_001",
+        "name": "1号震动传感器",
+        "type": "vibration_sensor",
+        "metadata": {
+          "firmware_version": "v1.2.3",
+          "location": "房间A"
+        }
+      },
+      {
+        "shadowName": "smart_trap_001",
+        "name": "1号智能陷阱",
+        "type": "smart_trap",
+        "metadata": {
+          "firmware_version": "v1.0.5",
+          "battery_level": 85
+        }
+      },
+      {
+        "shadowName": "temp_humidity_001",
+        "name": "温湿度传感器",
+        "type": "temp_humidity_sensor"
+      }
+    ]
+  }'
+```
+
+```javascript Node.js - 网关固件侧示例
+// 网关发现连接的子设备后调用此接口注册
+const gatewayId = 'your-gateway-uuid';
+
+// 扫描连接的子设备
+const connectedDevices = [
+  {
+    shadowName: 'vibration_sensor_001',
+    name: '震动传感器1',
+    type: 'vibration_sensor',
+    metadata: {
+      firmware_version: 'v1.2.3',
+      rssi: -45,
+    },
+  },
+  {
+    shadowName: 'smart_trap_001',
+    name: '智能陷阱1',
+    type: 'smart_trap',
+    metadata: {
+      firmware_version: 'v1.0.5',
+      battery_level: 90,
+    },
+  },
+];
+
+// 批量注册
+const response = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/gateway-devices-register',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${gatewayToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      gatewayId: gatewayId,
+      devices: connectedDevices,
+    }),
+  }
+);
+
+const result = await response.json();
+console.log(`成功注册 ${result.summary.created} 个新设备`);
+console.log(`更新了 ${result.summary.updated} 个设备`);
+
+// 保存设备 ID 映射关系
+result.devices.forEach(device => {
+  deviceIdMap[device.shadowName] = device.id;
+});
+```
+
+```python Python - 网关固件侧示例
+import requests
+
+gateway_id = 'your-gateway-uuid'
+
+# 发现的子设备
+connected_devices = [
+    {
+        'shadowName': 'vibration_sensor_001',
+        'name': '震动传感器1',
+        'type': 'vibration_sensor',
+        'metadata': {
+            'firmware_version': 'v1.2.3',
+            'rssi': -45,
+        },
+    },
+    {
+        'shadowName': 'smart_trap_001',
+        'name': '智能陷阱1',
+        'type': 'smart_trap',
+        'metadata': {
+            'firmware_version': 'v1.0.5',
+            'battery_level': 90,
+        },
+    },
+]
+
+# 批量注册
+response = requests.post(
+    'https://your-supabase-project.supabase.co/functions/v1/gateway-devices-register',
+    headers={
+        'Authorization': f'Bearer {gateway_token}',
+        'Content-Type': 'application/json',
+    },
+    json={
+        'gatewayId': gateway_id,
+        'devices': connected_devices,
+    }
+)
+
+result = response.json()
+print(f"成功注册 {result['summary']['created']} 个新设备")
+print(f"更新了 {result['summary']['updated']} 个设备")
+
+# 保存设备 ID 映射
+device_id_map = {d['shadowName']: d['id'] for d in result['devices']}
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 注册3个子设备（2个新建，1个更新）
+{
+  "gateway": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "thingName": "RT-Gateway-Pro-001",
+    "name": "客厅网关"
+  },
+  "devices": [
+    {
+      "id": "device-uuid-1",
+      "shadowName": "vibration_sensor_001",
+      "name": "1号震动传感器",
+      "type": "vibration_sensor",
+      "status": "active"
+    },
+    {
+      "id": "device-uuid-2",
+      "shadowName": "smart_trap_001",
+      "name": "1号智能陷阱",
+      "type": "smart_trap",
+      "status": "active"
+    },
+    {
+      "id": "device-uuid-3",
+      "shadowName": "temp_humidity_001",
+      "name": "温湿度传感器",
+      "type": "temp_humidity_sensor",
+      "status": "active"
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "created": 2,
+    "updated": 1
+  }
+}
+```
+
+```json 错误响应 - 网关不存在
+{
+  "error": {
+    "code": "GATEWAY_NOT_FOUND",
+    "message": "Gateway with id '550e8400-e29b-41d4-a716-446655440000' not found",
+    "statusCode": 404
+  }
+}
+```
+
+```json 错误响应 - shadowName 格式错误
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Invalid shadowName format at index 0: sensor 001",
+    "statusCode": 400
+  }
+}
+```
+
+```json 错误响应 - 重复的 shadowName
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Duplicate shadowNames in request: vibration_sensor_001",
+    "statusCode": 400
+  }
+}
+```
+
+```json 错误响应 - 无权限
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "You do not have permission to manage devices for this gateway",
+    "statusCode": 403
+  }
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 需要有效的网关设备 JWT Token
+- 用户必须拥有指定的网关设备
+- 通过 `can_manage_device` RPC 验证权限
+
+### 设备注册流程
+
+<Steps>
+  <Step title="1. 网关扫描子设备">
+    网关通过 BLE/Zigbee/LoRa 扫描连接的子设备
+  </Step>
+
+  <Step title="2. 收集设备信息">
+    获取每个子设备的 shadowName、类型、元数据等信息
+  </Step>
+
+  <Step title="3. 构建请求">
+    将子设备信息组装成请求体（最多100个设备）
+  </Step>
+
+  <Step title="4. 调用注册接口">
+    POST 请求到 `/gateway-devices-register`
+  </Step>
+
+  <Step title="5. 处理响应">
+    - 新设备：记录设备 ID，建立映射关系
+    - 已存在设备：更新本地信息
+  </Step>
+
+  <Step title="6. 建立 Shadow 通信">
+    使用返回的设备 ID 和 shadowName 进行 IoT Shadow 通信
+  </Step>
+</Steps>
+
+### 数据库变更
+
+#### 新设备创建
+
+插入 `devices` 表记录：
+
+| 字段 | 值 |
+|-----|---|
+| `thing_name` | 网关的 thing_name |
+| `shadow_name` | 请求中的 shadowName |
+| `name` | 请求中的 name |
+| `type` | 请求中的 type |
+| `tenant_id` | 网关的 tenant_id |
+| `parent_id` | 网关的 UUID |
+| `status` | `active` |
+| `metadata` | 请求中的 metadata |
+
+#### 已存在设备更新
+
+更新 `devices` 表记录：
+
+| 字段 | 更新值 |
+|-----|-------|
+| `name` | 新的显示名称 |
+| `type` | 新的设备类型 |
+| `metadata` | 新的元数据 |
+| `status` | `active` |
+| `updated_at` | 当前时间 |
+
+### shadowName 格式规则
+
+<Warning>
+**格式要求严格**：shadowName 必须符合 AWS IoT Named Shadow 命名规范
+</Warning>
+
+**有效示例**：
+- `vibration_sensor_001` ✅
+- `trap-device-02` ✅
+- `PIR_SENSOR_01` ✅
+- `sensor_123abc` ✅
+
+**无效示例**：
+- `sensor 001` ❌ (包含空格)
+- `sensor@001` ❌ (包含特殊字符)
+- `传感器001` ❌ (包含中文)
+- `[超过128字符的名称]` ❌ (超长)
+
+### 批量限制
+
+- **单次最多 100 个设备**：超过需分批调用
+- **建议批量大小**：20-50 个设备为宜
+- **重复调用安全**：幂等设计，可安全重试
+
+### 网关架构示例
+
+```
+┌──────────────────────┐
+│   网关设备 (Gateway)  │
+│   IoT-Gateway-000001 │
+│   (Classic Shadow)   │
+└──────────┬───────────┘
+           │
+           ├──► vibration_sensor_001 (Named Shadow)
+           ├──► smart_trap_001 (Named Shadow)
+           ├──► temp_humidity_001 (Named Shadow)
+           └──► pir_sensor_001 (Named Shadow)
+
+AWS IoT Shadow 路径：
+- 网关: $aws/things/IoT-Gateway-000001/shadow/update
+- 子设备: $aws/things/IoT-Gateway-000001/shadow/name/vibration_sensor_001/update
+```
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="为什么子设备不创建独立的 IoT Thing？">
+    使用 Named Shadow 的优势：
+    1. **成本降低**：减少 IoT Thing 数量，降低账单
+    2. **管理简化**：一个网关 Thing 管理所有子设备
+    3. **通信效率**：子设备通过网关统一连接，减少连接数
+    4. **扩展性好**：轻松支持数十个子设备
+  </Accordion>
+
+  <Accordion title="可以多次注册同一个子设备吗？">
+    可以。相同 `shadowName` 的设备会更新现有记录，而非创建重复设备。
+
+    适用场景：
+    - 更新设备元数据（固件版本、电量等）
+    - 修正设备名称
+    - 网关重启后重新上报设备列表
+  </Accordion>
+
+  <Accordion title="一次最多注册多少个设备？">
+    单次请求最多 100 个设备。如果子设备超过 100 个，需要分批调用。
+
+    建议策略：
+    - 首次注册：分批上报，每批 20-50 个
+    - 增量更新：发现新设备立即上报
+    - 定期同步：每小时全量上报一次
+  </Accordion>
+
+  <Accordion title="shadowName 可以修改吗？">
+    不建议修改。shadowName 是子设备的唯一标识，修改后会被识别为新设备。
+
+    如需修改：
+    1. 删除旧的 shadowName 设备
+    2. 创建新的 shadowName 设备
+    3. 迁移历史数据（如需要）
+  </Accordion>
+
+  <Accordion title="子设备离线后会被删除吗？">
+    不会。设备记录会保留，状态保持为 `active`。
+
+    离线检测：
+    - 通过心跳机制判断设备是否在线
+    - `last_heartbeat` 字段记录最后心跳时间
+    - 超过阈值可标记为离线（不删除）
+  </Accordion>
+
+  <Accordion title="网关可以管理其他网关的子设备吗？">
+    不可以。子设备严格绑定到其父网关：
+    - `parent_id` 字段锁定父网关
+    - `thing_name` 必须与父网关一致
+    - 权限验证确保只能管理自己的子设备
+  </Accordion>
+
+  <Accordion title="注册失败后如何处理？">
+    根据错误码采取不同策略：
+
+    - `GATEWAY_NOT_FOUND` (404): 检查 gatewayId 是否正确
+    - `VALIDATION_ERROR` (400): 检查 shadowName 格式和重复性
+    - `PERMISSION_DENIED` (403): 检查网关是否属于当前用户
+    - `DATABASE_ERROR` (500): 重试（使用指数退避）
+  </Accordion>
+</AccordionGroup>
+
+## 相关接口
+
+- [绑定设备](/user-api/endpoint/user-device-bind) - 用户通过激活码绑定网关和子设备
+- [设备列表](/user-api/endpoint/list-devices) - 查询用户所有设备
+- [设备控制](/user-api/endpoint/user-device-control) - 控制网关和子设备

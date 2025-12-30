@@ -5,13 +5,37 @@ openapi: 'POST /user-device-bind'
 
 ## 接口说明
 
-用户通过激活码绑定设备，建立设备所有权关系。
+用户通过激活码绑定设备，建立设备所有权关系。该接口支持绑定网关设备和子设备，是设备从制造到使用流程中的关键步骤。
 
 <Note>
 **设备绑定顺序**：
 1. 先绑定网关设备（gateway）
 2. 再绑定子设备（smart_trap、vibration_sensor等），并指定所属网关
 </Note>
+
+## 核心概念
+
+### 设备生命周期
+
+设备从工厂到用户使用经历以下状态：
+
+```
+registered (工厂创建)
+    ↓
+  [用户绑定激活码]
+    ↓
+pending (等待设备完成设置)
+    ↓
+  [设备上报并完成配置]
+    ↓
+active (正常运行)
+```
+
+### 网关与子设备架构
+
+- **网关设备**：4G/WiFi 网关，直接连接云端，管理多个子设备
+- **子设备**：通过网关间接连接云端，使用 AWS IoT Named Shadows
+- **通信协议**：子设备通过 BLE/Zigbee/LoRa 与网关通信
 
 ## 请求参数
 
@@ -300,11 +324,57 @@ print(f"Smart trap {trap['thing_name']} bound to gateway {gateway['thing_name']}
 ```
 </ResponseExample>
 
+## 数据库变更
+
+绑定操作会修改以下数据表：
+
+### devices 表
+
+| 字段 | 绑定前 | 绑定后 |
+|-----|-------|-------|
+| `status` | `registered` | `pending` |
+| `tenant_id` | `null` | 用户的租户ID |
+| `parent_id` | `null` | 网关ID（仅子设备） |
+| `name` | 默认名称 | 用户昵称（如提供） |
+| `updated_at` | 创建时间 | 绑定时间 |
+
+### device_activation_codes 表
+
+| 字段 | 绑定前 | 绑定后 |
+|-----|-------|-------|
+| `is_used` | `false` | `true` |
+| `used_at` | `null` | 绑定时间 |
+| `used_by` | `null` | 用户UUID |
+| `bound_gateway_id` | `null` | 网关ID（仅子设备） |
+
+### device_owners 表
+
+新增记录，建立设备所有权：
+
+| 字段 | 值 |
+|-----|---|
+| `device_id` | 设备UUID |
+| `user_id` | 用户UUID |
+| `activation_code` | 使用的激活码 |
+| `bound_at` | 绑定时间 |
+
+### device_audit_logs 表
+
+记录绑定操作审计日志，包含激活码、设备类型、网关ID等信息。
+
 ## 使用说明
 
 ### 权限要求
 - 需要有效的用户JWT Token
 - 普通用户权限即可
+- 子设备绑定时需验证网关归属
+
+### 安全机制
+
+1. **激活码一次性使用**：激活码绑定后立即标记为已使用，防止重复绑定
+2. **设备所有权唯一性**：一个设备只能属于一个用户
+3. **网关归属验证**：绑定子设备时严格验证网关是否属于当前用户
+4. **租户隔离**：通过 RLS 策略确保用户只能访问自己租户的数据
 
 ### 绑定流程
 

@@ -98,7 +98,7 @@
     "/user-device-bind": {
       "post": {
         "summary": "绑定设备",
-        "description": "用户通过激活码绑定设备",
+        "description": "用户通过激活码绑定设备，建立设备所有权关系。支持绑定网关设备和子设备。",
         "operationId": "userDeviceBind",
         "tags": ["设备绑定"],
         "security": [
@@ -116,7 +116,19 @@
                 "properties": {
                   "activation_code": {
                     "type": "string",
-                    "description": "设备激活码"
+                    "description": "设备激活码，格式: {MODEL}-{8位HEX}",
+                    "example": "RT-GATEWAY-PRO-A1B2C3D4"
+                  },
+                  "device_nickname": {
+                    "type": "string",
+                    "description": "设备昵称（可选）",
+                    "example": "客厅网关"
+                  },
+                  "gateway_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "网关设备ID（仅子设备需要）",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
                   }
                 }
               }
@@ -125,7 +137,241 @@
         },
         "responses": {
           "200": {
-            "description": "成功"
+            "description": "绑定成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "device_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "设备ID"
+                    },
+                    "thing_name": {
+                      "type": "string",
+                      "description": "AWS IoT Thing名称"
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "设备显示名称"
+                    },
+                    "device_type": {
+                      "type": "string",
+                      "enum": ["gateway", "vibration_sensor", "smart_trap", "temp_humidity_sensor", "pir_sensor"],
+                      "description": "设备类型"
+                    },
+                    "model": {
+                      "type": "string",
+                      "description": "设备型号"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": ["pending"],
+                      "description": "设备状态，绑定后为 pending"
+                    },
+                    "shadow_name": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Named Shadow名称（子设备有值，网关为null）"
+                    },
+                    "bound_at": {
+                      "type": "string",
+                      "format": "date-time",
+                      "description": "绑定时间"
+                    },
+                    "tenant_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "租户ID"
+                    },
+                    "gateway_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true,
+                      "description": "所属网关ID（仅子设备有值）"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "资源不存在"
+          },
+          "409": {
+            "description": "冲突（激活码已使用或设备已绑定）"
+          }
+        }
+      }
+    },
+    "/gateway-devices-register": {
+      "post": {
+        "summary": "网关批量注册子设备",
+        "description": "网关设备批量注册子设备，使用 AWS IoT Named Shadows 管理子设备",
+        "operationId": "gatewayDevicesRegister",
+        "tags": ["设备绑定"],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["gatewayId", "devices"],
+                "properties": {
+                  "gatewayId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "网关设备UUID",
+                    "example": "550e8400-e29b-41d4-a716-446655440000"
+                  },
+                  "devices": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "description": "子设备列表（1-100个）",
+                    "items": {
+                      "type": "object",
+                      "required": ["shadowName", "name", "type"],
+                      "properties": {
+                        "shadowName": {
+                          "type": "string",
+                          "pattern": "^[a-zA-Z0-9_-]{1,128}$",
+                          "description": "Named Shadow名称",
+                          "example": "vibration_sensor_001"
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "设备显示名称",
+                          "example": "1号震动传感器"
+                        },
+                        "type": {
+                          "type": "string",
+                          "enum": ["vibration_sensor", "smart_trap", "temp_humidity_sensor", "pir_sensor"],
+                          "description": "设备类型"
+                        },
+                        "metadata": {
+                          "type": "object",
+                          "description": "设备元数据（可选）",
+                          "additionalProperties": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "注册成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "gateway": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "thingName": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "devices": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "shadowName": {
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "type": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": ["active"]
+                          }
+                        }
+                      }
+                    },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "total": {
+                          "type": "number",
+                          "description": "总设备数量"
+                        },
+                        "created": {
+                          "type": "number",
+                          "description": "新创建的设备数量"
+                        },
+                        "updated": {
+                          "type": "number",
+                          "description": "更新的设备数量"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "未授权"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "网关设备不存在"
           }
         }
       }
@@ -137,6 +383,30 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "错误代码"
+          },
+          "message": {
+            "type": "string",
+            "description": "错误描述"
+          },
+          "statusCode": {
+            "type": "number",
+            "description": "HTTP状态码"
+          },
+          "metadata": {
+            "type": "object",
+            "description": "额外的错误信息",
+            "additionalProperties": true
+          }
+        }
       }
     }
   }
