@@ -1,0 +1,549 @@
+---
+title: "IoT 设备心跳协议规范"
+description: "详细定义网关和子设备的心跳机制，包括心跳上报格式、离线判定规则、后端处理流程和设备端实现指南"
+---
+
+# IoT 设备心跳协议规范
+
+> 本文档定义了 PestGG IoT 系统中网关和子设备的心跳协议，用于实时监控设备在线状态和健康状况
+
+## 概述
+
+### 设计目标
+
+心跳协议是设备在线状态监控的核心机制，用于：
+
+- **实时监控**：准确判断设备是否在线
+- **健康检查**：监控设备电量、信号强度等关键指标
+- **故障预警**：及时发现设备离线或异常
+- **数据分离**：心跳数据与业务数据分离，避免相互干扰
+
+### 架构概览
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    子设备心跳流程                          │
+│  子设备 → BLE/Zigbee → 网关 → MQTT → AWS IoT → Lambda   │
+└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                    网关心跳流程                            │
+│  ��关 → MQTT → AWS IoT Core → Lambda → Supabase         │
+└─────────────────────────────────────────────────────────┘
+```
+
+**关键特点**：
+- 网关直接上报心跳到 AWS IoT Core
+- 子设备通过网关转发心跳
+- 使用专用 MQTT 主题，不污染 Device Shadow
+- 后端 Lambda 统一处理并更新数据库
+
+---
+
+## 1. MQTT 主题设计
+
+### 1.1 主题结构
+
+| 设备类型 | MQTT 主题 | QoS | 说明 |
+|---------|----------|-----|------|
+| **网关** | `heartbeat/{thingName}/gateway` | 1 | 网关自身心跳 |
+| **子设备** | `heartbeat/{thingName}/subdevice/{shadowName}` | 1 | 子设备心跳（网关转发） |
+
+**示例**：
+```
+# 网关心跳
+heartbeat/IoT-Gateway-000011/gateway
+
+# 子设备心跳
+heartbeat/IoT-Gateway-000011/subdevice/vibration-sensor-001
+heartbeat/IoT-Gateway-000011/subdevice/trap-device-002
+```
+
+### 1.2 主题命名规则
+
+- `{thingName}`：网关的 AWS IoT Thing Name（子设备继承网关的 thingName）
+- `{shadowName}`：子设备的唯一 Shadow Name（在绑定时生成）
+- 使用 `/` 分隔层级，便于 IoT Rule 通配符匹配
+
+---
+
+## 2. 心跳消息格式
+
+### 2.1 网关心跳消息
+
+```json
+{
+  "deviceId": "550e8400-e29b-41d4-a716-446655440000",
+  "deviceType": "gateway",
+  "timestamp": 1704355200,
+  "batteryLevel": 95,
+  "signalStrength": -45,
+  "metadata": {
+    "firmwareVersion": "1.2.3",
+    "connectedSubdevices": 5,
+    "uptime": 86400,
+    "memoryUsage": 45.2
+  }
+}
+```
+
+**字段说明**：
+
+| 字段 | 类型 | 必填 | 说明 |
+|-----|------|------|------|
+| `deviceId` | String (UUID) | ✅ | 设备唯一标识（数据库 UUID） |
+| `deviceType` | String | ✅ | 固定值 `"gateway"` |
+| `timestamp` | Integer | ✅ | Unix 时间戳（秒） |
+| `batteryLevel` | Integer | ❌ | 电池电量百分比（0-100），外接电源可省略 |
+| `signalStrength` | Integer | ❌ | WiFi/4G 信号强度（dBm） |
+| `metadata` | Object | ❌ | 扩展信息 |
+| `metadata.firmwareVersion` | String | ❌ | 固件版本号 |
+| `metadata.connectedSubdevices` | Integer | ❌ | 当前连接的子设备数量 |
+| `metadata.uptime` | Integer | ❌ | 运行时长（秒） |
+| `metadata.memoryUsage` | Float | ❌ | 内存使用率（%） |
+
+### 2.2 子设备心跳消息
+
+```json
+{
+  "deviceId": "660e8400-e29b-41d4-a716-446655440001",
+  "deviceType": "subdevice",
+  "shadowName": "vibration-sensor-001",
+  "timestamp": 1704355200,
+  "batteryLevel": 78,
+  "signalStrength": -62,
+  "metadata": {
+    "firmwareVersion": "2.1.0",
+    "localConnectionType": "BLE",
+    "lastDataUpload": 1704355180
+  }
+}
+```
+
+**字段说明**：
+
+| 字段 | 类型 | 必填 | 说明 |
+|-----|------|------|------|
+| `deviceId` | String (UUID) | ✅ | 子设备唯一标识 |
+| `deviceType` | String | ✅ | 固定值 `"subdevice"` |
+| `shadowName` | String | ✅ | 子设备的 Shadow Name |
+| `timestamp` | Integer | ✅ | Unix 时间戳（秒） |
+| `batteryLevel` | Integer | ✅ | 电池电量百分比（子设备通常为电池供电） |
+| `signalStrength` | Integer | ❌ | 本地通信信号强度（BLE/Zigbee RSSI） |
+| `metadata.localConnectionType` | String | ❌ | 本地连接类型（BLE/Zigbee/LoRa） |
+| `metadata.lastDataUpload` | Integer | ❌ | 最后一次数据上报时间 |
+
+---
+
+## 3. 心跳间隔与离线判定
+
+### 3.1 心跳间隔配置
+
+| 设备类型 | 心跳间隔 | 离线阈值 | 判定规则 |
+|---------|---------|---------|---------|
+| **网关（外接电源）** | 30秒 | 90秒 | 3倍心跳间隔 |
+| **网关（电池供电）** | 60秒 | 180秒 | 3倍心跳间隔 |
+| **子设备（电池供电）** | 60秒 | 180秒 | 3倍心跳间隔 |
+| **子设备（外接电源）** | 30秒 | 90秒 | 3倍心跳间隔 |
+
+**设计原则**：
+- 离线阈值 = 心跳间隔 × 3（允许丢失2次心跳）
+- 电池供电设备使用更长间隔以节省电量
+- 可通过数据库配置动态调整
+
+### 3.2 设备状态定义
+
+| 状态 | 说明 | 触发条件 |
+|------|------|---------|
+| `active` | 设备在线 | 收到心跳且在阈值内 |
+| `offline` | 设备离线 | 超过离线阈值未收到心跳 |
+| `warning` | 预警状态 | 超过1.5倍心跳间隔未收到心跳 |
+
+---
+
+## 4. 后端实现
+
+### 4.1 AWS IoT Rule 配置
+
+创建 IoT Rule 监听心跳主题：
+
+```sql
+-- Rule Name: HeartbeatProcessor
+-- Description: 处理设备心跳消息并更新数据库
+
+SELECT
+  topic(2) as thingName,
+  topic(3) as deviceType,
+  topic(4) as shadowName,
+  *
+FROM 'heartbeat/+/+/+'
+```
+
+**Action**: 触发 Lambda 函数 `HeartbeatProcessorLambda`
+
+### 4.2 数据库 Schema
+
+#### 扩展 `devices` 表
+
+```sql
+-- 添加心跳相关字段
+ALTER TABLE devices
+ADD COLUMN IF NOT EXISTS last_heartbeat TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS heartbeat_interval INTEGER DEFAULT 30,
+ADD COLUMN IF NOT EXISTS offline_threshold INTEGER DEFAULT 90,
+ADD COLUMN IF NOT EXISTS last_battery_level INTEGER,
+ADD COLUMN IF NOT EXISTS last_signal_strength INTEGER;
+
+-- 创建索引加速查询
+CREATE INDEX IF NOT EXISTS idx_devices_last_heartbeat
+ON devices(last_heartbeat DESC)
+WHERE status = 'active';
+```
+
+#### 创建心跳历史表（可选）
+
+```sql
+-- 用于监控分析和故障排查
+CREATE TABLE IF NOT EXISTS device_heartbeats (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  device_id UUID NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+  timestamp TIMESTAMPTZ NOT NULL,
+  battery_level INTEGER,
+  signal_strength INTEGER,
+  metadata JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 创建索引
+CREATE INDEX idx_heartbeats_device_timestamp
+ON device_heartbeats(device_id, timestamp DESC);
+
+-- 创建分区表（可选，用于大规模部署）
+CREATE INDEX idx_heartbeats_created_at
+ON device_heartbeats(created_at DESC);
+```
+
+### 4.3 Lambda 处理逻辑
+
+```python
+import json
+import boto3
+from datetime import datetime
+from supabase import create_client
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+def lambda_handler(event, context):
+    """处理设备心跳消息"""
+
+    # 解析消息
+    device_id = event.get('deviceId')
+    device_type = event.get('deviceType')
+    timestamp = event.get('timestamp')
+    battery_level = event.get('batteryLevel')
+    signal_strength = event.get('signalStrength')
+
+    # 更新设备心跳时间
+    update_data = {
+        'last_heartbeat': datetime.fromtimestamp(timestamp).isoformat(),
+        'status': 'active'
+    }
+
+    if battery_level is not None:
+        update_data['last_battery_level'] = battery_level
+
+    if signal_strength is not None:
+        update_data['last_signal_strength'] = signal_strength
+
+    # 更新数据库
+    result = supabase.table('devices').update(update_data).eq('id', device_id).execute()
+
+    # 可选：记录心跳历史
+    supabase.table('device_heartbeats').insert({
+        'device_id': device_id,
+        'timestamp': datetime.fromtimestamp(timestamp).isoformat(),
+        'battery_level': battery_level,
+        'signal_strength': signal_strength,
+        'metadata': event.get('metadata', {})
+    }).execute()
+
+    return {
+        'statusCode': 200,
+        'body': json.dumps({'message': 'Heartbeat processed'})
+    }
+```
+
+### 4.4 离线检测定时任务
+
+使用 EventBridge 定时触发 Lambda（每分钟执行）：
+
+```python
+def check_offline_devices(event, context):
+    """检测离线设备"""
+
+    # 查询所有活跃设备
+    devices = supabase.table('devices').select('*').eq('status', 'active').execute()
+
+    now = datetime.now()
+
+    for device in devices.data:
+        last_heartbeat = datetime.fromisoformat(device['last_heartbeat'])
+        offline_threshold = device.get('offline_threshold', 90)
+
+        # 计算离线时长
+        offline_seconds = (now - last_heartbeat).total_seconds()
+
+        if offline_seconds > offline_threshold:
+            # 标记为离线
+            supabase.table('devices').update({
+                'status': 'offline'
+            }).eq('id', device['id']).execute()
+
+            # 发送告警通知（可选）
+            send_offline_alert(device)
+```
+
+---
+
+## 5. 设备端实现
+
+### 5.1 网关端实现
+
+```python
+import time
+import json
+from awscrt import mqtt
+from threading import Thread
+
+class HeartbeatManager:
+    def __init__(self, mqtt_connection, thing_name, device_id):
+        self.mqtt_connection = mqtt_connection
+        self.thing_name = thing_name
+        self.device_id = device_id
+        self.subdevice_heartbeats = {}
+
+    def start(self):
+        """启动心跳管理器"""
+        # 启动网关心跳线程
+        gateway_thread = Thread(target=self._gateway_heartbeat_loop)
+        gateway_thread.daemon = True
+        gateway_thread.start()
+
+    def _gateway_heartbeat_loop(self):
+        """网关心跳循环"""
+        while True:
+            try:
+                self._send_gateway_heartbeat()
+                time.sleep(30)  # 30秒间隔
+            except Exception as e:
+                print(f"❌ Gateway heartbeat error: {e}")
+                time.sleep(5)
+
+    def _send_gateway_heartbeat(self):
+        """发送网关心跳"""
+        topic = f"heartbeat/{self.thing_name}/gateway"
+
+        payload = {
+            "deviceId": self.device_id,
+            "deviceType": "gateway",
+            "timestamp": int(time.time()),
+            "batteryLevel": self._get_battery_level(),
+            "signalStrength": self._get_wifi_rssi(),
+            "metadata": {
+                "firmwareVersion": "1.2.3",
+                "connectedSubdevices": len(self.subdevice_heartbeats),
+                "uptime": self._get_uptime(),
+                "memoryUsage": self._get_memory_usage()
+            }
+        }
+
+        self.mqtt_connection.publish(
+            topic=topic,
+            payload=json.dumps(payload),
+            qos=mqtt.QoS.AT_LEAST_ONCE
+        )
+        print(f"✅ Gateway heartbeat sent")
+
+    def receive_subdevice_heartbeat(self, shadow_name, device_id, heartbeat_data):
+        """接收子设备心跳（通过BLE/Zigbee）"""
+        self.subdevice_heartbeats[shadow_name] = {
+            'device_id': device_id,
+            'data': heartbeat_data,
+            'timestamp': time.time()
+        }
+        self._forward_subdevice_heartbeat(shadow_name, device_id, heartbeat_data)
+
+    def _forward_subdevice_heartbeat(self, shadow_name, device_id, heartbeat_data):
+        """转发子设备心跳到云端"""
+        topic = f"heartbeat/{self.thing_name}/subdevice/{shadow_name}"
+
+        payload = {
+            "deviceId": device_id,
+            "deviceType": "subdevice",
+            "shadowName": shadow_name,
+            "timestamp": int(time.time()),
+            "batteryLevel": heartbeat_data.get('battery_level'),
+            "signalStrength": heartbeat_data.get('rssi'),
+            "metadata": {
+                "firmwareVersion": heartbeat_data.get('firmware_version'),
+                "localConnectionType": heartbeat_data.get('connection_type', 'BLE'),
+                "lastDataUpload": heartbeat_data.get('last_data_upload')
+            }
+        }
+
+        self.mqtt_connection.publish(
+            topic=topic,
+            payload=json.dumps(payload),
+            qos=mqtt.QoS.AT_LEAST_ONCE
+        )
+        print(f"✅ Subdevice heartbeat forwarded: {shadow_name}")
+
+    def _get_battery_level(self):
+        """获取电池电量（示例）"""
+        # 实际实现需要读取硬件电量
+        return 95
+
+    def _get_wifi_rssi(self):
+        """获取WiFi信号强度（示例）"""
+        # 实际实现需要读取WiFi RSSI
+        return -45
+
+    def _get_uptime(self):
+        """获取运行时长（示例）"""
+        with open('/proc/uptime', 'r') as f:
+            return int(float(f.readline().split()[0]))
+
+    def _get_memory_usage(self):
+        """获取内存使用率（示例）"""
+        import psutil
+        return psutil.virtual_memory().percent
+```
+
+### 5.2 子设备端实现（伪代码）
+
+```python
+class SubdeviceHeartbeat:
+    def __init__(self, ble_connection, device_id, shadow_name):
+        self.ble_connection = ble_connection
+        self.device_id = device_id
+        self.shadow_name = shadow_name
+
+    def start(self):
+        """启动子设备心跳"""
+        while True:
+            self._send_heartbeat_to_gateway()
+            time.sleep(60)  # 60秒间隔（节省电量）
+
+    def _send_heartbeat_to_gateway(self):
+        """通过BLE发送心跳到网关"""
+        heartbeat_data = {
+            'device_id': self.device_id,
+            'shadow_name': self.shadow_name,
+            'battery_level': self._read_battery(),
+            'rssi': self._read_ble_rssi(),
+            'firmware_version': '2.1.0',
+            'connection_type': 'BLE',
+            'last_data_upload': int(time.time())
+        }
+
+        # 通过BLE发送到网关
+        self.ble_connection.send_heartbeat(heartbeat_data)
+```
+
+---
+
+## 6. 监控与告警
+
+### 6.1 监控指标
+
+| 指标 | 说明 | 告警阈值 |
+|------|------|---------|
+| **心跳延迟** | 心跳消息到达时间与设备时间戳的差值 | > 10秒 |
+| **心跳丢失率** | 未按时收到心跳的比例 | > 10% |
+| **设备离线率** | 离线设备占总设备的比例 | > 5% |
+| **电池电量** | 设备电池剩余电量 | < 20% |
+| **信号强度** | WiFi/BLE 信号强度 | < -80 dBm |
+
+### 6.2 告警通知
+
+当检测到以下情况时发送告警：
+
+1. **设备离线**：超过离线阈值未收到心跳
+2. **电量低**：电池电量低于 20%
+3. **信号弱**：信号强度低于 -80 dBm
+4. **心跳异常**：心跳间隔突然变化或不规律
+
+---
+
+## 7. 最佳实践
+
+### 7.1 网关端
+
+- ✅ 使用独立线程处理心跳，避免阻塞主业务逻辑
+- ✅ 心跳失败时进行重试（最多3次）
+- ✅ 记录本地心跳日志，便于故障排查
+- ✅ 监控子设备心跳，及时发现子设备离线
+- ❌ 不要在心跳消息中包含大量业务数据
+
+### 7.2 子设备端
+
+- ✅ 根据电池电量动态调整心跳间隔
+- ✅ 心跳失败时缓存数据，待连接恢复后补发
+- ✅ 使用低功耗模式，心跳间隔期间进入休眠
+- ❌ 不要频繁发送心跳导致电量快速消耗
+
+### 7.3 后端
+
+- ✅ 使用数据库索引加速心跳查询
+- ✅ 定期清理历史心跳数据（保留30天）
+- ✅ 使用缓存减少数据库查询压力
+- ✅ 监控 Lambda 执行时间和错误率
+- ❌ 不要在心跳处理中执行耗时操作
+
+---
+
+## 8. 故障排查
+
+### 8.1 常见问题
+
+| 问题 | 可能原因 | 解决方案 |
+|------|---------|---------|
+| **设备频繁离线** | 网络不稳定、心跳间隔过短 | 增加离线阈值、检查网络质量 |
+| **心跳延迟高** | Lambda 冷启动、数据库慢查询 | 使用预留并发、优化数据库索引 |
+| **子设备心跳丢失** | BLE 连接不稳定、网关转发失败 | 检查本地连接、增加重试机制 |
+| **电量消耗快** | 心跳间隔过短 | 延长心跳间隔、优化休眠策略 |
+
+### 8.2 调试工具
+
+```bash
+# 订阅心跳主题查看实时消息
+mosquitto_sub -h <iot-endpoint> \
+  -p 8883 \
+  --cert device.crt \
+  --key device.key \
+  --cafile AmazonRootCA1.pem \
+  -t 'heartbeat/+/+/+' \
+  -v
+
+# 查询设备最后心跳时间
+SELECT id, thing_name, last_heartbeat, status
+FROM devices
+WHERE last_heartbeat < NOW() - INTERVAL '5 minutes'
+ORDER BY last_heartbeat DESC;
+```
+
+---
+
+## 9. 版本历史
+
+| 版本 | 日期 | 变更说明 |
+|------|------|---------|
+| 1.0.0 | 2024-01-04 | 初始版本，定义基础心跳协议 |
+
+---
+
+## 10. 参考文档
+
+- [IoT 系统架构](./IOT_SYSTEM_ARCHITECTURE.md)
+- [Supabase 后端与模拟器通信指南](./supabase-simulator-communication.mdx)
+- [AWS IoT Device Shadow](https://docs.aws.amazon.com/iot/latest/developerguide/iot-device-shadows.html)
+- [MQTT 协议规范](https://mqtt.org/mqtt-specification/)
