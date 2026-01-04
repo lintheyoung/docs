@@ -160,27 +160,371 @@ heartbeat/IoT-Gateway-000011/subdevice/trap-device-002
 
 ---
 
-## 4. 后端实现
+## 4. 设备端发布指南
 
-### 4.1 AWS IoT Rule 配置
+### 4.1 MQTT 连接要求
 
-创建 IoT Rule 监听心跳主题：
+设备端必须使用以下配置连接到 AWS IoT Core：
 
-```sql
--- Rule Name: HeartbeatProcessor
--- Description: 处理设备心跳消息并更新数据库
+**连接参数**：
+- **Endpoint**: 从 AWS IoT Core 获取（格式：`xxx.iot.region.amazonaws.com`）
+- **Port**: 8883 (MQTT over TLS)
+- **Protocol**: MQTT 3.1.1 或 5.0
+- **TLS**: TLS 1.2+
+- **认证**: X.509 证书（仅网关需要，子设备通过网关转发）
 
-SELECT
-  topic(2) as thingName,
-  topic(3) as deviceType,
-  topic(4) as shadowName,
-  *
-FROM 'heartbeat/+/+/+'
+**网关证书要求**：
+- Device Certificate (`.crt`)
+- Private Key (`.key`)
+- Amazon Root CA 1 (`.pem`)
+
+### 4.2 网关心跳发布
+
+网关设备应按以下方式发布心跳消息：
+
+**MQTT 主题**：
+```
+heartbeat/{thingName}/gateway
 ```
 
-**Action**: 触发 Lambda 函数 `HeartbeatProcessorLambda`
+**示例**：
+```
+heartbeat/IoT-Gateway-000011/gateway
+```
 
-### 4.2 数据库 Schema
+**Python 代码示例**：
+
+```python
+import json
+import time
+from awscrt import mqtt
+
+# 初始化 MQTT 连接
+mqtt_connection = mqtt.Connection(
+    client_id=thing_name,
+    endpoint="xxx.iot.us-east-1.amazonaws.com",
+    port=8883,
+    cert_filepath="device.crt",
+    pri_key_filepath="device.key",
+    ca_filepath="AmazonRootCA1.pem"
+)
+
+# 连接到 AWS IoT Core
+mqtt_connection.connect().result()
+
+# 发送网关心跳
+def send_gateway_heartbeat():
+    topic = f"heartbeat/{thing_name}/gateway"
+
+    payload = {
+        "deviceId": "550e8400-e29b-41d4-a716-446655440000",  # 设备 UUID（从数据库获取）
+        "deviceType": "gateway",
+        "timestamp": int(time.time()),
+        "batteryLevel": 95,  # 可选，外接电源可省略
+        "signalStrength": -45,  # WiFi RSSI (dBm)
+        "metadata": {
+            "firmwareVersion": "1.2.3",
+            "connectedSubdevices": 5,
+            "uptime": 86400
+        }
+    }
+
+    mqtt_connection.publish(
+        topic=topic,
+        payload=json.dumps(payload),
+        qos=mqtt.QoS.AT_LEAST_ONCE  # QoS 1
+    )
+    print(f"✅ Gateway heartbeat sent to {topic}")
+
+# 每 30 秒发送一次心跳
+while True:
+    send_gateway_heartbeat()
+    time.sleep(30)
+```
+
+### 4.3 子设备心跳转发
+
+子设备通过本地通信（BLE/Zigbee）将心跳数据发送给网关，网关负责转发到云端。
+
+**MQTT 主题**：
+```
+heartbeat/{thingName}/subdevice/{shadowName}
+```
+
+**示例**：
+```
+heartbeat/IoT-Gateway-000011/subdevice/vibration-sensor-001
+```
+
+**Python 代码示例**：
+
+```python
+def forward_subdevice_heartbeat(shadow_name, device_id, heartbeat_data):
+    """网关转发子设备心跳"""
+    topic = f"heartbeat/{thing_name}/subdevice/{shadow_name}"
+
+    payload = {
+        "deviceId": device_id,  # 子设备 UUID
+        "deviceType": "subdevice",
+        "shadowName": shadow_name,
+        "timestamp": int(time.time()),
+        "batteryLevel": heartbeat_data.get('battery_level'),  # 必填
+        "signalStrength": heartbeat_data.get('rssi'),  # BLE/Zigbee RSSI
+        "metadata": {
+            "firmwareVersion": heartbeat_data.get('firmware_version'),
+            "localConnectionType": "BLE",  # BLE/Zigbee/LoRa
+            "lastDataUpload": heartbeat_data.get('last_data_upload')
+        }
+    }
+
+    mqtt_connection.publish(
+        topic=topic,
+        payload=json.dumps(payload),
+        qos=mqtt.QoS.AT_LEAST_ONCE
+    )
+    print(f"✅ Subdevice heartbeat forwarded: {shadow_name}")
+
+# 网关接收子设备心跳（通过 BLE）
+def on_ble_heartbeat_received(ble_device):
+    """当通过 BLE 接收到子设备心跳时调用"""
+    shadow_name = ble_device.shadow_name
+    device_id = ble_device.device_id
+
+    heartbeat_data = {
+        'battery_level': ble_device.read_battery(),
+        'rssi': ble_device.get_rssi(),
+        'firmware_version': ble_device.firmware_version,
+        'last_data_upload': int(time.time())
+    }
+
+    forward_subdevice_heartbeat(shadow_name, device_id, heartbeat_data)
+```
+
+### 4.4 设备端注意事项
+
+**必须遵守的规则**：
+
+1. **deviceId 必须是数据库中的 UUID**
+   - 不能使用 `thing_name` 或 `shadow_name`
+   - 必须从设备绑定时获取的 UUID
+   - 后端通过此 UUID 更新数据库
+
+2. **timestamp 必须是 Unix 时间戳（秒）**
+   - 使用 `int(time.time())` 获取
+   - 不要使用毫秒时间戳
+
+3. **QoS 必须设置为 1（AT_LEAST_ONCE）**
+   - 确保心跳消息不会丢失
+   - QoS 0 可能导致心跳丢失，设备被误判为离线
+
+4. **心跳间隔必须严格遵守**
+   - 网关（外接电源）：30 秒
+   - 网关（电池供电）：60 秒
+   - 子设备：60 秒
+   - 不要随意更改间隔，否则可能被误判为离线
+
+5. **心跳与业务数据分离**
+   - 心跳消息只用于在线状态监控
+   - 业务数据通过 Device Shadow 上报
+   - 不要在心跳消息中包含大量业务数据
+
+---
+
+## 5. 后端实现
+
+### 5.1 AWS IoT Rule 配置
+
+后端需要创建专用的 IoT Rule 来监听心跳主题并触发处理 Lambda。
+
+#### CDK 配置（TypeScript）
+
+在 `cloud-iot/lib/iot-stack.ts` 中添加：
+
+```typescript
+import * as iot from 'aws-cdk-lib/aws-iot';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as iam from 'aws-cdk-lib/aws-iam';
+
+// 创建 HeartbeatProcessor Lambda
+const heartbeatLambda = new lambda.Function(this, 'HeartbeatProcessor', {
+  runtime: lambda.Runtime.NODEJS_18_X,
+  handler: 'index.handler',
+  code: lambda.Code.fromAsset('lambdas/heartbeat-processor'),
+  environment: {
+    SUPABASE_URL: process.env.SUPABASE_URL!,
+    SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY!
+  },
+  timeout: cdk.Duration.seconds(30)
+});
+
+// 创建 IoT Rule 监听心跳主题
+const heartbeatRule = new iot.CfnTopicRule(this, 'HeartbeatToLambda', {
+  ruleName: 'heartbeat_to_lambda',
+  topicRulePayload: {
+    sql: `
+      SELECT
+        topic(2) as thingName,
+        topic(3) as deviceType,
+        topic(4) as shadowName,
+        *
+      FROM 'heartbeat/+/+/+'
+    `,
+    description: '处理设备心跳消息并更新数据库',
+    actions: [{
+      lambda: {
+        functionArn: heartbeatLambda.functionArn
+      }
+    }],
+    errorAction: {
+      cloudwatchLogs: {
+        logGroupName: '/aws/iot/heartbeat-errors',
+        roleArn: iotRuleRole.roleArn
+      }
+    },
+    awsIotSqlVersion: '2016-03-23'
+  }
+});
+
+// 授予 IoT Rule 调用 Lambda 的权限
+heartbeatLambda.addPermission('AllowIoTInvoke', {
+  principal: new iam.ServicePrincipal('iot.amazonaws.com'),
+  sourceArn: heartbeatRule.attrArn
+});
+```
+
+#### SQL 查询说明
+
+```sql
+SELECT
+  topic(2) as thingName,      -- 提取 thing_name（如：IoT-Gateway-000011）
+  topic(3) as deviceType,     -- 提取设备类型（gateway 或 subdevice）
+  topic(4) as shadowName,     -- 提取 shadow_name（仅子设备有值）
+  *                           -- 包含完整的心跳消息 payload
+FROM 'heartbeat/+/+/+'        -- 监听所有心跳主题
+```
+
+**主题匹配示例**：
+- `heartbeat/IoT-Gateway-000011/gateway` → `thingName=IoT-Gateway-000011`, `deviceType=gateway`, `shadowName=null`
+- `heartbeat/IoT-Gateway-000011/subdevice/vibration-sensor-001` → `thingName=IoT-Gateway-000011`, `deviceType=subdevice`, `shadowName=vibration-sensor-001`
+
+### 5.2 HeartbeatProcessor Lambda 实现
+
+创建 `lambdas/heartbeat-processor/index.ts`：
+
+```typescript
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
+);
+
+export async function handler(event: any) {
+  console.log('Heartbeat event:', JSON.stringify(event));
+
+  const {
+    deviceId,
+    deviceType,
+    timestamp,
+    batteryLevel,
+    signalStrength,
+    metadata
+  } = event;
+
+  // 验证必填字段
+  if (!deviceId || !timestamp) {
+    console.error('Missing required fields:', { deviceId, timestamp });
+    return { statusCode: 400, body: 'Missing deviceId or timestamp' };
+  }
+
+  // 构建更新数据
+  const updateData: any = {
+    last_heartbeat: new Date(timestamp * 1000).toISOString(),
+    status: 'active',
+    updated_at: new Date().toISOString()
+  };
+
+  if (batteryLevel !== undefined && batteryLevel !== null) {
+    updateData.last_battery_level = batteryLevel;
+  }
+
+  if (signalStrength !== undefined && signalStrength !== null) {
+    updateData.last_signal_strength = signalStrength;
+  }
+
+  // 更新设备心跳时间
+  const { data, error } = await supabase
+    .from('devices')
+    .update(updateData)
+    .eq('id', deviceId)
+    .select();
+
+  if (error) {
+    console.error('Failed to update heartbeat:', error);
+    return { statusCode: 500, body: JSON.stringify(error) };
+  }
+
+  if (!data || data.length === 0) {
+    console.warn('Device not found:', deviceId);
+    return { statusCode: 404, body: 'Device not found' };
+  }
+
+  console.log('Heartbeat updated successfully:', deviceId);
+
+  // 可选：记录心跳历史
+  if (process.env.ENABLE_HEARTBEAT_HISTORY === 'true') {
+    await supabase.from('device_heartbeats').insert({
+      device_id: deviceId,
+      timestamp: new Date(timestamp * 1000).toISOString(),
+      battery_level: batteryLevel,
+      signal_strength: signalStrength,
+      metadata: metadata || {}
+    });
+  }
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ message: 'Heartbeat processed', deviceId })
+  };
+}
+```
+
+### 5.3 与 Projector Lambda 的关系
+
+**重要**：HeartbeatProcessor Lambda 与 Projector Lambda 完全独立，互不干扰。
+
+| 特性 | HeartbeatProcessor Lambda | Projector Lambda |
+|------|--------------------------|------------------|
+| **监听主题** | `heartbeat/+/+/+` | `$aws/things/+/shadow/update/documents` |
+| **处理数据** | 心跳消息 | Shadow 更新（业务数据） |
+| **更新字段** | `last_heartbeat`, `last_battery_level`, `last_signal_strength` | `telemetry_last` 表 |
+| **触发频率** | 30-60 秒 | 按业务需求 |
+| **职责** | 设备在线状态监控 | 业务数据持久化 |
+
+**迁移注意事项**：
+
+如果当前 Projector Lambda 中有更新 `last_heartbeat` 的逻辑，**必须移除**：
+
+```typescript
+// ❌ 需要从 Projector Lambda 中删除
+await supabase
+  .from('devices')
+  .update({
+    last_heartbeat: new Date().toISOString(),  // ← 删除此行
+    // ... 保留其他业务字段
+  })
+  .eq('id', deviceId);
+
+// ✅ Projector Lambda 只更新业务数据
+await supabase
+  .from('telemetry_last')
+  .upsert({
+    device_id: deviceId,
+    // ... 业务数据字段
+  });
+```
+
+### 5.4 数据库 Schema
 
 #### 扩展 `devices` 表
 
@@ -222,7 +566,7 @@ CREATE INDEX idx_heartbeats_created_at
 ON device_heartbeats(created_at DESC);
 ```
 
-### 4.3 Lambda 处理逻辑
+### 5.5 Lambda 处理逻辑
 
 ```python
 import json
@@ -248,6 +592,7 @@ def lambda_handler(event, context):
         'status': 'active'
     }
 
+
     if battery_level is not None:
         update_data['last_battery_level'] = battery_level
 
@@ -272,41 +617,175 @@ def lambda_handler(event, context):
     }
 ```
 
-### 4.4 离线检测定时任务
+### 5.6 离线检测定时任务
 
-使用 EventBridge 定时触发 Lambda（每分钟执行）：
+后端需要定期检查设备的心跳时间，标记离线设备。
 
-```python
-def check_offline_devices(event, context):
-    """检测离线设备"""
+#### EventBridge 配置（CDK）
 
-    # 查询所有活跃设备
-    devices = supabase.table('devices').select('*').eq('status', 'active').execute()
+在 `cloud-iot/lib/iot-stack.ts` 中添加：
 
-    now = datetime.now()
+```typescript
+import * as events from 'aws-cdk-lib/aws-events';
+import * as targets from 'aws-cdk-lib/aws-events-targets';
 
-    for device in devices.data:
-        last_heartbeat = datetime.fromisoformat(device['last_heartbeat'])
-        offline_threshold = device.get('offline_threshold', 90)
+// 创建离线检测 Lambda
+const offlineDetectorLambda = new lambda.Function(this, 'OfflineDetector', {
+  runtime: lambda.Runtime.NODEJS_18_X,
+  handler: 'index.handler',
+  code: lambda.Code.fromAsset('lambdas/offline-detector'),
+  environment: {
+    SUPABASE_URL: process.env.SUPABASE_URL!,
+    SUPABASE_SERVICE_KEY: process.env.SUPABASE_SERVICE_KEY!
+  },
+  timeout: cdk.Duration.minutes(5)  // 允许处理大量设备
+});
 
-        # 计算离线时长
-        offline_seconds = (now - last_heartbeat).total_seconds()
+// 创建 EventBridge 规则（每分钟执行）
+const offlineDetectionRule = new events.Rule(this, 'OfflineDetectionRule', {
+  schedule: events.Schedule.rate(cdk.Duration.minutes(1)),
+  description: '每分钟检测离线设备'
+});
 
-        if offline_seconds > offline_threshold:
-            # 标记为离线
-            supabase.table('devices').update({
-                'status': 'offline'
-            }).eq('id', device['id']).execute()
+// 添加 Lambda 作为目标
+offlineDetectionRule.addTarget(new targets.LambdaFunction(offlineDetectorLambda));
+```
 
-            # 发送告警通知（可选）
-            send_offline_alert(device)
+#### OfflineDetector Lambda 实现
+
+创建 `lambdas/offline-detector/index.ts`：
+
+```typescript
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_KEY!
+);
+
+export async function handler(event: any) {
+  console.log('Starting offline detection...');
+
+  const now = new Date();
+  let offlineCount = 0;
+  let checkedCount = 0;
+
+  try {
+    // 查询所有活跃设备
+    const { data: devices, error } = await supabase
+      .from('devices')
+      .select('id, thing_name, last_heartbeat, offline_threshold, heartbeat_interval')
+      .eq('status', 'active')
+      .not('last_heartbeat', 'is', null);
+
+    if (error) {
+      console.error('Failed to query devices:', error);
+      return { statusCode: 500, body: JSON.stringify(error) };
+    }
+
+    if (!devices || devices.length === 0) {
+      console.log('No active devices to check');
+      return { statusCode: 200, body: 'No devices to check' };
+    }
+
+    console.log(`Checking ${devices.length} active devices...`);
+
+    // 批量处理设备
+    const offlineDeviceIds: string[] = [];
+
+    for (const device of devices) {
+      checkedCount++;
+
+      const lastHeartbeat = new Date(device.last_heartbeat);
+      const offlineThreshold = device.offline_threshold || 90;
+      const offlineSeconds = (now.getTime() - lastHeartbeat.getTime()) / 1000;
+
+      if (offlineSeconds > offlineThreshold) {
+        offlineDeviceIds.push(device.id);
+        console.log(`Device offline: ${device.thing_name} (${offlineSeconds.toFixed(0)}s since last heartbeat)`);
+      }
+    }
+
+    // 批量更新离线设备
+    if (offlineDeviceIds.length > 0) {
+      const { error: updateError } = await supabase
+        .from('devices')
+        .update({
+          status: 'offline',
+          last_disconnect_time: now.toISOString(),
+          updated_at: now.toISOString()
+        })
+        .in('id', offlineDeviceIds);
+
+      if (updateError) {
+        console.error('Failed to update offline devices:', updateError);
+      } else {
+        offlineCount = offlineDeviceIds.length;
+        console.log(`Marked ${offlineCount} devices as offline`);
+      }
+
+      // 可选：发送告警通知
+      if (process.env.ENABLE_OFFLINE_ALERTS === 'true') {
+        await sendOfflineAlerts(offlineDeviceIds);
+      }
+    }
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Offline detection completed',
+        checkedCount,
+        offlineCount
+      })
+    };
+  } catch (error) {
+    console.error('Offline detection error:', error);
+    return { statusCode: 500, body: JSON.stringify(error) };
+  }
+}
+
+async function sendOfflineAlerts(deviceIds: string[]) {
+  // TODO: 实现告警通知（SNS/Email/Webhook）
+  console.log(`Sending offline alerts for ${deviceIds.length} devices`);
+}
+```
+
+#### 性能优化建议
+
+对于大规模部署（>10000 设备），建议使用以下优化：
+
+```typescript
+// 使用数据库查询直接标记离线设备
+const { data, error } = await supabase.rpc('mark_offline_devices', {
+  threshold_seconds: 90
+});
+```
+
+对应的数据库函数：
+
+```sql
+CREATE OR REPLACE FUNCTION mark_offline_devices(threshold_seconds INTEGER)
+RETURNS TABLE(device_id UUID, thing_name TEXT) AS $$
+BEGIN
+  RETURN QUERY
+  UPDATE devices
+  SET
+    status = 'offline',
+    last_disconnect_time = NOW(),
+    updated_at = NOW()
+  WHERE
+    status = 'active'
+    AND last_heartbeat < NOW() - (threshold_seconds || ' seconds')::INTERVAL
+  RETURNING id, thing_name;
+END;
+$$ LANGUAGE plpgsql;
 ```
 
 ---
 
-## 5. 设备端实现
+## 6. 设备端实现
 
-### 5.1 网关端实现
+### 6.1 网关端实现
 
 ```python
 import time
@@ -418,7 +897,7 @@ class HeartbeatManager:
         return psutil.virtual_memory().percent
 ```
 
-### 5.2 子设备端实现（伪代码）
+### 6.2 子设备端实现（伪代码）
 
 ```python
 class SubdeviceHeartbeat:
@@ -451,9 +930,10 @@ class SubdeviceHeartbeat:
 
 ---
 
-## 6. 监控与告警
+## 7. 监控与告警
 
-### 6.1 监控指标
+
+### 7.1 监控指标
 
 | 指标 | 说明 | 告警阈值 |
 |------|------|---------|
@@ -463,7 +943,7 @@ class SubdeviceHeartbeat:
 | **电池电量** | 设备电池剩余电量 | < 20% |
 | **信号强度** | WiFi/BLE 信号强度 | < -80 dBm |
 
-### 6.2 告警通知
+### 7.2 告警通知
 
 当检测到以下情况时发送告警：
 
@@ -474,9 +954,9 @@ class SubdeviceHeartbeat:
 
 ---
 
-## 7. 最佳实践
+## 8. 最佳实践
 
-### 7.1 网关端
+### 8.1 网关端
 
 - ✅ 使用独立线程处理心跳，避免阻塞主业务逻辑
 - ✅ 心跳失败时进行重试（最多3次）
@@ -484,14 +964,14 @@ class SubdeviceHeartbeat:
 - ✅ 监控子设备心跳，及时发现子设备离线
 - ❌ 不要在心跳消息中包含大量业务数据
 
-### 7.2 子设备端
+### 8.2 子设备端
 
 - ✅ 根据电池电量动态调整心跳间隔
 - ✅ 心跳失败时缓存数据，待连接恢复后补发
 - ✅ 使用低功耗模式，心跳间隔期间进入休眠
 - ❌ 不要频繁发送心跳导致电量快速消耗
 
-### 7.3 后端
+### 8.3 后端
 
 - ✅ 使用数据库索引加速心跳查询
 - ✅ 定期清理历史心跳数据（保留30天）
@@ -501,9 +981,9 @@ class SubdeviceHeartbeat:
 
 ---
 
-## 8. 故障排查
+## 9. 故障排查
 
-### 8.1 常见问题
+### 9.1 常见问题
 
 | 问题 | 可能原因 | 解决方案 |
 |------|---------|---------|
@@ -512,7 +992,7 @@ class SubdeviceHeartbeat:
 | **子设备心跳丢失** | BLE 连接不稳定、网关转发失败 | 检查本地连接、增加重试机制 |
 | **电量消耗快** | 心跳间隔过短 | 延长心跳间隔、优化休眠策略 |
 
-### 8.2 调试工具
+### 9.2 调试工具
 
 ```bash
 # 订阅心跳主题查看实时消息
@@ -533,17 +1013,55 @@ ORDER BY last_heartbeat DESC;
 
 ---
 
-## 9. 版本历史
+## 10. 实施检查清单
+
+### 10.1 后端实施
+
+- [ ] 在 `cloud-iot/lib/iot-stack.ts` 中添加 HeartbeatProcessor Lambda
+- [ ] 创建 IoT Rule 监听 `heartbeat/+/+/+` 主题
+- [ ] 实现 HeartbeatProcessor Lambda 逻辑
+- [ ] 创建 OfflineDetector Lambda
+- [ ] 配置 EventBridge 定时任务（每分钟）
+- [ ] 执行数据库迁移（添加心跳字段）
+- [ ] 从 Projector Lambda 中移除 `last_heartbeat` 更新逻辑
+- [ ] 测试心跳消息处理流程
+- [ ] 测试离线检测功能
+
+### 10.2 设备端实施
+
+- [ ] 网关实现心跳发送逻辑（30秒间隔）
+- [ ] 子设备实现心跳上报逻辑（60秒间隔）
+- [ ] 网关实现子设备心跳转发逻辑
+- [ ] 确保 deviceId 使用数据库 UUID
+- [ ] 确保 QoS 设置为 1
+- [ ] 测试心跳消息发送
+- [ ] 测试离线恢复流程
+
+### 10.3 测试验证
+
+- [ ] 网关心跳正常上报
+- [ ] 子设备心跳正常转发
+- [ ] 设备离线后正确标记为 offline
+- [ ] 设备恢复后正确标记为 active
+- [ ] 电量和信号强度正确记录
+- [ ] 离线检测定时任务正常运行
+- [ ] 心跳与业务数据完全分离
+
+---
+
+## 11. 版本历史
 
 | 版本 | 日期 | 变更说明 |
 |------|------|---------|
 | 1.0.0 | 2024-01-04 | 初始版本，定义基础心跳协议 |
+| 1.1.0 | 2024-01-04 | 补充设备端发布指南和后端实现细节 |
 
 ---
 
-## 10. 参考文档
+## 12. 参考文档
 
 - [IoT 系统架构](./IOT_SYSTEM_ARCHITECTURE.md)
 - [Supabase 后端与模拟器通信指南](./supabase-simulator-communication.mdx)
 - [AWS IoT Device Shadow](https://docs.aws.amazon.com/iot/latest/developerguide/iot-device-shadows.html)
 - [MQTT 协议规范](https://mqtt.org/mqtt-specification/)
+- [AWS IoT Core Rules](https://docs.aws.amazon.com/iot/latest/developerguide/iot-rules.html)
