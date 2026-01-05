@@ -1,0 +1,391 @@
+---
+title: '解除绑定设备'
+openapi: 'POST /user-device-unbind'
+---
+
+## 接口说明
+
+用户可以解除已绑定设备的所有权关系。解除绑定后，设备将回到未绑定状态，可以被其他用户重新绑定。
+
+<Warning>
+**重要提示**：
+- 解除绑定后，设备的所有权关系将被移除
+- 设备的历史数据（陷阱记录、遥测数据等）将被保留，但不再关联到您的账号
+- 网关设备解绑时，所有关联的子设备也会自动解绑
+- 此操作不可撤销，请谨慎操作
+</Warning>
+
+## 核心概念
+
+### 设备状态变化
+
+```
+active/offline (已绑定使用中)
+    ↓
+  [用户解除绑定]
+    ↓
+unbound (已解绑，可重新绑定)
+```
+
+### 网关与子设备解绑规则
+
+- **解绑网关**：自动解绑所有关联的子设备
+- **解绑子设备**：仅解绑该子设备，不影响网关和其他子设备
+
+## 请求参数
+
+<ParamField body="device_id" type="string" required>
+  设备ID (UUID)
+
+  示例: `d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b`
+</ParamField>
+
+<ParamField body="confirm" type="boolean" required>
+  确认解绑操作，必须设置为 `true`
+
+  防止误操作的安全机制
+</ParamField>
+
+<ParamField body="reason" type="string">
+  解绑原因（可选），用于记录和分析
+
+  示例：
+  - `device_sold`: 设备已出售
+  - `device_damaged`: 设备损坏
+  - `no_longer_needed`: 不再需要
+  - `other`: 其他原因
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="success" type="boolean">
+  解绑是否成功
+</ResponseField>
+
+<ResponseField name="device_id" type="string">
+  设备ID
+</ResponseField>
+
+<ResponseField name="thing_name" type="string">
+  设备Thing名称（网关）或 null（子设备）
+</ResponseField>
+
+<ResponseField name="shadow_name" type="string">
+  子设备Shadow名称（子设备）或 null（网关）
+</ResponseField>
+
+<ResponseField name="device_type" type="string">
+  设备类型
+</ResponseField>
+
+<ResponseField name="previous_status" type="string">
+  解绑前的设备状态
+</ResponseField>
+
+<ResponseField name="new_status" type="string">
+  解绑后的设备状态（`unbound`）
+</ResponseField>
+
+<ResponseField name="unbound_at" type="string">
+  解绑时间 (ISO 8601)
+</ResponseField>
+
+<ResponseField name="affected_subdevices" type="array">
+  受影响的子设备列表（仅网关解绑时返回）
+
+  <Expandable title="AffectedSubdevice 对象">
+    <ResponseField name="device_id" type="string">
+      子设备ID
+    </ResponseField>
+
+    <ResponseField name="shadow_name" type="string">
+      子设备Shadow名称
+    </ResponseField>
+
+    <ResponseField name="device_type" type="string">
+      子设备类型
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 后端行为
+
+### 1. 权限验证
+- 验证用户是否为设备所有者
+- 检查设备是否存在且未被删除
+
+### 2. 解绑网关设备
+```sql
+-- 1. 查找所有关联的子设备
+SELECT id, shadow_name, device_type
+FROM devices
+WHERE parent_id = :gateway_id;
+
+-- 2. 删除所有子设备的所有权记录
+DELETE FROM device_owners
+WHERE device_id IN (SELECT id FROM devices WHERE parent_id = :gateway_id);
+
+-- 3. 更新所有子设备状态
+UPDATE devices
+SET status = 'unbound',
+    parent_id = NULL,
+    thing_name = NULL,
+    updated_at = NOW()
+WHERE parent_id = :gateway_id;
+
+-- 4. 删除网关的所有权记录
+DELETE FROM device_owners
+WHERE device_id = :gateway_id;
+
+-- 5. 更新网关状态
+UPDATE devices
+SET status = 'unbound',
+    updated_at = NOW()
+WHERE id = :gateway_id;
+```
+
+### 3. 解绑子设备
+```sql
+-- 1. 删除所有权记录
+DELETE FROM device_owners
+WHERE device_id = :subdevice_id;
+
+-- 2. 更新子设备状态
+UPDATE devices
+SET status = 'unbound',
+    parent_id = NULL,
+    thing_name = NULL,
+    updated_at = NOW()
+WHERE id = :subdevice_id;
+```
+
+### 4. 记录解绑历史（可选）
+```sql
+INSERT INTO device_unbind_history (
+  device_id,
+  user_id,
+  reason,
+  unbound_at
+) VALUES (
+  :device_id,
+  :user_id,
+  :reason,
+  NOW()
+);
+```
+
+## 设备状态说明
+
+### unbound 状态
+
+设备解绑后进入 `unbound` 状态，具有以下特征：
+
+| 特性 | 说明 |
+|------|------|
+| **所有权** | 无所有者，device_owners 记录已删除 |
+| **可见性** | 不在用户设备列表中显示 |
+| **可重新绑定** | ✅ 可以通过激活码重新绑定 |
+| **历史数据** | 保留但不可访问（除非重新绑定） |
+| **设备连接** | 设备仍可连接AWS IoT，但数据不会关联到任何用户 |
+
+### 与其他状态的区别
+
+| 状态 | 所有权 | 可重新绑定 | 历史数据 |
+|------|--------|-----------|---------|
+| `registered` | 无 | ✅ 首次绑定 | 无 |
+| `unbound` | 无 | ✅ 重新绑定 | 保留 |
+| `inactive` | 有 | ❌ | 保留 |
+| `deleted` | 无 | ❌ | 删除 |
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `UNAUTHORIZED` | 401 | 缺少或无效的认证Token |
+| `PERMISSION_DENIED` | 403 | 仅设备所有者可解除绑定 |
+| `DEVICE_NOT_FOUND` | 404 | 设备不存在 |
+| `DEVICE_NOT_BOUND` | 400 | 设备未绑定，无需解绑 |
+| `CONFIRM_REQUIRED` | 400 | 必须设置 confirm=true 确认操作 |
+| `DEVICE_ALREADY_UNBOUND` | 409 | 设备已处于解绑状态 |
+| `DATABASE_ERROR` | 500 | 数据库操作失败 |
+
+<RequestExample>
+```bash cURL - 解绑网关设备
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-unbind' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+    "confirm": true,
+    "reason": "device_sold"
+  }'
+```
+
+```bash cURL - 解绑子设备
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-unbind' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+    "confirm": true,
+    "reason": "no_longer_needed"
+  }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/user-device-unbind',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${userToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      device_id: 'd9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+      confirm: true,
+      reason: 'device_sold'
+    })
+  }
+);
+
+const data = await response.json();
+console.log('Device unbound:', data.device_id);
+if (data.affected_subdevices) {
+  console.log(`Also unbound ${data.affected_subdevices.length} subdevices`);
+}
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-supabase-project.supabase.co/functions/v1/user-device-unbind',
+    headers={
+        'Authorization': f'Bearer {user_token}',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'device_id': 'd9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b',
+        'confirm': True,
+        'reason': 'device_sold'
+    }
+)
+
+data = response.json()
+print(f"Device unbound: {data['device_id']}")
+if 'affected_subdevices' in data:
+    print(f"Also unbound {len(data['affected_subdevices'])} subdevices")
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 解绑网关设备
+{
+  "success": true,
+  "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+  "thing_name": "IoT-Gateway-000011",
+  "shadow_name": null,
+  "device_type": "gateway",
+  "previous_status": "active",
+  "new_status": "unbound",
+  "unbound_at": "2024-01-04T10:30:00Z",
+  "affected_subdevices": [
+    {
+      "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+      "shadow_name": "vibration-sensor-001",
+      "device_type": "vibration_sensor"
+    },
+    {
+      "device_id": "b2c3d4e5-6f7g-8h9i-0j1k-2l3m4n5o6p7q",
+      "shadow_name": "smart-trap-001",
+      "device_type": "smart_trap"
+    }
+  ]
+}
+```
+
+```json 成功响应 - 解绑子设备
+{
+  "success": true,
+  "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
+  "thing_name": null,
+  "shadow_name": "vibration-sensor-001",
+  "device_type": "vibration_sensor",
+  "previous_status": "active",
+  "new_status": "unbound",
+  "unbound_at": "2024-01-04T10:30:00Z"
+}
+```
+
+```json 错误响应 - 未确认操作
+{
+  "error": {
+    "code": "CONFIRM_REQUIRED",
+    "message": "Must set confirm=true to unbind device",
+    "statusCode": 400
+  }
+}
+```
+
+```json 错误响应 - 权限不足
+{
+  "error": {
+    "code": "PERMISSION_DENIED",
+    "message": "Only device owner can unbind device",
+    "statusCode": 403
+  }
+}
+```
+
+```json 错误响应 - 设备未绑定
+{
+  "error": {
+    "code": "DEVICE_NOT_BOUND",
+    "message": "Device is not bound to any user",
+    "statusCode": 400,
+    "details": {
+      "device_id": "d9e3f5c1-4e0a-4b5e-8f3a-1c2d3e4f5a6b",
+      "current_status": "registered"
+    }
+  }
+}
+```
+</ResponseExample>
+
+## 常见问题
+
+### 1. 解绑后设备还能连接AWS IoT吗？
+
+可以。设备的AWS IoT凭证（证书）不会被撤销，设备仍可连接并上报数据。但由于没有所有者，数据不会关联到任何用户账号。
+
+### 2. 解绑后能重新绑定吗？
+
+可以。解绑后设备进入 `unbound` 状态，可以通过激活码重新绑定到任何用户（包括原用户）。
+
+### 3. 解绑网关时子设备会怎样？
+
+所有关联的子设备会自动解绑，状态变为 `unbound`，并清除与网关的关联关系（`parent_id` 和 `thing_name` 设为 NULL）。
+
+### 4. 历史数据会被删除吗？
+
+不会。设备的历史数据（陷阱记录、遥测数据等）会被保留，但不再关联到您的账号。如果重新绑定，历史数据会重新可见。
+
+### 5. 解绑和转移有什么区别？
+
+| 操作 | 所有权 | 历史数据 | 使用场景 |
+|------|--------|---------|---------|
+| **解绑** | 移除所有权 | 保留但不可访问 | 设备出售、损坏、不再使用 |
+| **转移** | 转移给其他用户 | 新用户可访问 | 设备赠送、共享给家人 |
+
+### 6. 如何防止误操作？
+
+接口要求 `confirm=true` 参数，前端应实现二次确认对话框，明确告知用户解绑的后果。
+
+## 相关接口
+
+- [绑定设备](/user-api/endpoint/user-device-bind) - 通过激活码绑定设备
+- [转移设备](/user-api/endpoint/device-transfer) - 将设备转移给其他用户
+- [设备列表](/user-api/endpoint/list-devices) - 查询已绑定的设备

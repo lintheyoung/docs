@@ -168,7 +168,8 @@
             "group": "设备共享与转移",
             "pages": [
               "user-api/endpoint/device-share",
-              "user-api/endpoint/device-transfer"
+              "user-api/endpoint/device-transfer",
+              "user-api/endpoint/user-device-unbind"
             ]
           }
         ]
