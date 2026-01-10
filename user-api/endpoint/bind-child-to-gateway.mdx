@@ -1,0 +1,284 @@
+---
+title: '绑定子设备到网关'
+openapi: 'POST /bind-child-to-gateway'
+---
+
+## 接口说明
+
+将子设备绑定到指定网关,支持从一个网关切换到另一个网关。该接口是多设备统一框架的核心功能,实现了灵活的设备组合管理。
+
+<Note>
+**多设备框架特性**:
+- 工厂独立生产设备,用户自由组合
+- 支持子设备在不同网关间切换
+- 自动验证设备类型兼容性
+- 自动检查网关容量限制
+</Note>
+
+## 核心概念
+
+### 设备绑定架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    云端 (Supabase + AWS IoT)             │
+│                                                          │
+│  ┌──────────────┐           ┌──────────────┐           │
+│  │  WiFi 网关   │           │   4G 网关    │           │
+│  └──────┬───────┘           └──────┬───────┘           │
+│         │ BLE                      │ BLE                │
+│    ┌────┴────┬────────┐      ┌────┴────┬────────┐     │
+│    │         │        │      │         │        │     │
+│  ┌─▼──┐   ┌─▼──┐  ┌─▼──┐  ┌─▼──┐   ┌─▼──┐  ┌─▼──┐  │
+│  │温湿度│  │捕鼠器│ │震动│  │温湿度│  │红外│  │震动│  │
+│  │传感器│  │     │ │传感器│ │传感器│  │传感器│ │传感器│ │
+│  └────┘   └────┘  └────┘  └────┘   └────┘  └────┘  │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 绑定验证机制
+
+1. **类型兼容性检查**: 验证子设备类型是否可以连接到指定网关类型
+2. **网关容量检查**: 验证网关是否已达到最大子设备数量
+3. **自动解绑**: 如果子设备已绑定到其他网关,自动解绑后重新绑定
+
+## 请求参数
+
+<ParamField body="child_device_id" type="string" required>
+  子设备ID (UUID)
+
+  示例: `123e4567-e89b-12d3-a456-426614174000`
+</ParamField>
+
+<ParamField body="gateway_device_id" type="string" required>
+  网关设备ID (UUID)
+
+  示例: `987fcdeb-51a2-43f7-9876-543210fedcba`
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="success" type="boolean">
+  操作是否成功
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  操作结果消息
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  绑定结果数据
+
+  <Expandable title="data 对象属性">
+    <ResponseField name="child_device_id" type="string">
+      子设备ID
+    </ResponseField>
+
+    <ResponseField name="gateway_device_id" type="string">
+      网关设备ID
+    </ResponseField>
+
+    <ResponseField name="bound_at" type="string">
+      绑定时间 (ISO 8601)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `INCOMPATIBLE_TYPES` | 400 | 子设备类型与网关类型不兼容 |
+| `GATEWAY_FULL` | 400 | 网关已达到最大子设备数量 |
+| `DEVICE_NOT_FOUND` | 404 | 设备不存在或无权访问 |
+| `PERMISSION_DENIED` | 403 | 没有权限执行此操作 |
+| `INVALID_REQUEST` | 400 | 请求参数无效 |
+
+<RequestExample>
+```bash cURL
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/bind-child-to-gateway' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "child_device_id": "123e4567-e89b-12d3-a456-426614174000",
+    "gateway_device_id": "987fcdeb-51a2-43f7-9876-543210fedcba"
+  }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/bind-child-to-gateway',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      child_device_id: '123e4567-e89b-12d3-a456-426614174000',
+      gateway_device_id: '987fcdeb-51a2-43f7-9876-543210fedcba'
+    })
+  }
+);
+
+const result = await response.json();
+console.log('绑定结果:', result);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-supabase-project.supabase.co/functions/v1/bind-child-to-gateway',
+    headers={
+        'Authorization': 'Bearer YOUR_JWT_TOKEN',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'child_device_id': '123e4567-e89b-12d3-a456-426614174000',
+        'gateway_device_id': '987fcdeb-51a2-43f7-9876-543210fedcba'
+    }
+)
+
+result = response.json()
+print('绑定结果:', result)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "success": true,
+  "message": "绑定成功",
+  "data": {
+    "child_device_id": "123e4567-e89b-12d3-a456-426614174000",
+    "gateway_device_id": "987fcdeb-51a2-43f7-9876-543210fedcba",
+    "bound_at": "2026-01-10T08:26:03Z"
+  }
+}
+```
+
+```json 错误响应 - 类型不兼容
+{
+  "success": false,
+  "error": "INCOMPATIBLE_TYPES",
+  "message": "子设备类型与网关类型不兼容",
+  "details": {
+    "child_type": "temp_humidity_sensor",
+    "gateway_type": "gateway_wifi",
+    "reason": "No binding relationship exists"
+  }
+}
+```
+
+```json 错误响应 - 网关容量已满
+{
+  "success": false,
+  "error": "GATEWAY_FULL",
+  "message": "网关已达到最大子设备数量",
+  "details": {
+    "gateway_id": "987fcdeb-51a2-43f7-9876-543210fedcba",
+    "current_count": 10,
+    "max_count": 10
+  }
+}
+```
+
+```json 错误响应 - 设备不存在
+{
+  "success": false,
+  "error": "DEVICE_NOT_FOUND",
+  "message": "设备不存在或无权访问"
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 需要有效的用户JWT Token
+- 用户必须拥有子设备和网关的访问权限
+
+### 绑定流程
+
+<Steps>
+  <Step title="1. 验证设备归属">
+    系统验证子设备和网关是否都属于当前用户
+  </Step>
+
+  <Step title="2. 检查类型兼容性">
+    查询 `device_type_bindings` 表,验证子设备类型是否可以连接到网关类型
+  </Step>
+
+  <Step title="3. 检查网关容量">
+    统计网关当前已绑定的子设备数量,验证是否超过限制
+  </Step>
+
+  <Step title="4. 自动解绑旧网关">
+    如果子设备已绑定到其他网关,自动解绑
+  </Step>
+
+  <Step title="5. 绑定到新网关">
+    更新 `devices.gateway_device_id` 字段,建立新的绑定关系
+  </Step>
+
+  <Step title="6. 返回绑定结果">
+    返回绑定成功信息和时间戳
+  </Step>
+</Steps>
+
+### 设备类型兼容性
+
+设备类型兼容性由 `device_type_bindings` 表配置。当前配置:
+
+| 子设备类型 | 支持的网关 | 单个网关最大数量 |
+|-----------|-----------|----------------|
+| 温湿度传感器 | WiFi网关, 4G网关 | 10 |
+| 智能捕鼠器 | WiFi网关, 4G网关 | 20 |
+| 震动传感器 | WiFi网关, 4G网关 | 15 |
+| 红外传感器 | WiFi网关, 4G网关 | 10 |
+
+<Note>
+**动态配置**: 设备类型兼容性由数据库配置,管理员可通过 Admin Portal 修改。上表显示的是当前默认配置。
+</Note>
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="子设备可以同时连接多个网关吗?">
+    不可以。子设备在任何时刻只能绑定到一个网关。如果需要切换网关,调用此接口会自动解绑旧网关并绑定到新网关。
+  </Accordion>
+
+  <Accordion title="如何查看网关支持哪些子设备类型?">
+    使用 `GET /device-type-bindings?gateway_type_id=<uuid>` 接口查询指定网关类型支持的子设备类型列表。
+  </Accordion>
+
+  <Accordion title="网关容量已满怎么办?">
+    可以:
+    1. 解绑不需要的子设备
+    2. 添加新的网关设备
+    3. 联系管理员增加网关容量限制
+  </Accordion>
+
+  <Accordion title="绑定后子设备多久能连接到网关?">
+    绑定操作只是建立逻辑关系,物理连接取决于:
+    - 网关是否在线
+    - 子设备是否在网关的通信范围内(BLE通常为10米)
+    - 子设备是否已完成配对流程
+
+    通常在1-2分钟内完成连接。
+  </Accordion>
+
+  <Accordion title="可以跨租户绑定设备吗?">
+    不可以。子设备和网关必须属于同一个租户(用户)。系统会自动验证设备归属。
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**自动解绑**: 如果子设备已绑定到其他网关,调用此接口会自动解绑旧网关。请确认操作后再提交。
+</Warning>
+
+<Tip>
+**批量绑定**: 如需批量绑定多个子设备,建议使用并发请求以提高效率。
+</Tip>

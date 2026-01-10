@@ -1,0 +1,388 @@
+---
+title: '查询命令状态'
+openapi: 'GET /get-command-status'
+---
+
+## 接口说明
+
+查询命令执行状态,用于追踪命令是否成功送达并执行。该接口配合 `send-device-command` 使用,实现命令的可靠性追踪。
+
+<Note>
+**状态追踪**:
+- 实时查询命令执行状态
+- 包含详细的时间戳信息
+- 显示重试次数
+- 支持失败原因分析
+</Note>
+
+## 请求参数
+
+<ParamField query="command_id" type="string" required>
+  命令ID (UUID)
+
+  从 `send-device-command` 接口返回的 `command_id`
+
+  示例: `abc12345-def6-7890-ghij-klmnopqrstuv`
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="success" type="boolean">
+  操作是否成功
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  命令状态详情
+
+  <Expandable title="data 对象属性">
+    <ResponseField name="command_id" type="string">
+      命令ID
+    </ResponseField>
+
+    <ResponseField name="device_id" type="string">
+      设备ID
+    </ResponseField>
+
+    <ResponseField name="command_type" type="string">
+      命令类型
+    </ResponseField>
+
+    <ResponseField name="command_payload" type="object">
+      命令负载内容
+    </ResponseField>
+
+    <ResponseField name="sequence_number" type="number">
+      命令序列号
+    </ResponseField>
+
+    <ResponseField name="status" type="string">
+      命令状态: `pending` | `sent` | `acked` | `executed` | `failed` | `expired`
+    </ResponseField>
+
+    <ResponseField name="created_at" type="string">
+      命令创建时间 (ISO 8601)
+    </ResponseField>
+
+    <ResponseField name="sent_at" type="string">
+      命令发送时间 (ISO 8601),状态为 `pending` 时为 `null`
+    </ResponseField>
+
+    <ResponseField name="executed_at" type="string">
+      命令执行时间 (ISO 8601),未执行时为 `null`
+    </ResponseField>
+
+    <ResponseField name="retry_count" type="number">
+      重试次数,最多3次
+    </ResponseField>
+
+    <ResponseField name="error_message" type="string">
+      错误信息,仅在状态为 `failed` 时存在
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `COMMAND_NOT_FOUND` | 404 | 命令不存在 |
+| `PERMISSION_DENIED` | 403 | 没有权限查询此命令 |
+| `INVALID_REQUEST` | 400 | 请求参数无效 |
+
+<RequestExample>
+```bash cURL
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/get-command-status?command_id=abc12345-def6-7890-ghij-klmnopqrstuv' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```javascript Node.js - 轮询命令状态
+async function waitForCommandExecution(commandId: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const checkInterval = setInterval(async () => {
+      const response = await fetch(
+        `https://your-supabase-project.supabase.co/functions/v1/get-command-status?command_id=${commandId}`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      );
+
+      const result = await response.json();
+      const status = result.data.status;
+
+      console.log(`命令状态: ${status}`);
+
+      if (status === 'executed') {
+        clearInterval(checkInterval);
+        resolve();
+      } else if (status === 'failed' || status === 'expired') {
+        clearInterval(checkInterval);
+        reject(new Error(`Command ${status}`));
+      }
+    }, 2000); // 每2秒检查一次
+
+    // 30秒超时
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      reject(new Error('Timeout'));
+    }, 30000);
+  });
+}
+
+// 使用示例
+try {
+  await waitForCommandExecution('abc12345-def6-7890-ghij-klmnopqrstuv');
+  console.log('命令执行成功');
+} catch (error) {
+  console.error('命令执行失败:', error);
+}
+```
+
+```python Python - 轮询命令状态
+import requests
+import time
+
+def wait_for_command_execution(command_id: str, token: str, timeout: int = 30):
+    """
+    轮询命令状态直到执行完成或超时
+
+    Args:
+        command_id: 命令ID
+        token: JWT Token
+        timeout: 超时时间(秒)
+
+    Returns:
+        命令执行结果
+
+    Raises:
+        Exception: 命令执行失败或超时
+    """
+    start_time = time.time()
+
+    while time.time() - start_time < timeout:
+        response = requests.get(
+            f'https://your-supabase-project.supabase.co/functions/v1/get-command-status',
+            params={'command_id': command_id},
+            headers={'Authorization': f'Bearer {token}'}
+        )
+
+        result = response.json()
+        status = result['data']['status']
+
+        print(f'命令状态: {status}')
+
+        if status == 'executed':
+            return result['data']
+        elif status in ['failed', 'expired']:
+            raise Exception(f'Command {status}')
+
+        time.sleep(2)
+
+    raise Exception('Timeout')
+
+# 使用示例
+try:
+    result = wait_for_command_execution('abc12345-def6-7890-ghij-klmnopqrstuv', token)
+    print('命令执行成功:', result)
+except Exception as e:
+    print('命令执行失败:', e)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 命令已执行
+{
+  "success": true,
+  "data": {
+    "command_id": "abc12345-def6-7890-ghij-klmnopqrstuv",
+    "device_id": "123e4567-e89b-12d3-a456-426614174000",
+    "command_type": "update_desired",
+    "command_payload": {
+      "armed": true,
+      "sensitivity": "high"
+    },
+    "sequence_number": 42,
+    "status": "executed",
+    "created_at": "2026-01-10T08:26:03Z",
+    "sent_at": "2026-01-10T08:26:04Z",
+    "executed_at": "2026-01-10T08:26:08Z",
+    "retry_count": 0
+  }
+}
+```
+
+```json 成功响应 - 命令等待发送
+{
+  "success": true,
+  "data": {
+    "command_id": "abc12345-def6-7890-ghij-klmnopqrstuv",
+    "device_id": "123e4567-e89b-12d3-a456-426614174000",
+    "command_type": "update_desired",
+    "command_payload": {
+      "armed": true,
+      "sensitivity": "high"
+    },
+    "sequence_number": 42,
+    "status": "pending",
+    "created_at": "2026-01-10T08:26:03Z",
+    "sent_at": null,
+    "executed_at": null,
+    "retry_count": 0
+  }
+}
+```
+
+```json 成功响应 - 命令执行失败
+{
+  "success": true,
+  "data": {
+    "command_id": "abc12345-def6-7890-ghij-klmnopqrstuv",
+    "device_id": "123e4567-e89b-12d3-a456-426614174000",
+    "command_type": "update_desired",
+    "command_payload": {
+      "armed": true,
+      "sensitivity": "high"
+    },
+    "sequence_number": 42,
+    "status": "failed",
+    "created_at": "2026-01-10T08:26:03Z",
+    "sent_at": "2026-01-10T08:26:04Z",
+    "executed_at": null,
+    "retry_count": 3,
+    "error_message": "Device did not respond after 3 retries"
+  }
+}
+```
+
+```json 错误响应 - 命令不存在
+{
+  "success": false,
+  "error": "COMMAND_NOT_FOUND",
+  "message": "命令不存在"
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 需要有效的用户JWT Token
+- 用户必须拥有命令关联设备的访问权限
+
+### 命令状态说明
+
+| 状态 | 说明 | 下一步操作 |
+|-----|------|----------|
+| `pending` | 等待发送到 AWS IoT | 继续轮询 |
+| `sent` | 已发送到 AWS IoT Shadow | 继续轮询 |
+| `acked` | 网关已确认收到 (可选) | 继续轮询 |
+| `executed` | 设备已执行完成 | 停止轮询,显示成功 |
+| `failed` | 执行失败(重试3次后) | 停止轮询,显示失败,建议重试 |
+| `expired` | 命令已过期(5分钟超时) | 停止轮询,显示超时,建议重新发送 |
+
+<Note>
+**acked 状态**: `acked` 状态是可选的,取决于网关固件是否实现了确认机制。大多数情况下,命令状态会直接从 `sent` 跳转到 `executed`。
+</Note>
+
+### 轮询最佳实践
+
+<Steps>
+  <Step title="1. 设置轮询间隔">
+    建议每2秒查询一次,避免过于频繁的请求
+  </Step>
+
+  <Step title="2. 设置超时时间">
+    建议设置30秒客户端超时,避免无限等待
+  </Step>
+
+  <Step title="3. 处理终止状态">
+    当状态为 `executed`、`failed` 或 `expired` 时停止轮询
+  </Step>
+
+  <Step title="4. 显示进度">
+    在UI中显示当前状态,提升用户体验
+  </Step>
+</Steps>
+
+### 时间线分析
+
+通过时间戳可以分析命令执行的各个阶段耗时:
+
+```typescript
+const result = await getCommandStatus(commandId);
+
+// 计算各阶段耗时
+const createdTime = new Date(result.data.created_at);
+const sentTime = result.data.sent_at ? new Date(result.data.sent_at) : null;
+const executedTime = result.data.executed_at ? new Date(result.data.executed_at) : null;
+
+if (sentTime && executedTime) {
+  const sendDelay = sentTime.getTime() - createdTime.getTime();
+  const executeDelay = executedTime.getTime() - sentTime.getTime();
+  const totalDelay = executedTime.getTime() - createdTime.getTime();
+
+  console.log(`发送延迟: ${sendDelay}ms`);
+  console.log(`执行延迟: ${executeDelay}ms`);
+  console.log(`总延迟: ${totalDelay}ms`);
+}
+```
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="命令一直处于 pending 状态怎么办?">
+    可能原因:
+    - 设备离线,无法接收命令
+    - 网络问题,命令无法发送到 AWS IoT
+    - 系统繁忙,命令在队列中等待
+
+    建议:
+    - 检查设备在线状态
+    - 等待30秒后重新发送命令
+    - 联系技术支持
+  </Accordion>
+
+  <Accordion title="命令状态为 failed 是什么原因?">
+    常见原因:
+    - 设备在执行过程中离线
+    - 设备固件错误
+    - 命令参数不支持
+    - 网络不稳定
+
+    系统会自动重试3次,如果仍然失败,建议:
+    - 检查设备状态
+    - 验证命令参数
+    - 重新发送命令
+  </Accordion>
+
+  <Accordion title="为什么命令会过期?">
+    命令创建后5分钟自动过期,原因:
+    - 避免长时间积压的命令突然执行
+    - 确保命令的时效性
+    - 防止设备状态不一致
+
+    如果命令过期,需要重新发送。
+  </Accordion>
+
+  <Accordion title="可以查询历史命令吗?">
+    可以。此接口可以查询任何时间的命令状态,包括已完成、失败或过期的命令。
+
+    建议保存 `command_id` 用于后续查询和审计。
+  </Accordion>
+
+  <Accordion title="轮询会影响性能吗?">
+    适度的轮询(每2秒一次)不会影响性能。建议:
+    - 设置合理的轮询间隔(2-5秒)
+    - 设置超时时间(30秒)
+    - 在终止状态时停止轮询
+    - 避免同时轮询大量命令
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**轮询频率**: 不要过于频繁地轮询(如每秒多次),可能导致API限流。建议每2秒查询一次。
+</Warning>
+
+<Tip>
+**使用 WebSocket**: 未来版本将支持 WebSocket 实时推送命令状态,无需轮询。
+</Tip>

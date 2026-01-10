@@ -1,0 +1,368 @@
+---
+title: '获取设备类型绑定关系'
+openapi: 'GET /device-type-bindings'
+---
+
+## 接口说明
+
+获取指定网关类型可以绑定的子设备类型列表,包括兼容性配置和容量限制。该接口用于设备绑定界面,确保只显示兼容的子设备类型。
+
+<Note>
+**兼容性管理**:
+- 动态配置网关与子设备的兼容关系
+- 每种子设备类型有独立的容量限制
+- 支持灵活的设备组合
+- 管理员可通过 Admin Portal 配置
+</Note>
+
+## 请求参数
+
+<ParamField query="gateway_type_id" type="string" required>
+  网关类型ID (UUID)
+
+  示例: `gateway-uuid-1`
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="success" type="boolean">
+  操作是否成功
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  绑定关系数据
+
+  <Expandable title="data 对象属性">
+    <ResponseField name="gateway_type_id" type="string">
+      网关类型ID
+    </ResponseField>
+
+    <ResponseField name="gateway_type_name" type="string">
+      网关类型名称
+
+      示例: `gateway_wifi`, `gateway_4g`
+    </ResponseField>
+
+    <ResponseField name="compatible_child_types" type="array">
+      兼容的子设备类型列表
+
+      <Expandable title="子设备类型对象">
+        <ResponseField name="child_type_id" type="string">
+          子设备类型ID
+        </ResponseField>
+
+        <ResponseField name="child_type_name" type="string">
+          子设备类型名称
+
+          示例: `temp_humidity_sensor`, `smart_trap`
+        </ResponseField>
+
+        <ResponseField name="display_name" type="string">
+          子设备类型显示名称
+
+          示例: `温湿度传感器`, `智能捕鼠器`
+        </ResponseField>
+
+        <ResponseField name="max_count" type="number">
+          该类型子设备的最大数量限制
+
+          示例: 10 表示最多可绑定10个该类型的子设备
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="total_count" type="number">
+      兼容的子设备类型总数
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `GATEWAY_TYPE_NOT_FOUND` | 404 | 网关类型不存在 |
+| `INVALID_REQUEST` | 400 | 请求参数无效 |
+| `PERMISSION_DENIED` | 403 | 没有权限访问 |
+
+<RequestExample>
+```bash cURL
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/device-type-bindings?gateway_type_id=gateway-uuid-1' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```javascript Node.js - 设备绑定界面
+async function getCompatibleChildTypes(gatewayTypeId: string) {
+  const response = await fetch(
+    `https://your-supabase-project.supabase.co/functions/v1/device-type-bindings?gateway_type_id=${gatewayTypeId}`,
+    {
+      headers: { 'Authorization': `Bearer ${token}` }
+    }
+  );
+
+  const result = await response.json();
+  return result.data.compatible_child_types;
+}
+
+// 使用示例 - 在绑定界面显示兼容的子设备
+function DeviceBindingPage({ gateway }) {
+  const [compatibleTypes, setCompatibleTypes] = useState([]);
+
+  useEffect(() => {
+    if (gateway?.device_type_id) {
+      getCompatibleChildTypes(gateway.device_type_id)
+        .then(setCompatibleTypes);
+    }
+  }, [gateway]);
+
+  return (
+    <div>
+      <h2>绑定子设备到 {gateway.name}</h2>
+      <p>支持的子设备类型:</p>
+      <ul>
+        {compatibleTypes.map(type => (
+          <li key={type.child_type_id}>
+            {type.display_name} (最多 {type.max_count} 个)
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+```
+
+```python Python - 验证设备兼容性
+import requests
+
+def check_device_compatibility(gateway_type_id: str, child_type_id: str, token: str) -> bool:
+    """
+    检查子设备类型是否与网关类型兼容
+
+    Args:
+        gateway_type_id: 网关类型ID
+        child_type_id: 子设备类型ID
+        token: JWT Token
+
+    Returns:
+        是否兼容
+    """
+    response = requests.get(
+        'https://your-supabase-project.supabase.co/functions/v1/device-type-bindings',
+        params={'gateway_type_id': gateway_type_id},
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    result = response.json()
+    compatible_types = result['data']['compatible_child_types']
+
+    # 检查子设备类型是否在兼容列表中
+    return any(t['child_type_id'] == child_type_id for t in compatible_types)
+
+# 使用示例
+is_compatible = check_device_compatibility(
+    gateway_type_id='gateway-uuid-1',
+    child_type_id='type-uuid-1',
+    token=token
+)
+
+if is_compatible:
+    print('设备类型兼容,可以绑定')
+else:
+    print('设备类型不兼容,无法绑定')
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "success": true,
+  "data": {
+    "gateway_type_id": "gateway-uuid-1",
+    "gateway_type_name": "gateway_wifi",
+    "compatible_child_types": [
+      {
+        "child_type_id": "type-uuid-1",
+        "child_type_name": "temp_humidity_sensor",
+        "display_name": "温湿度传感器",
+        "max_count": 10
+      },
+      {
+        "child_type_id": "type-uuid-2",
+        "child_type_name": "smart_trap",
+        "display_name": "智能捕鼠器",
+        "max_count": 20
+      },
+      {
+        "child_type_id": "type-uuid-3",
+        "child_type_name": "vibration_sensor",
+        "display_name": "震动传感器",
+        "max_count": 15
+      }
+    ],
+    "total_count": 3
+  }
+}
+```
+
+```json 错误响应 - 网关类型不存在
+{
+  "success": false,
+  "error": "GATEWAY_TYPE_NOT_FOUND",
+  "message": "网关类型不存在"
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 需要有效的用户JWT Token
+- 普通用户权限即可
+
+### 兼容性配置
+
+不同网关类型支持不同的子设备类型:
+
+| 网关类型 | 支持的子设备类型 | 说明 |
+|---------|----------------|------|
+| `gateway_wifi` | 温湿度传感器、智能捕鼠器、震动传感器 | WiFi 网关,适合室内使用 |
+| `gateway_4g` | 温湿度传感器、智能捕鼠器、红外传感器 | 4G 网关,适合户外使用 |
+
+### 容量限制说明
+
+每种子设备类型有独立的容量限制:
+- `max_count`: 该类型子设备的最大数量
+- 不同类型的子设备数量独立计算
+- 总数量受网关硬件性能限制
+
+**示例**:
+```
+WiFi 网关:
+- 温湿度传感器: 最多 10 个
+- 智能捕鼠器: 最多 20 个
+- 震动传感器: 最多 15 个
+总计: 最多 45 个子设备
+```
+
+### 使用场景
+
+<Steps>
+  <Step title="1. 设备绑定界面">
+    显示当前网关支持的子设备类型,只允许绑定兼容的设备
+  </Step>
+
+  <Step title="2. 设备选择器">
+    根据网关类型动态生成子设备选择列表
+  </Step>
+
+  <Step title="3. 容量检查">
+    在绑定前检查是否超过容量限制
+  </Step>
+
+  <Step title="4. 设备推荐">
+    根据网关类型推荐合适的子设备
+  </Step>
+</Steps>
+
+### 完整绑定流程示例
+
+```typescript
+// 完整的设备绑定流程
+async function bindDeviceWithValidation(
+  childDeviceId: string,
+  gatewayDeviceId: string,
+  gatewayTypeId: string,
+  childTypeId: string
+) {
+  // 1. 获取兼容的子设备类型
+  const bindingsResponse = await fetch(
+    `/functions/v1/device-type-bindings?gateway_type_id=${gatewayTypeId}`,
+    { headers: { 'Authorization': `Bearer ${token}` } }
+  );
+  const bindings = await bindingsResponse.json();
+
+  // 2. 检查类型兼容性
+  const compatibleType = bindings.data.compatible_child_types.find(
+    t => t.child_type_id === childTypeId
+  );
+
+  if (!compatibleType) {
+    throw new Error('设备类型不兼容');
+  }
+
+  // 3. 检查容量限制
+  const currentCount = await getCurrentChildCount(gatewayDeviceId, childTypeId);
+  if (currentCount >= compatibleType.max_count) {
+    throw new Error(`该类型设备已达到最大数量 (${compatibleType.max_count})`);
+  }
+
+  // 4. 执行绑定
+  const bindResponse = await fetch('/functions/v1/bind-child-to-gateway', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      child_device_id: childDeviceId,
+      gateway_device_id: gatewayDeviceId
+    })
+  });
+
+  return await bindResponse.json();
+}
+```
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="为什么有些子设备类型不能绑定到我的网关?">
+    设备类型兼容性由管理员配置,取决于:
+    - 网关硬件能力
+    - 通信协议支持
+    - 业务需求
+
+    如需绑定不兼容的设备类型,请联系管理员。
+  </Accordion>
+
+  <Accordion title="容量限制可以调整吗?">
+    容量限制由管理员通过 Admin Portal 配置。如果需要增加容量限制,请联系管理员。
+
+    注意:容量限制受网关硬件性能限制,不建议超过推荐值。
+  </Accordion>
+
+  <Accordion title="不同类型的子设备数量是独立计算的吗?">
+    是的。每种子设备类型有独立的容量限制。例如:
+    - 温湿度传感器: 最多 10 个
+    - 智能捕鼠器: 最多 20 个
+
+    可以同时绑定 10 个温湿度传感器和 20 个智能捕鼠器。
+  </Accordion>
+
+  <Accordion title="如何知道网关还能绑定多少个子设备?">
+    需要:
+    1. 调用此接口获取容量限制
+    2. 查询网关当前已绑定的子设备数量
+    3. 计算剩余容量
+
+    建议在绑定界面实时显示剩余容量。
+  </Accordion>
+
+  <Accordion title="兼容性配置会更新吗?">
+    会的。管理员可能会:
+    - 添加新的子设备类型支持
+    - 调整容量限制
+    - 移除不再支持的设备类型
+
+    建议定期刷新兼容性配置,或在绑定前重新查询。
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**容量限制**: 超过容量限制会导致绑定失败。建议在绑定前检查剩余容量。
+</Warning>
+
+<Tip>
+**动态UI**: 根据此接口返回的数据动态生成设备选择界面,确保用户只能选择兼容的设备类型。
+</Tip>

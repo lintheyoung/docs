@@ -1,0 +1,203 @@
+---
+title: '解绑子设备'
+openapi: 'POST /unbind-child-from-gateway'
+---
+
+## 接口说明
+
+将子设备从当前网关解绑,解除设备间的绑定关系。解绑后子设备将无法通过网关连接云端,直到重新绑定到新的网关。
+
+<Note>
+**解绑特性**:
+- 仅解除绑定关系,不删除设备
+- 解绑后子设备仍属于当前用户
+- 可以重新绑定到其他网关
+- 不影响设备的历史数据
+</Note>
+
+## 请求参数
+
+<ParamField body="child_device_id" type="string" required>
+  子设备ID (UUID)
+
+  示例: `123e4567-e89b-12d3-a456-426614174000`
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="success" type="boolean">
+  操作是否成功
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  操作结果消息
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  解绑结果数据
+
+  <Expandable title="data 对象属性">
+    <ResponseField name="child_device_id" type="string">
+      子设备ID
+    </ResponseField>
+
+    <ResponseField name="unbound_at" type="string">
+      解绑时间 (ISO 8601)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `DEVICE_NOT_FOUND` | 404 | 设备不存在或无权访问 |
+| `PERMISSION_DENIED` | 403 | 没有权限执行此操作 |
+| `INVALID_REQUEST` | 400 | 请求参数无效 |
+| `NOT_BOUND` | 400 | 设备未绑定到任何网关 |
+
+<RequestExample>
+```bash cURL
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/unbind-child-from-gateway' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "child_device_id": "123e4567-e89b-12d3-a456-426614174000"
+  }'
+```
+
+```javascript Node.js
+const response = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/unbind-child-from-gateway',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      child_device_id: '123e4567-e89b-12d3-a456-426614174000'
+    })
+  }
+);
+
+const result = await response.json();
+console.log('解绑结果:', result);
+```
+
+```python Python
+import requests
+
+response = requests.post(
+    'https://your-supabase-project.supabase.co/functions/v1/unbind-child-from-gateway',
+    headers={
+        'Authorization': 'Bearer YOUR_JWT_TOKEN',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'child_device_id': '123e4567-e89b-12d3-a456-426614174000'
+    }
+)
+
+result = response.json()
+print('解绑结果:', result)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "success": true,
+  "message": "解绑成功",
+  "data": {
+    "child_device_id": "123e4567-e89b-12d3-a456-426614174000",
+    "unbound_at": "2026-01-10T08:26:03Z"
+  }
+}
+```
+
+```json 错误响应 - 设备不存在
+{
+  "success": false,
+  "error": "DEVICE_NOT_FOUND",
+  "message": "设备不存在或无权访问"
+}
+```
+
+```json 错误响应 - 设备未绑定
+{
+  "success": false,
+  "error": "NOT_BOUND",
+  "message": "设备未绑定到任何网关"
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 需要有效的用户JWT Token
+- 用户必须拥有子设备的访问权限
+
+### 解绑流程
+
+<Steps>
+  <Step title="1. 验证设备归属">
+    系统验证子设备是否属于当前用户
+  </Step>
+
+  <Step title="2. 检查绑定状态">
+    验证子设备是否已绑定到网关
+  </Step>
+
+  <Step title="3. 解除绑定关系">
+    将 `devices.gateway_device_id` 字段设置为 `null`
+  </Step>
+
+  <Step title="4. 返回解绑结果">
+    返回解绑成功信息和时间戳
+  </Step>
+</Steps>
+
+### 解绑影响
+
+解绑子设备后:
+- ✅ 子设备仍属于当前用户
+- ✅ 历史数据保留
+- ✅ 可以重新绑定到其他网关
+- ❌ 无法通过网关连接云端
+- ❌ 无法接收和执行命令
+- ❌ 无法上报新的数据
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="解绑后子设备还属于我吗?">
+    是的。解绑只是解除子设备与网关的绑定关系,不影响设备所有权。子设备仍然属于您,可以重新绑定到其他网关。
+  </Accordion>
+
+  <Accordion title="解绑后历史数据会丢失吗?">
+    不会。解绑不会删除任何历史数据,所有遥测数据和事件记录都会保留。
+  </Accordion>
+
+  <Accordion title="解绑后可以立即重新绑定吗?">
+    可以。解绑后可以立即调用 `bind-child-to-gateway` 接口将子设备绑定到新的网关。
+  </Accordion>
+
+  <Accordion title="解绑网关设备会怎样?">
+    此接口仅用于解绑子设备。如果需要解绑网关设备,请使用设备转移或删除接口。
+  </Accordion>
+
+  <Accordion title="解绑后子设备会自动离线吗?">
+    是的。解绑后子设备将无法通过网关连接云端,状态会变为离线。重新绑定到新网关后会自动恢复连接。
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**数据上报中断**: 解绑后子设备将无法上报数据,直到重新绑定到网关。
+</Warning>
+
+<Tip>
+**切换网关**: 如果只是想将子设备切换到另一个网关,可以直接调用 `bind-child-to-gateway` 接口,系统会自动解绑旧网关。
+</Tip>

@@ -1,0 +1,414 @@
+---
+title: '发送设备命令'
+openapi: 'POST /send-device-command'
+---
+
+## 接口说明
+
+向设备发送控制命令,支持命令队列、状态追踪和自动重试机制。该接口是多设备框架的核心功能,确保命令可靠送达并执行。
+
+<Note>
+**命令可靠性保障**:
+- 命令队列 + 序列号机制防止旧命令覆盖新命令
+- 自动重试最多3次
+- 状态追踪(pending → sent → executed)
+- 5分钟超时保护
+</Note>
+
+## 核心概念
+
+### 命令执行流程
+
+```
+前端应用
+    │ 1. 发送命令
+    ▼
+Edge Function
+    │ 2. 创建命令记录
+    │ 3. 生成序列号
+    ▼
+AWS IoT Shadow
+    │ 4. 更新 desired 状态
+    ▼
+网关设备
+    │ 5. 接收 delta 消息
+    │ 6. 检查序列号
+    │ 7. 转发给子设备
+    ▼
+子设备
+    │ 8. 执行命令
+    │ 9. 更新 reported 状态
+    ▼
+Projector Lambda
+    │ 10. 检测 _cmd_id
+    │ 11. 更新命令状态为 executed
+    ▼
+前端应用
+    │ 12. 轮询命令状态
+    │ 13. 显示执行结果
+```
+
+### 命令状态
+
+| 状态 | 说明 |
+|-----|------|
+| `pending` | 等待发送到 AWS IoT |
+| `sent` | 已发送到 AWS IoT Shadow |
+| `acked` | 网关已确认收到 |
+| `executed` | 设备已执行完成 |
+| `failed` | 执行失败(重试3次后) |
+| `expired` | 命令已过期(5分钟超时) |
+
+## 请求参数
+
+<ParamField body="device_id" type="string" required>
+  设备ID (UUID)
+
+  可以是网关设备或子设备的ID
+
+  示例: `123e4567-e89b-12d3-a456-426614174000`
+</ParamField>
+
+<ParamField body="command_type" type="string" required>
+  命令类型
+
+  目前支持: `update_desired`
+
+  示例: `update_desired`
+</ParamField>
+
+<ParamField body="command_payload" type="object" required>
+  命令负载,具体字段取决于设备类型
+
+  **智能捕鼠器示例**:
+  ```json
+  {
+    "armed": true,
+    "sensitivity": "high"
+  }
+  ```
+
+  **温湿度传感器示例**:
+  ```json
+  {
+    "report_interval": 60
+  }
+  ```
+
+  建议使用生成的 TypeScript SDK 确保类型安全
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="success" type="boolean">
+  操作是否成功
+</ResponseField>
+
+<ResponseField name="message" type="string">
+  操作结果消息
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  命令创建结果
+
+  <Expandable title="data 对象属性">
+    <ResponseField name="command_id" type="string">
+      命令ID (UUID),用于追踪命令状态
+    </ResponseField>
+
+    <ResponseField name="device_id" type="string">
+      设备ID
+    </ResponseField>
+
+    <ResponseField name="sequence_number" type="number">
+      命令序列号,用于防止旧命令覆盖新命令
+    </ResponseField>
+
+    <ResponseField name="status" type="string">
+      命令状态,创建时为 `pending`
+    </ResponseField>
+
+    <ResponseField name="created_at" type="string">
+      命令创建时间 (ISO 8601)
+    </ResponseField>
+
+    <ResponseField name="expires_at" type="string">
+      命令过期时间 (ISO 8601),默认5分钟后过期
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `DEVICE_NOT_FOUND` | 404 | 设备不存在或无权访问 |
+| `PERMISSION_DENIED` | 403 | 没有权限控制此设备 |
+| `INVALID_REQUEST` | 400 | 请求参数无效 |
+
+<Note>
+**命令负载验证**: 当前版本不在后端验证命令负载格式,依赖前端使用 TypeScript SDK 进行编译时类型检查。设备端会在接收命令时进行验证。
+</Note>
+
+<Note>
+**设备离线处理**: 命令会被创建并进入队列,无论设备是否在线。设备恢复在线后会自动接���命令(如果未过期)。
+</Note>
+
+<RequestExample>
+```bash cURL - 智能捕鼠器布防
+curl -X POST \
+  'https://your-supabase-project.supabase.co/functions/v1/send-device-command' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_id": "123e4567-e89b-12d3-a456-426614174000",
+    "command_type": "update_desired",
+    "command_payload": {
+      "armed": true,
+      "sensitivity": "high"
+    }
+  }'
+```
+
+```javascript Node.js - 类型安全的命令发送
+import { SmartTrapDesired } from './device-types.generated';
+
+// 类型安全的命令构造
+const command: SmartTrapDesired = {
+  armed: true,
+  sensitivity: 'high'  // 自动补全: 'low' | 'medium' | 'high'
+};
+
+const response = await fetch(
+  'https://your-supabase-project.supabase.co/functions/v1/send-device-command',
+  {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer YOUR_JWT_TOKEN',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      device_id: '123e4567-e89b-12d3-a456-426614174000',
+      command_type: 'update_desired',
+      command_payload: command
+    })
+  }
+);
+
+const result = await response.json();
+console.log('命令ID:', result.data.command_id);
+```
+
+```python Python - 发送命令并追踪状态
+import requests
+import time
+
+# 发送命令
+response = requests.post(
+    'https://your-supabase-project.supabase.co/functions/v1/send-device-command',
+    headers={
+        'Authorization': 'Bearer YOUR_JWT_TOKEN',
+        'Content-Type': 'application/json'
+    },
+    json={
+        'device_id': '123e4567-e89b-12d3-a456-426614174000',
+        'command_type': 'update_desired',
+        'command_payload': {
+            'armed': True,
+            'sensitivity': 'high'
+        }
+    }
+)
+
+result = response.json()
+command_id = result['data']['command_id']
+print(f'命令已创建: {command_id}')
+
+# 轮询命令状态
+for i in range(15):  # 最多等待30秒
+    status_response = requests.get(
+        f'https://your-supabase-project.supabase.co/functions/v1/get-command-status?command_id={command_id}',
+        headers={'Authorization': 'Bearer YOUR_JWT_TOKEN'}
+    )
+
+    status_result = status_response.json()
+    status = status_result['data']['status']
+    print(f'命令状态: {status}')
+
+    if status in ['executed', 'failed', 'expired']:
+        break
+
+    time.sleep(2)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "success": true,
+  "message": "命令已创建",
+  "data": {
+    "command_id": "abc12345-def6-7890-ghij-klmnopqrstuv",
+    "device_id": "123e4567-e89b-12d3-a456-426614174000",
+    "sequence_number": 42,
+    "status": "pending",
+    "created_at": "2026-01-10T08:26:03Z",
+    "expires_at": "2026-01-10T08:31:03Z"
+  }
+}
+```
+
+```json 错误响应 - 设备不存在
+{
+  "success": false,
+  "error": "DEVICE_NOT_FOUND",
+  "message": "设备不存在或无权访问"
+}
+```
+
+```json 错误响应 - 无权限
+{
+  "success": false,
+  "error": "PERMISSION_DENIED",
+  "message": "您没有权限控制此设备"
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 需要有效的用户JWT Token
+- 用户必须拥有设备的控制权限
+
+### 命令可靠性机制
+
+#### 1. 序列号机制
+每个命令都有唯一的序列号,网关会检查序列号:
+- 只执行序列号大于当前值的命令
+- 忽略序列号小于等于当前值的旧命令
+- 防止网络延迟导致的命令乱序
+
+#### 2. 自动重试
+命令发送失败会自动重试:
+- 最多重试3次
+- 重试间隔由网关固件决定
+- 重试次数记录在 `retry_count` 字段
+
+#### 3. 超时保护
+命令创建后5分钟自动过期:
+- 过期命令不会被执行
+- 状态自动变为 `expired`
+- 避免长时间积压的命令突然执行
+
+### 命令追踪最佳实践
+
+<Steps>
+  <Step title="1. 发送命令">
+    调用此接口发送命令,获取 `command_id`
+  </Step>
+
+  <Step title="2. 轮询状态">
+    使用 `GET /get-command-status` 接口每2秒查询一次命令状态
+  </Step>
+
+  <Step title="3. 处理结果">
+    根据最终状态显示结果:
+    - `executed`: 显示成功提示
+    - `failed`: 显示失败提示,建议重试
+    - `expired`: 显示超时提示,建议重新发送
+  </Step>
+
+  <Step title="4. 设置超时">
+    建议设置30秒客户端超时,避免无限等待
+  </Step>
+</Steps>
+
+### 类型安全开发
+
+使用生成的 TypeScript SDK 确保命令类型安全:
+
+```typescript
+import { DeviceTypeMap } from './device-types.generated';
+
+// 类型安全的命令发送函数
+async function sendCommand<T extends keyof DeviceTypeMap>(
+  deviceId: string,
+  deviceType: T,
+  command: DeviceTypeMap[T]['desired']
+) {
+  const response = await fetch('/functions/v1/send-device-command', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      device_id: deviceId,
+      command_type: 'update_desired',
+      command_payload: command
+    })
+  });
+
+  return await response.json();
+}
+
+// 使用示例 - 编译时类型检查
+await sendCommand('device-id', 'smart_trap', {
+  armed: true,
+  sensitivity: 'high'  // 自动补全和类型检查
+});
+```
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="命令发送后多久会执行?">
+    通常在2-5秒内执行,取决于:
+    - 网关是否在线
+    - 网络延迟
+    - 子设备是否在网关通信范围内
+
+    命令会在5分钟后自动过期。
+  </Accordion>
+
+  <Accordion title="如何知道命令是否执行成功?">
+    使用 `GET /get-command-status` 接口轮询命令状态:
+    - `executed`: 执行成功
+    - `failed`: 执行失败
+    - `expired`: 命令超时
+
+    建议每2秒查询一次,最多等待30秒。
+  </Accordion>
+
+  <Accordion title="命令失败后会自动重试吗?">
+    是的。命令失败会自动重试最多3次。如果3次重试后仍然失败,状态会变为 `failed`,需要手动重新发送命令。
+  </Accordion>
+
+  <Accordion title="可以同时发送多个命令吗?">
+    可以,但不建议。命令会按序列号顺序执行,同时发送多个命令可能导致:
+    - 命令队列积压
+    - 执行顺序不确定
+    - 部分命令被忽略
+
+    建议等待前一个命令执行完成后再发送下一个。
+  </Accordion>
+
+  <Accordion title="设备离线时发送命令会怎样?">
+    命令会创建成功并进入队列,但无法发送到设备。当设备恢复在线时:
+    - 如果命令未过期,会自动发送
+    - 如果命令已过期,状态变为 `expired`,需要重新发送
+  </Accordion>
+
+  <Accordion title="如何取消已发送的命令?">
+    目前不支持取消命令。如果需要撤销命令效果,可以发送新的命令覆盖之前的设置。
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**命令顺序**: 命令按序列号顺序执行,旧命令会被自动忽略。如果需要确保命令执行,请等待前一个命令完成后再发送新命令。
+</Warning>
+
+<Tip>
+**使用 TypeScript SDK**: 强烈建议使用生成的 TypeScript SDK 构造命令,可以获得编译时类型检查和自动补全,避免运行时错误。
+</Tip>

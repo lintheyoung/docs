@@ -1,0 +1,352 @@
+---
+title: '查询设备待处理命令'
+openapi: 'GET /get-pending-commands'
+---
+
+## 接口说明
+
+查询设备的所有待处理命令,包括等待发送、已发送但未执行的命令。该接口用于监控设备命令队列状态,排查命令积压问题。
+
+<Note>
+**命令队列监控**:
+- 查看设备所有待处理命令
+- 按序列号排序
+- 包含重试次数和过期时间
+- 用于排查命令积压问题
+</Note>
+
+## 请求参数
+
+<ParamField query="device_id" type="string" required>
+  设备ID (UUID)
+
+  示例: `123e4567-e89b-12d3-a456-426614174000`
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="success" type="boolean">
+  操作是否成功
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  待处理命令列表
+
+  <Expandable title="data 对象属性">
+    <ResponseField name="device_id" type="string">
+      设备ID
+    </ResponseField>
+
+    <ResponseField name="pending_commands" type="array">
+      待处理命令数组,按序列号升序排列
+
+      <Expandable title="命令对象属性">
+        <ResponseField name="command_id" type="string">
+          命令ID
+        </ResponseField>
+
+        <ResponseField name="command_type" type="string">
+          命令类型
+        </ResponseField>
+
+        <ResponseField name="sequence_number" type="number">
+          命令序列号
+        </ResponseField>
+
+        <ResponseField name="status" type="string">
+          命令状态: `pending` | `sent` | `acked`
+        </ResponseField>
+
+        <ResponseField name="created_at" type="string">
+          命令创建时间 (ISO 8601)
+        </ResponseField>
+
+        <ResponseField name="expires_at" type="string">
+          命令过期时间 (ISO 8601)
+        </ResponseField>
+
+        <ResponseField name="retry_count" type="number">
+          重试次数
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="total_count" type="number">
+      待处理命令总数
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `DEVICE_NOT_FOUND` | 404 | 设备不存在或无权访问 |
+| `PERMISSION_DENIED` | 403 | 没有权限查询此设备 |
+| `INVALID_REQUEST` | 400 | 请求参数无效 |
+
+<RequestExample>
+```bash cURL
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/get-pending-commands?device_id=123e4567-e89b-12d3-a456-426614174000' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```javascript Node.js - 监控命令队列
+async function monitorCommandQueue(deviceId: string) {
+  const response = await fetch(
+    `https://your-supabase-project.supabase.co/functions/v1/get-pending-commands?device_id=${deviceId}`,
+    {
+      headers: { 'Authorization': `Bearer ${token}` }
+    }
+  );
+
+  const result = await response.json();
+  const { pending_commands, total_count } = result.data;
+
+  console.log(`设备 ${deviceId} 有 ${total_count} 个待处理命令`);
+
+  // 检查是否有命令积压
+  if (total_count > 5) {
+    console.warn('命令队列积压,可能存在问题');
+  }
+
+  // 检查是否有即将过期的命令
+  const now = new Date();
+  pending_commands.forEach(cmd => {
+    const expiresAt = new Date(cmd.expires_at);
+    const timeLeft = expiresAt.getTime() - now.getTime();
+
+    if (timeLeft < 60000) { // 少于1分钟
+      console.warn(`命令 ${cmd.command_id} 即将过期`);
+    }
+  });
+
+  return result.data;
+}
+
+// 使用示例
+const queueStatus = await monitorCommandQueue('123e4567-e89b-12d3-a456-426614174000');
+```
+
+```python Python - 监控命令队列
+import requests
+from datetime import datetime, timedelta
+
+def monitor_command_queue(device_id: str, token: str):
+    """
+    监控设备命令队列状态
+
+    Args:
+        device_id: 设备ID
+        token: JWT Token
+
+    Returns:
+        命令队列状态
+    """
+    response = requests.get(
+        'https://your-supabase-project.supabase.co/functions/v1/get-pending-commands',
+        params={'device_id': device_id},
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    result = response.json()
+    pending_commands = result['data']['pending_commands']
+    total_count = result['data']['total_count']
+
+    print(f'设备 {device_id} 有 {total_count} 个待处理命令')
+
+    # 检查命令积压
+    if total_count > 5:
+        print('警告: 命令队列积压')
+
+    # 检查即将过期的命令
+    now = datetime.now()
+    for cmd in pending_commands:
+        expires_at = datetime.fromisoformat(cmd['expires_at'].replace('Z', '+00:00'))
+        time_left = (expires_at - now).total_seconds()
+
+        if time_left < 60:  # 少于1分钟
+            print(f'警告: 命令 {cmd["command_id"]} 即将过期')
+
+    return result['data']
+
+# 使用示例
+queue_status = monitor_command_queue('123e4567-e89b-12d3-a456-426614174000', token)
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应 - 有待处理命令
+{
+  "success": true,
+  "data": {
+    "device_id": "123e4567-e89b-12d3-a456-426614174000",
+    "pending_commands": [
+      {
+        "command_id": "abc12345-def6-7890-ghij-klmnopqrstuv",
+        "command_type": "update_desired",
+        "sequence_number": 42,
+        "status": "pending",
+        "created_at": "2026-01-10T08:26:03Z",
+        "expires_at": "2026-01-10T08:31:03Z",
+        "retry_count": 0
+      },
+      {
+        "command_id": "xyz98765-abc4-3210-defg-hijklmnopqrs",
+        "command_type": "update_desired",
+        "sequence_number": 43,
+        "status": "sent",
+        "created_at": "2026-01-10T08:26:05Z",
+        "expires_at": "2026-01-10T08:31:05Z",
+        "retry_count": 1
+      }
+    ],
+    "total_count": 2
+  }
+}
+```
+
+```json 成功响应 - 无待处理命令
+{
+  "success": true,
+  "data": {
+    "device_id": "123e4567-e89b-12d3-a456-426614174000",
+    "pending_commands": [],
+    "total_count": 0
+  }
+}
+```
+
+```json 错误响应 - 设备不存在
+{
+  "success": false,
+  "error": "DEVICE_NOT_FOUND",
+  "message": "设备不存在或无权访问"
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 需要有效的用户JWT Token
+- 用户必须拥有设备的访问权限
+
+### 命令队列状态分析
+
+#### 正常状态
+- 待处理命令数量: 0-2个
+- 所有命令状态为 `pending` 或 `sent`
+- 重试次数: 0-1次
+
+#### 异常状态
+- 待处理命令数量: >5个 (命令积压)
+- 命令状态长时间为 `pending` (发送失败)
+- 重试次数: >2次 (执行困难)
+- 命令即将过期 (剩余时间<1分钟)
+
+### 使用场景
+
+<Steps>
+  <Step title="1. 排查命令积压">
+    当用户反馈设备响应慢时,查询命令队列检查是否有积压
+  </Step>
+
+  <Step title="2. 监控设备健康">
+    定期查询命令队列,及时发现设备通信问题
+  </Step>
+
+  <Step title="3. 调试命令执行">
+    开发调试时查看命令队列,了解命令执行顺序
+  </Step>
+
+  <Step title="4. 优化命令发送">
+    根据队列状态调整命令发送策略,避免积压
+  </Step>
+</Steps>
+
+### 命令队列管理最佳实践
+
+```typescript
+// 智能命令发送 - 检查队列后再发送
+async function smartSendCommand(deviceId: string, command: any) {
+  // 1. 检查命令队列
+  const queueStatus = await getPendingCommands(deviceId);
+
+  // 2. 如果队列积压,等待或提示用户
+  if (queueStatus.total_count > 5) {
+    throw new Error('命令队列积压,请稍后重试');
+  }
+
+  // 3. 检查是否有相同类型的命令在队列中
+  const hasSameType = queueStatus.pending_commands.some(
+    cmd => cmd.command_type === 'update_desired'
+  );
+
+  if (hasSameType) {
+    console.warn('已有相同类型的命令在队列中');
+  }
+
+  // 4. 发送命令
+  return await sendCommand(deviceId, command);
+}
+```
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="为什么会有命令积压?">
+    常见原因:
+    - 设备离线,命令无法发送
+    - 网络不稳定,命令发送失败
+    - 设备处理速度慢
+    - 短时间内发送大量命令
+
+    解决方法:
+    - 检查设备在线状态
+    - 等待队列清空后再发送新命令
+    - 优化命令发送频率
+  </Accordion>
+
+  <Accordion title="待处理命令会自动清理吗?">
+    是的。命令会在以下情况自动清理:
+    - 执行成功后自动移除
+    - 执行失败(重试3次后)自动移除
+    - 过期(5分钟后)自动移除
+
+    不需要手动清理命令队列。
+  </Accordion>
+
+  <Accordion title="可以取消队列中的命令吗?">
+    目前不支持取消命令。如果需要撤销命令效果,可以:
+    - 等待命令执行完成
+    - 发送新的命令覆盖之前的设置
+    - 联系技术支持协助处理
+  </Accordion>
+
+  <Accordion title="命令执行顺序是怎样的?">
+    命令按序列号升序执行:
+    - 序列号小的命令先执行
+    - 序列号大的命令后执行
+    - 旧命令(序列号小)会被自动忽略
+
+    查询结果已按序列号排序,第一个命令会最先执行。
+  </Accordion>
+
+  <Accordion title="如何避免命令积压?">
+    最佳实践:
+    - 发送命令前检查队列状态
+    - 等待前一个命令执行完成后再发送新命令
+    - 避免短时间内发送大量命令
+    - 确保设备在线且网络稳定
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**命令积压**: 如果待处理命令超过10个,说明设备可能存在严重问题,建议检查设备状态或联系技术支持。
+</Warning>
+
+<Tip>
+**定期监控**: 建议在设备管理界面显示待处理命令数量,帮助用户及时发现问题。
+</Tip>

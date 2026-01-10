@@ -1,0 +1,394 @@
+---
+title: '获取设备类型列表'
+openapi: 'GET /device-types'
+---
+
+## 接口说明
+
+获取所有设备类型定义,包括设备协议、数据字段、枚举值等信息。该接口是多设备框架的基础,用于动态获取设备类型配置。
+
+<Note>
+**动态配置特性**:
+- 设备类型由数据库配置,无需修改代码
+- 支持按角色和连接类型筛选
+- 包含完整的数据协议定义
+- 用于生成 TypeScript SDK
+</Note>
+
+## 请求参数
+
+<ParamField query="role" type="string">
+  筛选设备角色
+
+  可选值: `gateway` | `child`
+
+  示例: `child`
+</ParamField>
+
+<ParamField query="connection_type" type="string">
+  筛选连接类型
+
+  可选值: `wifi` | `4g` | `ble` | `zigbee` | `lora`
+
+  示例: `ble`
+</ParamField>
+
+## 响应数据
+
+<ResponseField name="success" type="boolean">
+  操作是否成功
+</ResponseField>
+
+<ResponseField name="data" type="array">
+  设备类型列表
+
+  <Expandable title="设备类型对象属性">
+    <ResponseField name="id" type="string">
+      设备类型ID (UUID)
+    </ResponseField>
+
+    <ResponseField name="name" type="string">
+      设备类型名称 (英文标识符)
+
+      示例: `temp_humidity_sensor`, `smart_trap`
+    </ResponseField>
+
+    <ResponseField name="display_name" type="string">
+      设备类型显示名称 (中文)
+
+      示例: `温湿度传感器`, `智能捕鼠器`
+    </ResponseField>
+
+    <ResponseField name="device_role" type="string">
+      设备角色: `gateway` | `child`
+    </ResponseField>
+
+    <ResponseField name="connection_type" type="string">
+      连接类型: `wifi` | `4g` | `ble` | `zigbee` | `lora`
+    </ResponseField>
+
+    <ResponseField name="reported_schema" type="array">
+      上报数据协议定义
+
+      <Expandable title="字段定义对象">
+        <ResponseField name="key" type="string">
+          字段路径,支持嵌套 (如 `env.tempC`)
+        </ResponseField>
+
+        <ResponseField name="name" type="string">
+          字段显示名称
+        </ResponseField>
+
+        <ResponseField name="type" type="string">
+          字段类型: `number` | `string` | `boolean` | `enum`
+        </ResponseField>
+
+        <ResponseField name="required" type="boolean">
+          是否必填
+        </ResponseField>
+
+        <ResponseField name="unit" type="string">
+          单位 (可选)
+        </ResponseField>
+
+        <ResponseField name="options" type="array">
+          枚举值选项 (仅 type 为 enum 时)
+        </ResponseField>
+      </Expandable>
+    </ResponseField>
+
+    <ResponseField name="desired_schema" type="array">
+      控制命令协议定义,结构同 `reported_schema`
+    </ResponseField>
+
+    <ResponseField name="version" type="number">
+      协议版本号
+    </ResponseField>
+
+    <ResponseField name="created_at" type="string">
+      创建时间 (ISO 8601)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="total_count" type="number">
+  设备类型总数
+</ResponseField>
+
+## 错误码
+
+| 错误码 | HTTP状态码 | 说明 |
+|--------|-----------|------|
+| `INVALID_REQUEST` | 400 | 请求参数无效 |
+| `PERMISSION_DENIED` | 403 | 没有权限访问 |
+
+<RequestExample>
+```bash cURL - 获取所有设备类型
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/device-types' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```bash cURL - 获取所有子设备类型
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/device-types?role=child' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```bash cURL - 获取所有 BLE 设备类型
+curl -X GET \
+  'https://your-supabase-project.supabase.co/functions/v1/device-types?connection_type=ble' \
+  -H "Authorization: Bearer YOUR_JWT_TOKEN"
+```
+
+```javascript Node.js - 获取设备类型并生成UI
+async function getDeviceTypes(role?: 'gateway' | 'child') {
+  const params = new URLSearchParams();
+  if (role) params.append('role', role);
+
+  const response = await fetch(
+    `https://your-supabase-project.supabase.co/functions/v1/device-types?${params}`,
+    {
+      headers: { 'Authorization': `Bearer ${token}` }
+    }
+  );
+
+  const result = await response.json();
+  return result.data;
+}
+
+// 使用示例 - 生成设备选择器
+const childDeviceTypes = await getDeviceTypes('child');
+
+childDeviceTypes.forEach(deviceType => {
+  console.log(`${deviceType.display_name} (${deviceType.name})`);
+  console.log('上报字段:');
+  deviceType.reported_schema.forEach(field => {
+    console.log(`  - ${field.name} (${field.key}): ${field.type}`);
+  });
+  console.log('控制字段:');
+  deviceType.desired_schema.forEach(field => {
+    console.log(`  - ${field.name} (${field.key}): ${field.type}`);
+  });
+});
+```
+
+```python Python - 获取设备类型
+import requests
+
+def get_device_types(token: str, role: str = None, connection_type: str = None):
+    """
+    获取设备类型列表
+
+    Args:
+        token: JWT Token
+        role: 设备角色 ('gateway' 或 'child')
+        connection_type: 连接类型
+
+    Returns:
+        设备类型列表
+    """
+    params = {}
+    if role:
+        params['role'] = role
+    if connection_type:
+        params['connection_type'] = connection_type
+
+    response = requests.get(
+        'https://your-supabase-project.supabase.co/functions/v1/device-types',
+        params=params,
+        headers={'Authorization': f'Bearer {token}'}
+    )
+
+    result = response.json()
+    return result['data']
+
+# 使用示例
+child_device_types = get_device_types(token, role='child')
+
+for device_type in child_device_types:
+    print(f"{device_type['display_name']} ({device_type['name']})")
+```
+</RequestExample>
+
+<ResponseExample>
+```json 成功响应
+{
+  "success": true,
+  "data": [
+    {
+      "id": "type-uuid-1",
+      "name": "temp_humidity_sensor",
+      "display_name": "温湿度传感器",
+      "device_role": "child",
+      "connection_type": "ble",
+      "reported_schema": [
+        {
+          "key": "env.tempC",
+          "name": "温度",
+          "type": "number",
+          "required": true,
+          "unit": "℃"
+        },
+        {
+          "key": "env.humPct",
+          "name": "湿度",
+          "type": "number",
+          "required": true,
+          "unit": "%"
+        },
+        {
+          "key": "hw.batteryPct",
+          "name": "电量",
+          "type": "number",
+          "required": false,
+          "unit": "%"
+        }
+      ],
+      "desired_schema": [],
+      "version": 1,
+      "created_at": "2026-01-10T00:00:00Z"
+    },
+    {
+      "id": "type-uuid-2",
+      "name": "smart_trap",
+      "display_name": "智能捕鼠器",
+      "device_role": "child",
+      "connection_type": "ble",
+      "reported_schema": [
+        {
+          "key": "status",
+          "name": "状态",
+          "type": "enum",
+          "required": true,
+          "options": ["idle", "triggered", "error"]
+        },
+        {
+          "key": "hw.batteryPct",
+          "name": "电量",
+          "type": "number",
+          "required": false,
+          "unit": "%"
+        }
+      ],
+      "desired_schema": [
+        {
+          "key": "armed",
+          "name": "布防",
+          "type": "boolean"
+        },
+        {
+          "key": "sensitivity",
+          "name": "灵敏度",
+          "type": "enum",
+          "options": ["low", "medium", "high"]
+        }
+      ],
+      "version": 1,
+      "created_at": "2026-01-10T00:00:00Z"
+    }
+  ],
+  "total_count": 2
+}
+```
+</ResponseExample>
+
+## 使用说明
+
+### 权限要求
+- 需要有效的用户JWT Token
+- 普通用户权限即可
+
+### 数据协议说明
+
+#### reported_schema (上报数据)
+设备上报到云端的数据字段定义:
+- 传感器数据 (温度、湿度、振动等)
+- 设备状态 (idle、triggered、error等)
+- 硬件信息 (电量、信号强度等)
+
+#### desired_schema (控制命令)
+云端下发到设备的控制字段���义:
+- 设备配置 (灵敏度、上报间隔等)
+- 控制命令 (布防、撤防等)
+- 参数设置 (阈值、模式等)
+
+### 字段类型说明
+
+| 类型 | 说明 | 示例 |
+|-----|------|------|
+| `number` | 数值类型 | 温度: 25.5, 湿度: 60 |
+| `string` | 字符串类型 | 设备名称, 固件版本 |
+| `boolean` | 布尔类型 | 布防状态: true/false |
+| `enum` | 枚举类型 | 状态: idle/triggered/error |
+
+### 使用场景
+
+<Steps>
+  <Step title="1. 动态生成UI">
+    根据设备类型定义动态生成设备管理界面
+  </Step>
+
+  <Step title="2. 数据验证">
+    验证设备上报数据是否符合协议定义
+  </Step>
+
+  <Step title="3. 生成SDK">
+    自动生成 TypeScript SDK,确保类型安全
+  </Step>
+
+  <Step title="4. 设备选择">
+    在设备绑定界面显示可用的设备类型
+  </Step>
+</Steps>
+
+### 常见问题
+
+<AccordionGroup>
+  <Accordion title="设备类型可以自定义吗?">
+    设备类型由管理员通过 Admin Portal 配置。普通用户只能查看和使用已配置的设备类型,不能自定义。
+
+    如需新增设备类型,请联系管理员。
+  </Accordion>
+
+  <Accordion title="如何知道设备支持哪些命令?">
+    查看设备类型的 `desired_schema` 字段,包含所有支持的控制命令和参数。
+
+    建议使用生成的 TypeScript SDK,可以获得自动补全和类型检查。
+  </Accordion>
+
+  <Accordion title="设备类型版本号有什么用?">
+    版本号用于协议升级管理:
+    - 版本号递增表示协议更新
+    - 设备固件需要支持对应版本的协议
+    - 向后兼容,旧版本设备仍可使用
+
+    通常不需要关注版本号,系统会自动处理。
+  </Accordion>
+
+  <Accordion title="如何筛选特定类型的设备?">
+    使用查询参数筛选:
+    - `role=gateway`: 只获取网关设备类型
+    - `role=child`: 只获取子设备类型
+    - `connection_type=ble`: 只获取 BLE 设备类型
+
+    可以组合使用多个参数。
+  </Accordion>
+
+  <Accordion title="设备类型更新后需要重新获取吗?">
+    是的。设备类型配置更新后,需要重新调用此接口获取最新定义。
+
+    建议:
+    - 应用启动时获取一次
+    - 定期刷新(如每小时)
+    - 管理员更新后提示用户刷新
+  </Accordion>
+</AccordionGroup>
+
+<Warning>
+**协议兼容性**: 设备固件必须支持对应版本的协议。如果协议更新,可能需要升级设备固件。
+</Warning>
+
+<Tip>
+**生成 TypeScript SDK**: 使用 `GET /generate-device-sdk` 接口可以自动生成类型安全的 TypeScript SDK,无需手动解析设备类型定义。
+</Tip>
