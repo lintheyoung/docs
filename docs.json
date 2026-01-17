@@ -199,7 +199,6 @@
             "group": "通信架构",
             "pages": [
               "supabase-simulator-communication",
-              "iot-heartbeat-protocol",
               "iot-heartbeat-implementation"
             ]
           }

@@ -1,0 +1,511 @@
+---
+title: "设备与 IoT 通信实现指南"
+description: "详细介绍心跳机制、Shadow 通信、命令下发与 ACK 的完整实现方案"
+---
+
+# 设备与 IoT 通信实现指南
+
+> 本文档详细说明设备与 AWS IoT Core 的通信实现机制，包括心跳检测、Shadow 状态管理和命令交互
+
+## 概述
+
+### 通信架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                         云端                                 │
+│                                                              │
+│   ┌─────────────┐                    ┌─────────────┐        │
+│   │  Supabase   │◄── IoT Rule ──────│ AWS IoT Core │        │
+│   │  (数据持久化) │                    │ (MQTT Broker)│        │
+│   └─────────────┘                    └──────┬──────┘        │
+│                                             │                │
+│                            MQTT over TLS (8883)              │
+│                            X.509 证书认证                    │
+└─────────────────────────────────────────────│───────────────┘
+                                              │
+┌─────────────────────────────────────────────▼───────────────┐
+│                        网关设备 (Gateway)                    │
+│   • 拥有 AWS IoT 证书                                        │
+│   • Thing Name: IoT-Gateway-XXXXXX                          │
+│   • Keep Alive: 30秒                                        │
+└─────────────────────────────────────────────▲───────────────┘
+                                              │
+                               本地通信 (BLE/Zigbee)
+                                              │
+┌─────────────────────────────────────────────▼───────────────┐
+│                        子设备 (Sub-device)                   │
+│   • 无 AWS 证书，无网络连接                                   │
+│   • Shadow Name: vibration-sensor-001                       │
+│   • 通过网关转发数据                                          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 1. 心跳与在线检测
+
+### 1.1 AWS IoT Keep Alive 机制
+
+使用 AWS IoT 内置的 Keep Alive 机制检测网关在线状态，无需自定义心跳协议。
+
+**工作原理**：
+- 网关连接时设置 Keep Alive 时间（30 秒）
+- AWS IoT Core 在 **1.5 倍 Keep Alive 时间**（45 秒）内没有收到任何通信时，判定设备离线
+- 设备离线时自动发布生命周期事件
+
+**配置参数**：
+
+| 参数 | 值 | 说明 |
+|-----|-----|------|
+| Keep Alive | 30 秒 | MQTT 连接时设置 |
+| 超时阈值 | 45 秒 | AWS IoT 自动计算 (1.5 × Keep Alive) |
+| 离线判定 | 45 秒无通信 | 自动发布断开事件 |
+
+### 1.2 生命周期事件
+
+AWS IoT Core 自动发布设备连接/断开事件：
+
+| 事件类型 | Topic |
+|---------|-------|
+| 设备连接 | `$aws/events/presence/connected/{clientId}` |
+| 设备断开 | `$aws/events/presence/disconnected/{clientId}` |
+
+**连接事件消息**：
+```json
+{
+  "clientId": "IoT-Gateway-000011",
+  "thingName": "IoT-Gateway-000011",
+  "timestamp": 1573002230757,
+  "eventType": "connected",
+  "sessionIdentifier": "00000000-0000-0000-0000-000000000000",
+  "versionNumber": 0
+}
+```
+
+**断开事件消息**：
+```json
+{
+  "clientId": "IoT-Gateway-000011",
+  "thingName": "IoT-Gateway-000011",
+  "timestamp": 1573002340451,
+  "eventType": "disconnected",
+  "disconnectReason": "MQTT_KEEP_ALIVE_TIMEOUT",
+  "clientInitiatedDisconnect": false,
+  "versionNumber": 1
+}
+```
+
+**断开原因说明**：
+
+| disconnectReason | 说明 | 发送 LWT |
+|-----------------|------|---------|
+| `MQTT_KEEP_ALIVE_TIMEOUT` | Keep Alive 超时 | 是 |
+| `CLIENT_INITIATED_DISCONNECT` | 客户端主动断开 | 否 |
+| `CONNECTION_LOST` | 连接丢失 | 是 |
+| `DUPLICATE_CLIENTID` | 客户端 ID 重复 | 是 |
+
+### 1.3 子设备心跳机制
+
+子设备没有直接连接 AWS IoT，其在线状态由网关管理并通过专用心跳主题上报。
+
+**心跳主题**：
+```
+heartbeat/{thingName}/subdevice/{shadowName}
+```
+
+**心跳消息格式**：
+```json
+{
+  "deviceId": "660e8400-e29b-41d4-a716-446655440001",
+  "deviceType": "subdevice",
+  "shadowName": "vibration-sensor-001",
+  "timestamp": 1704355200,
+  "batteryLevel": 78,
+  "signalStrength": -62,
+  "metadata": {
+    "firmwareVersion": "2.1.0",
+    "localConnectionType": "BLE",
+    "lastDataUpload": 1704355180
+  }
+}
+```
+
+**心跳配置**：
+
+| 设备类型 | 心跳间隔 | 离线阈值 | 判定规则 |
+|---------|---------|---------|---------|
+| 网关 | 30秒 (Keep Alive) | 45秒 | AWS IoT 自动判定 |
+| 子设备 | 5秒 | 15秒 | 3倍心跳间隔 |
+
+---
+
+## 2. Shadow 通信实现
+
+### 2.1 Shadow 类型
+
+| Shadow 类型 | Topic 前缀 | 用途 |
+|------------|-----------|---------|
+| Classic Shadow (网关) | `$aws/things/{thingName}/shadow` | 网关自身状态 |
+| Named Shadow (子设备) | `$aws/things/{thingName}/shadow/name/{shadowName}` | 子设备状态 |
+
+### 2.2 设备端必须订阅的 Topics
+
+<Warning>
+设备连接后，**必须先订阅响应主题，再发布请求**，否则无法收到响应。
+</Warning>
+
+**子设备 Named Shadow（网关代理订阅）**：
+
+| 主题 | 用途 | 必须 |
+|-----|------|-----|
+| `{prefix}/update/accepted` | 更新成功响应 | ✅ |
+| `{prefix}/update/rejected` | 更新失败响应 | ✅ |
+| `{prefix}/update/delta` | 接收云端命令 | ✅ |
+| `{prefix}/get/accepted` | 获取 Shadow 成功响应 | ✅ |
+| `{prefix}/get/rejected` | 获取 Shadow 失败响应 | ✅ |
+
+**Topic 完整示例**（网关 `IoT-Gateway-000011`，子设备 `vibration-sensor-001`）：
+```
+# 订阅（网关代理）
+$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update/accepted
+$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update/rejected
+$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update/delta
+$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/get/accepted
+$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/get/rejected
+
+# 发布（网关代理）
+$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update
+$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/get
+```
+
+---
+
+## 3. 状态上报实现
+
+### 3.1 遥测数据上报
+
+设备状态变化时，更新 Shadow 的 `reported` 状态：
+
+**Topic**: `$aws/things/{thingName}/shadow/name/{shadowName}/update`
+
+**消息格式**：
+```json
+{
+  "state": {
+    "reported": {
+      "deviceId": "09aa8ad8-f23e-4e75-bcbe-332efeb431ce",
+      "gatewayId": "435204e6-21c9-447d-ab6f-888c99b91926",
+      "connected": true,
+      "battery": 95,
+      "vibration_detected": false,
+      "vibration_level": 2.3,
+      "threshold": 5.0,
+      "timestamp": 1702900060
+    }
+  }
+}
+```
+
+**Python 实现**：
+```python
+def report_state(mqtt_client, thing_name, shadow_name, state):
+    """上报设备状态"""
+    topic = f"$aws/things/{thing_name}/shadow/name/{shadow_name}/update"
+    payload = {"state": {"reported": state}}
+    mqtt_client.publish(topic, json.dumps(payload), qos=1)
+```
+
+### 3.2 设备启动获取 Shadow
+
+设备启动或重连后，应获取当前 Shadow 状态检查是否有待处理命令：
+
+**Topic**: `$aws/things/{thingName}/shadow/name/{shadowName}/get`
+
+```python
+def on_connect():
+    """连接成功后获取 Shadow"""
+    # 先订阅响应主题
+    mqtt_client.subscribe(f"{shadow_prefix}/get/accepted", on_get_accepted)
+    mqtt_client.subscribe(f"{shadow_prefix}/get/rejected", on_get_rejected)
+
+    # 再发布 get 请求
+    mqtt_client.publish(f"{shadow_prefix}/get", "{}")
+
+def on_get_accepted(topic, payload):
+    shadow = json.loads(payload)
+    desired = shadow.get('state', {}).get('desired', {})
+    reported = shadow.get('state', {}).get('reported', {})
+
+    # 检查是否有待处理命令
+    req_id = desired.get('_reqId')
+    last_acked = reported.get('lastAckedReqId')
+
+    if req_id and req_id != last_acked:
+        # 有未处理的命令，执行它
+        execute_command(desired)
+```
+
+---
+
+## 4. 命令下发与 ACK
+
+### 4.1 命令下发流程
+
+```
+App → AWS IoT (desired) → Delta → 网关 → BLE → 子设备
+                                            ↓
+                                         执行命令
+                                            ↓
+子设备 → BLE → 网关 → AWS IoT (reported + ACK) → App
+```
+
+### 4.2 接收命令（Delta）
+
+**Topic**: `$aws/things/{thingName}/shadow/name/{shadowName}/update/delta`
+
+**Delta 消息格式**：
+```json
+{
+  "version": 43,
+  "timestamp": 1702900100,
+  "state": {
+    "action": "set_threshold",
+    "threshold": 3.0,
+    "_reqId": "cmd_1702900100_abc123"
+  },
+  "metadata": {
+    "action": {"timestamp": 1702900100},
+    "threshold": {"timestamp": 1702900100},
+    "_reqId": {"timestamp": 1702900100}
+  }
+}
+```
+
+**处理实现**：
+```python
+def on_delta_received(topic, payload):
+    delta = json.loads(payload)
+    state = delta.get('state', {})
+    req_id = state.get('_reqId')
+
+    # 执行命令
+    if state.get('action') == 'set_threshold':
+        new_threshold = state.get('threshold')
+        device.set_threshold(new_threshold)
+
+        # 发送 ACK，清除 desired
+        ack_payload = {
+            "state": {
+                "reported": {
+                    "threshold": new_threshold,
+                    "lastAckedReqId": req_id
+                },
+                "desired": {
+                    "action": None,
+                    "threshold": None,
+                    "_reqId": None
+                }
+            }
+        }
+        mqtt_client.publish(update_topic, json.dumps(ack_payload))
+```
+
+### 4.3 ACK 消息格式
+
+执行命令后，设备必须更新 `reported` 状态并清除 `desired`：
+
+```json
+{
+  "state": {
+    "reported": {
+      "threshold": 3.0,
+      "lastAckedReqId": "cmd_1702900100_abc123",
+      "timestamp": 1702900105
+    },
+    "desired": null
+  }
+}
+```
+
+<Note>
+`lastAckedReqId` 字段用于 App 确认命令已被执行。App 可通过比较 `desired._reqId` 和 `reported.lastAckedReqId` 判断命令执行状态。
+</Note>
+
+---
+
+## 5. 错误处理
+
+### 5.1 Shadow 更新错误码
+
+| code | 说明 | 处理建议 |
+|------|------|----------|
+| 400 | 请求格式错误 | 检查 JSON 格式 |
+| 401 | 未授权 | 检查证书配置 |
+| 403 | 禁止访问 | 检查 IAM 策略 |
+| 404 | Shadow 不存在 | 首次上报会自动创建 |
+| 409 | 版本冲突 | 重新获取最新状态后重试 |
+| 413 | 请求体过大 | Shadow 最大 8KB |
+| 500 | 服务器内部错误 | 稍后重试 |
+
+**错误处理示例**：
+```python
+def on_update_rejected(topic, payload):
+    error = json.loads(payload)
+    print(f"Shadow 更新失败: {error['code']} - {error['message']}")
+
+    if error['code'] == 409:
+        # 版本冲突，重新获取最新状态后重试
+        get_shadow()
+```
+
+---
+
+## 6. 完整连接流程
+
+### 6.1 网关启动流程
+
+```python
+class GatewayDevice:
+    def __init__(self, thing_name, cert_path, key_path, ca_path):
+        self.thing_name = thing_name
+        self.mqtt_client = self._create_mqtt_client(cert_path, key_path, ca_path)
+        self.subdevices = {}  # shadowName -> device_info
+
+    def start(self):
+        """启动网关"""
+        # 1. 连接 AWS IoT Core
+        self.mqtt_client.connect(
+            host="xxx.iot.ap-southeast-1.amazonaws.com",
+            port=8883,
+            keepalive=30  # Keep Alive 30秒
+        )
+
+        # 2. 等待连接成功
+        self.mqtt_client.on_connect = self._on_connect
+
+    def _on_connect(self):
+        """连接成功回调"""
+        # 3. 订阅网关 Classic Shadow
+        self._subscribe_gateway_shadow()
+
+        # 4. 订阅所有子设备的 Named Shadow Delta
+        for shadow_name in self.subdevices:
+            self._subscribe_subdevice_shadow(shadow_name)
+
+        # 5. 获取网关当前 Shadow（上线补偿）
+        self._get_gateway_shadow()
+
+        # 6. 获取所有子设备的 Shadow
+        for shadow_name in self.subdevices:
+            self._get_subdevice_shadow(shadow_name)
+
+    def _subscribe_subdevice_shadow(self, shadow_name):
+        """订阅子设备 Shadow 主题"""
+        prefix = f"$aws/things/{self.thing_name}/shadow/name/{shadow_name}"
+
+        # 必须订阅的主题
+        self.mqtt_client.subscribe(f"{prefix}/update/delta", self._on_delta)
+        self.mqtt_client.subscribe(f"{prefix}/update/accepted", self._on_accepted)
+        self.mqtt_client.subscribe(f"{prefix}/update/rejected", self._on_rejected)
+        self.mqtt_client.subscribe(f"{prefix}/get/accepted", self._on_get_accepted)
+        self.mqtt_client.subscribe(f"{prefix}/get/rejected", self._on_get_rejected)
+```
+
+### 6.2 子设备绑定流程
+
+```python
+def bind_subdevice(self, shadow_name, device_id, device_info):
+    """绑定新的子设备"""
+    # 1. 保存子设备信息
+    self.subdevices[shadow_name] = {
+        'device_id': device_id,
+        'info': device_info
+    }
+
+    # 2. 订阅子设备的 Shadow 主题
+    self._subscribe_subdevice_shadow(shadow_name)
+
+    # 3. 获取子设备当前 Shadow
+    self._get_subdevice_shadow(shadow_name)
+
+    # 4. 启动子设备心跳
+    self._start_subdevice_heartbeat(shadow_name)
+```
+
+---
+
+## 7. 配置参数汇总
+
+### 7.1 MQTT 连接配置
+
+```typescript
+{
+  protocol: 'mqtts',
+  port: 8883,
+  keepalive: 30,              // 30秒保活
+  clean: false,               // 保持会话
+  reconnectPeriod: 5000,      // 5秒重连间隔
+  connectTimeout: 30000,      // 30秒连接超时
+  protocolVersion: 4          // MQTT 3.1.1
+}
+```
+
+### 7.2 QoS 策略
+
+| 数据类型 | QoS | 原因 |
+|---------|-----|------|
+| 心跳消息 | 1 | 确保送达，用于在线状态监控 |
+| 遥测数据 | 0 | 高频数据，允许丢失 |
+| Shadow Update | 1 | 确保状态同步 |
+| Shadow Delta | 0 | AWS IoT 自动管理 |
+
+### 7.3 时间间隔配置
+
+| 参数 | 值 | 说明 |
+|------|-----|------|
+| 网关 Keep Alive | 30秒 | MQTT 连接保活 |
+| 子设备心跳间隔 | 5秒 | 通过心跳主题上报 |
+| 子设备离线阈值 | 15秒 | 3倍心跳间隔 |
+| 遥测数据间隔 | 10秒 | 业务数据上报频率 |
+
+---
+
+## 8. 数据库字段
+
+### 8.1 devices 表心跳相关字段
+
+```sql
+ALTER TABLE devices
+ADD COLUMN IF NOT EXISTS last_heartbeat TIMESTAMPTZ,
+ADD COLUMN IF NOT EXISTS heartbeat_interval INTEGER DEFAULT 5,
+ADD COLUMN IF NOT EXISTS offline_threshold INTEGER DEFAULT 15,
+ADD COLUMN IF NOT EXISTS last_battery_level INTEGER,
+ADD COLUMN IF NOT EXISTS last_signal_strength INTEGER;
+```
+
+### 8.2 离线检测 SQL
+
+```sql
+-- 查询离线设备
+SELECT id, thing_name, last_heartbeat, status
+FROM devices
+WHERE status = 'active'
+  AND last_heartbeat < NOW() - INTERVAL '15 seconds';
+
+-- 批量标记离线
+UPDATE devices
+SET status = 'offline', updated_at = NOW()
+WHERE status = 'active'
+  AND last_heartbeat < NOW() - (offline_threshold || ' seconds')::INTERVAL;
+```
+
+---
+
+## 参考文档
+
+- [子设备与网关通信架构](./gateway-subdevice-communication.md) - 完整架构设计
+- [IoT 设备心跳协议规范](./iot-heartbeat-protocol.mdx) - 协议规范文档
+- [Supabase 后端与模拟器通信指南](./supabase-simulator-communication.mdx) - 模拟器实现
+- [AWS IoT Device Shadow](https://docs.aws.amazon.com/iot/latest/developerguide/iot-device-shadows.html)
+- [AWS IoT 生命周期事件](https://docs.aws.amazon.com/iot/latest/developerguide/life-cycle-events.html)
