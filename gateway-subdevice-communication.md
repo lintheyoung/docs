@@ -866,7 +866,10 @@ FROM '$aws/events/presence/+/{clientId}'
 
 ## 子设备在线状态检测
 
-子设备没有直接连接 AWS IoT，其在线状态由网关管理：
+子设备没有直接连接 AWS IoT，因此：
+- **无法使用 MQTT LWT 机制**：子设备没有自己的 MQTT 连接，无法设置 Last Will and Testament
+- **由网关维护在线状态**：子设备的 `connected` 属性表示与网关的本地连接状态（BLE/Zigbee）
+- **网关负责更新 Shadow**：当子设备本地连接建立或断开时，网关更新其 Named Shadow
 
 ```json
 // $aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update
@@ -880,6 +883,14 @@ FROM '$aws/events/presence/+/{clientId}'
   }
 }
 ```
+
+**处理网关异常断开**：
+
+当网关异常断开时，其下所有子设备都应标记为离线。可以通过以下方式实现：
+
+1. 网关的 MQTT LWT 触发生命周期事件
+2. IoT Rule 监听网关断开事件
+3. Lambda 函数批量更新该网关下所有子设备的 `connected` 状态为 `false`
 
 ## 消息格式
 

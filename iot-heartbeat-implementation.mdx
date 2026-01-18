@@ -140,15 +140,21 @@ heartbeat/{thingName}/subdevice/{shadowName}
 
 ### 1.4 使用 Shadow Connected 属性检测在线状态
 
-为了更可靠地检测设备在线状态，建议在 Shadow 文档中包含 `connected` 属性，配合 MQTT Last Will and Testament (LWT) 机制实现异常断线检测。
+为了更可靠地检测设备在线状态，建议在 Shadow 文档中包含 `connected` 属性。
 
-#### 工作原理
+<Note>
+**适用范围**：
+- **网关设备**：可以使用完整的MQTT LWT机制配合`connected`属性
+- **子设备**：由于没有直接的MQTT连接，只能由网关维护其`connected`属性，无法使用MQTT LWT机制
+</Note>
 
-**为什么需要 LWT？**
+#### 工作原理（仅适用于网关）
 
-- MQTT LWT 消息在设备异常断开时由 AWS IoT 自动发布
+**为什么网关需要 LWT？**
+
+- MQTT LWT 消息在网关异常断开时由 AWS IoT 自动发布
 - 可以自动更新 Shadow 的 `connected` 属性为 `false`
-- 无需应用层轮询即可实时感知设备异常离线
+- 无需应用层轮询即可实时感知网关异常离线
 
 **关键限制**：
 
@@ -194,9 +200,9 @@ AWS IoT Device Shadow 服务会**忽略**发送到保留主题（以 `$` 开头�
 ```
 </Note>
 
-**步骤 2：设备连接时注册 LWT**
+**步骤 2：网关设备连接时注册 LWT**
 
-设备连接时，向非保留主题注册 LWT 消息，将 `connected` 设置为 `false`：
+网关连接时，向非保留主题注册 LWT 消息，将 `connected` 设置为 `false`：
 
 ```python
 import paho.mqtt.client as mqtt
@@ -232,9 +238,9 @@ def connect_with_lwt(thing_name):
     return client
 ```
 
-**步骤 3：连接成功后更新为在线**
+**步骤 3：网关连接成功后更新为在线**
 
-设备连接成功后，立即更新 Shadow 的 `connected` 属性为 `true`：
+网关连接成功后，立即更新 Shadow 的 `connected` 属性为 `true`：
 
 ```python
 def on_connect(client, userdata, flags, rc):
@@ -251,9 +257,9 @@ def on_connect(client, userdata, flags, rc):
         client.publish(shadow_topic, online_payload, qos=1)
 ```
 
-**步骤 4：正常断开时更新为离线**
+**步骤 4：网关正常断开时更新为离线**
 
-设备正常断开前，应主动更新 `connected` 为 `false`：
+网关正常断开前，应主动更新 `connected` 为 `false`：
 
 ```python
 def disconnect_gracefully(client, thing_name):
@@ -275,10 +281,10 @@ def disconnect_gracefully(client, thing_name):
     client.disconnect()
 ```
 
-#### 完整状态流转
+#### 完整状态流转（网关）
 
 ```
-设备启动 → 注册 LWT (connected: false) → 连接成功 → 更新 Shadow (connected: true)
+网关启动 → 注册 LWT (connected: false) → 连接成功 → 更新 Shadow (connected: true)
                                                               ↓
                                                      正常运行、数据上报
                                                               ↓
@@ -298,6 +304,8 @@ def disconnect_gracefully(client, thing_name):
 
 **网关设备（Classic Shadow）**：
 
+网关可以使用完整的MQTT LWT机制，因为它拥有直接的MQTT连接：
+
 ```python
 # LWT Topic
 lwt_topic = f"my/things/{thing_name}/lwt"
@@ -308,28 +316,40 @@ shadow_topic = f"$aws/things/{thing_name}/shadow/update"
 
 **子设备（Named Shadow，网关代理）**：
 
-```python
-# LWT Topic（网关代理）
-lwt_topic = f"my/things/{gateway_thing_name}/subdevice/{shadow_name}/lwt"
+<Warning>
+子设备**无法使用MQTT LWT机制**，因为：
+1. 子设备没有自己的MQTT连接（通过BLE/Zigbee连接网关）
+2. 子设备没有AWS IoT证书
+3. MQTT LWT只能在MQTT连接时设置
 
-# Shadow 更新 Topic（网关代理）
+因此，子设备的`connected`属性必须由网关根据本地连接状态（BLE/Zigbee）来维护和更新。
+</Warning>
+
+```python
+# 子设备 Shadow 更新 Topic（网关代理）
 shadow_topic = f"$aws/things/{gateway_thing_name}/shadow/name/{shadow_name}/update"
 
-# 子设备连接到网关时（BLE/Zigbee）
+# 子设备通过本地通信（BLE/Zigbee）连接到网关时
 def on_subdevice_connected(gateway, shadow_name):
-    """子设备连接到网关"""
+    """子设备连接到网关（本地BLE/Zigbee连接建立）"""
     shadow_topic = f"$aws/things/{gateway.thing_name}/shadow/name/{shadow_name}/update"
     gateway.mqtt_client.publish(shadow_topic, json.dumps({
         "state": {"reported": {"connected": True}}
     }), qos=1)
 
-# 子设备从网关断开时
+# 子设备从网关断开时（本地连接断开）
 def on_subdevice_disconnected(gateway, shadow_name):
-    """子设备从网关断开"""
+    """子设备从网关断开（本地BLE/Zigbee连接断开）"""
     shadow_topic = f"$aws/things/{gateway.thing_name}/shadow/name/{shadow_name}/update"
     gateway.mqtt_client.publish(shadow_topic, json.dumps({
         "state": {"reported": {"connected": False}}
     }), qos=1)
+
+# 网关异常断开时，子设备的connected状态处理
+def on_gateway_disconnected(gateway):
+    """网关异常断开时，所有子设备的connected状态由后端IoT Rule处理"""
+    # 网关的LWT会触发，后端可以通过IoT Rule批量更新所有子设备状态为offline
+    pass
 ```
 
 #### 查询设备在线状态
@@ -338,7 +358,12 @@ def on_subdevice_disconnected(gateway, shadow_name):
 
 ```python
 def get_device_online_status(thing_name, shadow_name=None):
-    """查询设备在线状态"""
+    """查询设备在线状态
+
+    注意：
+    - 网关：connected 表示与AWS IoT的MQTT连接状态
+    - 子设备：connected 表示与网关的本地连接状态（BLE/Zigbee）
+    """
     if shadow_name:
         # 子设备 Named Shadow
         topic = f"$aws/things/{thing_name}/shadow/name/{shadow_name}/get"
@@ -356,10 +381,17 @@ def get_device_online_status(thing_name, shadow_name=None):
 #### 注意事项
 
 <Warning>
-- LWT 消息必须在 MQTT 连接时设置，连接后无法修改
-- 确保 IoT Rule 的 IAM 角色有权限发布到 Shadow 更新主题
-- `connected` 属性应与心跳机制配合使用，提供双重保障
-- 子设备的 `connected` 表示与网关的本地连接状态，非与云端的连接状态
+- **网关设备**：可以使用MQTT LWT机制
+  - LWT 消息必须在 MQTT 连接时设置，连接后无法修改
+  - 确保 IoT Rule 的 IAM 角色有权限发布到 Shadow 更新主题
+
+- **子设备**：**不能使用MQTT LWT机制**
+  - 子设备没有直接的MQTT连接，无法设置LWT
+  - 子设备的`connected`属性必须由网关维护
+  - `connected`属性表示子设备与网关的本地连接状态（BLE/Zigbee），非与云端的连接状态
+  - 当网关异常断开时，需要通过IoT Rule批量将该网关下所有子设备状态更新为offline
+
+- **心跳机制配合**：`connected`属性应与心跳机制配合使用，提供双重保障
 </Warning>
 
 ---
