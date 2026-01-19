@@ -1,0 +1,175 @@
+---
+title: '网关设备 Shadow Schema v1.0'
+description: '网关设备的 Shadow 字段定义规范'
+---
+
+# 网关设备 Shadow Schema v1.0
+
+## 基本信息
+
+**设备类型：** `gateway`
+**Schema 版本：** `1.0`
+**状态：** Active
+
+## 字段定义
+
+### 必填字段 (Required Fields)
+
+#### 基础状态
+
+<ParamField path="connected" type="boolean" required>
+  设备连接状态（与 AWS IoT 的 MQTT 连接）
+</ParamField>
+
+<ParamField path="timestamp" type="number" required>
+  Unix 时间戳（毫秒）
+</ParamField>
+
+<ParamField path="gatewayId" type="string" required>
+  网关设备 UUID
+</ParamField>
+
+<ParamField path="thingName" type="string" required>
+  AWS IoT Thing 名称，例如：`IoT-Gateway-000001`
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  网关工作状态
+
+  **可选值：**
+  - `online`: 在线
+  - `offline`: 离线
+  - `error`: 故障状态
+</ParamField>
+
+### 可选字段 (Optional Fields)
+
+<ParamField path="boundDevices" type="array">
+  已绑定的子设备列表
+
+  **数组元素：**
+  - `deviceId` (string): 子设备 UUID
+  - `shadowName` (string): 子设备 Shadow 名称
+  - `deviceType` (string): 子设备类型
+  - `online` (boolean): 子设备在线状态
+</ParamField>
+
+<ParamField path="firmwareVersion" type="string">
+  固件版本号，例如：`1.2.0`
+</ParamField>
+
+<ParamField path="uptime" type="number">
+  设备运行时长（秒）
+</ParamField>
+
+<ParamField path="lastAckedReqId" type="string">
+  最后确认的命令请求ID
+</ParamField>
+
+## Shadow 示例
+
+### 场景1：网关在线，已绑定3个子设备
+
+```json
+{
+  "state": {
+    "reported": {
+      "connected": true,
+      "timestamp": 1704600500123,
+      "gatewayId": "GW_001",
+      "thingName": "IoT-Gateway-000001",
+      "status": "online",
+      "boundDevices": [
+        {
+          "deviceId": "SN10086",
+          "shadowName": "vibration-sensor-001",
+          "deviceType": "vibration_sensor",
+          "online": true
+        },
+        {
+          "deviceId": "SN10087",
+          "shadowName": "smart-trap-001",
+          "deviceType": "smart_trap",
+          "online": true
+        },
+        {
+          "deviceId": "SN10088",
+          "shadowName": "vibration-sensor-002",
+          "deviceType": "vibration_sensor",
+          "online": false
+        }
+      ],
+      "firmwareVersion": "1.2.0",
+      "uptime": 86400
+    }
+  }
+}
+```
+
+### 场景2：网关刚启动，无子设备
+
+```json
+{
+  "state": {
+    "reported": {
+      "connected": true,
+      "timestamp": 1704600500123,
+      "gatewayId": "GW_002",
+      "thingName": "IoT-Gateway-000002",
+      "status": "online",
+      "boundDevices": [],
+      "firmwareVersion": "1.2.0",
+      "uptime": 10
+    }
+  }
+}
+```
+
+### 场景3：网关故障状态
+
+```json
+{
+  "state": {
+    "reported": {
+      "connected": true,
+      "timestamp": 1704600500123,
+      "gatewayId": "GW_001",
+      "thingName": "IoT-Gateway-000001",
+      "status": "error",
+      "firmwareVersion": "1.2.0",
+      "uptime": 3600
+    }
+  }
+}
+```
+
+## 使用说明
+
+### 网关启动流程
+
+1. 网关启动后连接 AWS IoT Core
+2. 更新 Shadow reported 状态为 `online`
+3. 上报已绑定的子设备列表
+4. 开始接收子设备的数据并转发
+
+### 子设备管理
+
+网关的 `boundDevices` 数组包含所有已绑定的子设备信息，App 可以通过订阅网关 Shadow 来获取子设备列表的实时变化。
+
+### 在线检测
+
+- 网关通过 MQTT Keep Alive 机制（30秒）维持连接
+- AWS IoT Core 在 45秒（1.5倍 Keep Alive）内无通信时判定离线
+- 网关异常断开时，AWS IoT 会自动发布生命周期事件
+
+## 版本历史
+
+| 版本 | 发布日期 | 变更说明 |
+|------|---------|----------|
+| 1.0  | 2024-01 | 初始版本 |
+
+## 相关文档
+
+- [Shadow Schema 使用指南](/shadow-schema-guide)
+- [子设备与网关通信架构](/gateway-subdevice-communication)
+- [设备与 IoT 通信实现指南](/iot-heartbeat-implementation)

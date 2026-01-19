@@ -184,6 +184,14 @@
               "shadow-schema-guide",
               "iot-heartbeat-implementation"
             ]
+          },
+          {
+            "group": "Shadow Schemas",
+            "pages": [
+              "iot-api/shadow-schemas/gateway-v1.0",
+              "iot-api/shadow-schemas/vibration-sensor-v1.0",
+              "iot-api/shadow-schemas/smart-trap-v1.0"
+            ]
           }
         ]
       }

@@ -1,0 +1,235 @@
+---
+title: '智能陷阱 Shadow Schema v1.0'
+description: '智能陷阱设备的 Shadow 字段定义规范'
+---
+
+# 智能陷阱 Shadow Schema v1.0
+
+## 基本信息
+
+**设备类型：** `smart_trap`
+**Schema 版本：** `1.0`
+**状态：** Active
+
+## 字段定义
+
+### 必填字段 (Required Fields)
+
+#### 基础状态
+
+<ParamField path="connected" type="boolean" required>
+  设备连接状态（与网关的 BLE 连接）
+</ParamField>
+
+<ParamField path="deviceId" type="string" required>
+  设备 UUID
+</ParamField>
+
+<ParamField path="gatewayId" type="string" required>
+  所属网关 UUID
+</ParamField>
+
+<ParamField path="battery" type="number" required>
+  电量百分比（0-100）
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  设备状态
+
+  **可选值：**
+  - `armed`: 已布防
+  - `triggered`: 已触发
+  - `maintenance`: 维护中
+  - `error`: 故障状态
+</ParamField>
+
+<ParamField path="timestamp" type="number" required>
+  Unix 时间戳（毫秒）
+</ParamField>
+
+### 可选字段 (Optional Fields)
+
+#### 陷阱状态
+
+<ParamField path="trapState" type="string">
+  陷阱捕获状态
+
+  **可选值：**
+  - `empty`: 空闲
+  - `captured`: 已捕获
+  - `needs_reset`: 需要重置
+</ParamField>
+
+<ParamField path="captureCount" type="number">
+  累计捕获次数
+</ParamField>
+
+<ParamField path="lastCaptureTime" type="number">
+  上次捕获时间（Unix时间戳）
+</ParamField>
+
+#### 诱饵管理
+
+<ParamField path="baitLevel" type="number">
+  诱饵剩余量（0-100）
+</ParamField>
+
+#### 信号强度
+
+<ParamField path="signalStrength" type="number">
+  信号强度（-100 到 0 dBm）
+</ParamField>
+
+#### 固件信息
+
+<ParamField path="firmwareVersion" type="string">
+  固件版本，例如：`1.0.0`
+</ParamField>
+
+#### 命令控制
+
+<ParamField path="lastAckedReqId" type="string">
+  最后确认的命令请求ID
+</ParamField>
+
+## Shadow 示例
+
+### 场景1：陷阱已布防，等待捕获
+
+```json
+{
+  "state": {
+    "reported": {
+      "connected": true,
+      "deviceId": "SN20001",
+      "gatewayId": "GW_001",
+      "battery": 90,
+      "status": "armed",
+      "timestamp": 1704600500123,
+      "trapState": "empty",
+      "captureCount": 0,
+      "baitLevel": 80,
+      "signalStrength": -50,
+      "firmwareVersion": "1.0.0"
+    }
+  }
+}
+```
+
+### 场景2：陷阱已触发，捕获老鼠
+
+```json
+{
+  "state": {
+    "reported": {
+      "connected": true,
+      "deviceId": "SN20001",
+      "gatewayId": "GW_001",
+      "battery": 88,
+      "status": "triggered",
+      "timestamp": 1704603200000,
+      "trapState": "captured",
+      "captureCount": 1,
+      "lastCaptureTime": 1704603200000,
+      "baitLevel": 75,
+      "signalStrength": -52,
+      "firmwareVersion": "1.0.0"
+    }
+  }
+}
+```
+
+### 场景3：陷阱需要重置
+
+```json
+{
+  "state": {
+    "reported": {
+      "connected": true,
+      "deviceId": "SN20001",
+      "gatewayId": "GW_001",
+      "battery": 88,
+      "status": "maintenance",
+      "timestamp": 1704610000000,
+      "trapState": "needs_reset",
+      "captureCount": 1,
+      "lastCaptureTime": 1704603200000,
+      "baitLevel": 75,
+      "signalStrength": -52,
+      "firmwareVersion": "1.0.0"
+    }
+  }
+}
+```
+
+### 场景4：App下发重置命令
+
+```json
+{
+  "state": {
+    "desired": {
+      "action": "reset_trap",
+      "_reqId": "cmd_1704610100_xyz789"
+    },
+    "reported": {
+      "connected": true,
+      "deviceId": "SN20001",
+      "status": "armed",
+      "trapState": "empty",
+      "lastAckedReqId": "cmd_1704610100_xyz789",
+      "captureCount": 1
+    }
+  }
+}
+```
+
+## 使用说明
+
+### 工作流程
+
+1. **布防阶段**：
+   - 陷阱设置完成后，状态为 `armed`
+   - `trapState` 为 `empty`
+   - 开始监测老鼠活动
+
+2. **触发阶段**：
+   - 老鼠触发陷阱
+   - 更新 `status: "triggered"`, `trapState: "captured"`
+   - 记录 `lastCaptureTime` 和递增 `captureCount`
+   - 发送推送通知给 App
+
+3. **维护阶段**：
+   - 用户清理陷阱
+   - `status: "maintenance"`, `trapState: "needs_reset"`
+   - App 可以下发 `reset_trap` 命令
+
+4. **重置阶段**：
+   - 收到重置命令后
+   - 恢复到 `status: "armed"`, `trapState: "empty"`
+   - 准备下一次捕获
+
+### 诱饵管理
+
+- `baitLevel` 表示诱饵剩余量（0-100）
+- 当 `baitLevel < 20` 时，App 应提示用户补充诱饵
+- 每次捕获后 `baitLevel` 可能会下降
+
+### 状态通知
+
+**App 应监听以下状态变化：**
+- `status: "triggered"` → 发送捕获通知
+- `trapState: "needs_reset"` → 提示用户清理陷阱
+- `baitLevel < 20` → 提示补充诱饵
+- `battery < 15` → 提示充电
+
+## 版本历史
+
+| 版本 | 发布日期 | 变更说明 |
+|------|---------|----------|
+| 1.0  | 2024-01 | 初始版本 |
+
+## 相关文档
+
+- [Shadow Schema 使用指南](/shadow-schema-guide)
+- [子设备与网关通信架构](/gateway-subdevice-communication)
+- [设备与 IoT 通信实现指南](/iot-heartbeat-implementation)

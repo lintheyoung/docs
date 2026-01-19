@@ -1,0 +1,390 @@
+---
+title: '振动检测器 Shadow Schema v1.0'
+description: '振动检测器的 Shadow 字段定义规范，覆盖归仓、配置、部署、触发全流程'
+---
+
+# 振动检测器 Shadow Schema v1.0
+
+## 基本信息
+
+**设备类型：** `vibration_sensor`
+**Schema 版本：** `1.0`
+**状态：** Active
+
+## 设备状态流转
+
+```
+idle → docked → arming (60s倒计时) → armed (Deep Sleep) → triggered
+```
+
+## 字段定义
+
+### 必填字段 (Required Fields)
+
+#### 基础状态
+
+<ParamField path="connected" type="boolean" required>
+  设备连接状态（与网关的 BLE 连接）
+</ParamField>
+
+<ParamField path="deviceId" type="string" required>
+  设备序列号/UUID，例如：`SN10086`
+</ParamField>
+
+<ParamField path="gatewayId" type="string" required>
+  所属网关 UUID
+</ParamField>
+
+<ParamField path="timestamp" type="number" required>
+  Unix 时间戳（毫秒）
+</ParamField>
+
+<ParamField path="status" type="string" required>
+  设备工作状态
+
+  **可选值：**
+  - `idle`: 空闲（在仓内充电/待机）
+  - `docked`: 归仓（磁吸到网关）
+  - `arming`: 部署倒计时中（60秒）
+  - `armed`: 已布防（Deep Sleep，等待触发）
+  - `triggered`: 已触发报警
+  - `low_battery`: 低电量
+  - `error`: 故障状态
+</ParamField>
+
+#### 电池信息
+
+<ParamField path="battery" type="object" required>
+  电池状态
+
+  **子字段：**
+  - `level` (number): 电量百分比（0-100）
+  - `voltage` (number): 电压（mV）
+  - `charging` (boolean): 是否正在充电
+</ParamField>
+
+### 可选字段 (Optional Fields)
+
+#### 归仓状态
+
+<ParamField path="isDocked" type="boolean">
+  是否吸附在网关上（霍尔传感器检测）
+</ParamField>
+
+<ParamField path="chargingContact" type="boolean">
+  充电触点是否接触良好
+</ParamField>
+
+<ParamField path="rssi" type="number">
+  信号强度（-100 到 0 dBm），用于判断距离
+</ParamField>
+
+#### 配置参数
+
+<ParamField path="config" type="object">
+  当前配置
+
+  **子字段：**
+  - `mode` (number): 捕鼠器类型模式
+    - `0`: Unknown/Init
+    - `1`: SNAP_TRAP（老鼠夹）
+    - `2`: CAGE_TRAP（捕鼠笼）
+    - `3`: GLUE_BOARD（粘鼠板）
+    - `4`: BUCKET（水桶）
+    - `9`: CUSTOM（自定义）
+  - `thresholdG` (number): 触发阈值（G值，例如 2.5）
+  - `debounceMs` (number): 防抖时间（毫秒，例如 500）
+  - `samplingRate` (number): IMU采样率（Hz，例如 50）
+  - `ledEnabled` (boolean): LED指示灯开关
+  - `configHash` (string): 配置哈希值（用于检测配置是否已同步）
+</ParamField>
+
+#### 部署状态
+
+<ParamField path="armingCountdown" type="number">
+  部署倒计时秒数（60秒倒计时，0表示已布防）
+</ParamField>
+
+<ParamField path="deployedAt" type="number">
+  最后一次布防时间（Unix时间戳）
+</ParamField>
+
+#### 触发信息
+
+<ParamField path="lastTrigger" type="object">
+  最后一次触发数据
+
+  **子字段：**
+  - `eventId` (number): 事件随机ID（防止重复上报）
+  - `timestamp` (number): 触发时间（Unix时间戳毫秒）
+  - `triggerSource` (string): 触发源（`IMU` 或 `HALL`）
+  - `maxGForce` (number): 最大G值（例如 3.5）
+  - `durationMs` (number): 震动持续时间（毫秒）
+  - `axisData` (object): 三轴数据 `{x, y, z}`
+</ParamField>
+
+<ParamField path="triggerCount" type="number">
+  累计触发次数
+</ParamField>
+
+#### 固件与同步
+
+<ParamField path="firmwareVersion" type="string">
+  固件版本，例如：`1.2.0`
+</ParamField>
+
+<ParamField path="uptime" type="number">
+  设备运行时长（秒）
+</ParamField>
+
+<ParamField path="lastHeartbeat" type="number">
+  最后一次心跳时间（Unix时间戳）
+</ParamField>
+
+#### 命令控制
+
+<ParamField path="lastAckedReqId" type="string">
+  最后确认的命令请求ID
+</ParamField>
+
+## Shadow 示例
+
+### 场景1：设备归仓充电中
+
+```json
+{
+  "state": {
+    "reported": {
+      "connected": true,
+      "deviceId": "SN10086",
+      "gatewayId": "GW_001",
+      "timestamp": 1704600500123,
+      "status": "docked",
+      "battery": {
+        "level": 98,
+        "voltage": 4150,
+        "charging": true
+      },
+      "isDocked": true,
+      "chargingContact": true,
+      "config": {
+        "mode": 1,
+        "thresholdG": 2.5,
+        "debounceMs": 500,
+        "samplingRate": 50,
+        "ledEnabled": true,
+        "configHash": "a1b2c3d4"
+      },
+      "firmwareVersion": "1.2.0",
+      "triggerCount": 0
+    }
+  }
+}
+```
+
+### 场景2：部署倒计时中（刚从网关取下）
+
+```json
+{
+  "state": {
+    "reported": {
+      "connected": true,
+      "deviceId": "SN10086",
+      "gatewayId": "GW_001",
+      "timestamp": 1704600560000,
+      "status": "arming",
+      "battery": {
+        "level": 98,
+        "voltage": 4150,
+        "charging": false
+      },
+      "isDocked": false,
+      "armingCountdown": 45,
+      "rssi": -45,
+      "config": {
+        "mode": 9,
+        "thresholdG": 3.2,
+        "debounceMs": 300,
+        "samplingRate": 50,
+        "ledEnabled": true,
+        "configHash": "b2c3d4e5"
+      },
+      "firmwareVersion": "1.2.0"
+    }
+  }
+}
+```
+
+### 场景3：已布防（Deep Sleep）
+
+```json
+{
+  "state": {
+    "reported": {
+      "connected": false,
+      "deviceId": "SN10086",
+      "gatewayId": "GW_001",
+      "timestamp": 1704600620000,
+      "status": "armed",
+      "battery": {
+        "level": 97,
+        "voltage": 4120,
+        "charging": false
+      },
+      "isDocked": false,
+      "armingCountdown": 0,
+      "deployedAt": 1704600620000,
+      "config": {
+        "mode": 9,
+        "thresholdG": 3.2,
+        "debounceMs": 300,
+        "samplingRate": 50,
+        "configHash": "b2c3d4e5"
+      },
+      "firmwareVersion": "1.2.0",
+      "lastHeartbeat": 1704600620000
+    }
+  }
+}
+```
+
+### 场景4：触发报警
+
+```json
+{
+  "state": {
+    "reported": {
+      "connected": true,
+      "deviceId": "SN10086",
+      "gatewayId": "GW_001",
+      "timestamp": 1704603200000,
+      "status": "triggered",
+      "battery": {
+        "level": 95,
+        "voltage": 4080,
+        "charging": false
+      },
+      "isDocked": false,
+      "rssi": -55,
+      "lastTrigger": {
+        "eventId": 88,
+        "timestamp": 1704603200000,
+        "triggerSource": "IMU",
+        "maxGForce": 3.5,
+        "durationMs": 120,
+        "axisData": {
+          "x": 0.1,
+          "y": 0.2,
+          "z": 3.4
+        }
+      },
+      "triggerCount": 1,
+      "config": {
+        "mode": 9,
+        "thresholdG": 3.2,
+        "configHash": "b2c3d4e5"
+      },
+      "firmwareVersion": "1.2.0"
+    }
+  }
+}
+```
+
+### 场景5：App下发配置命令（通过 desired 状态）
+
+```json
+{
+  "state": {
+    "desired": {
+      "action": "set_config",
+      "config": {
+        "mode": 9,
+        "thresholdG": 2.8,
+        "debounceMs": 400,
+        "ledEnabled": true
+      },
+      "_reqId": "cmd_1704600700_abc123"
+    },
+    "reported": {
+      "connected": true,
+      "deviceId": "SN10086",
+      "status": "docked",
+      "lastAckedReqId": "cmd_1704600700_abc123",
+      "config": {
+        "mode": 9,
+        "thresholdG": 2.8,
+        "debounceMs": 400,
+        "ledEnabled": true,
+        "configHash": "c3d4e5f6"
+      }
+    }
+  }
+}
+```
+
+## 使用说明
+
+### 完整工作流程
+
+#### 1. 归仓与唤醒
+- 检测器放入网关凹槽，磁铁吸附
+- 霍尔传感器检测到磁场 → 唤醒 ESP32
+- 更新 Shadow: `status: "docked"`, `isDocked: true`, `charging: true`
+
+#### 2. 配置策略
+**傻瓜式选择（预设模式）：**
+- App 选择预设模式（如 `mode: 1` = 老鼠夹）
+- 下发官方预验证的参数包
+
+**极客式调优（自定义模式）：**
+- App 选择 `mode: 9` (CUSTOM)
+- 开启实时波形监控
+- 用户调整 `thresholdG` 阈值
+- 保存配置并更新 `configHash`
+
+#### 3. 出仓与倒计时
+- 检测器从网关取下
+- 霍尔传感器检测磁场消失
+- 更新 Shadow: `status: "arming"`, `armingCountdown: 60`
+- LED 慢速呼吸闪烁 60 秒
+- 倒计时结束: `status: "armed"`, `connected: false` (进入 Deep Sleep)
+
+#### 4. 触发报警
+- 老鼠触发陷阱，产生剧烈震动
+- IMU 唤醒 MCU，对比配置参数
+- 符合条件 → 发送 BLE 报警广播
+- 更新 Shadow: `status: "triggered"`, 包含完整 `lastTrigger` 数据
+
+#### 5. 现场微调
+- 长按按钮 3秒 → 强制唤醒蓝牙
+- App 连接后再次加载实时波形图
+- 现场敲击捕鼠器，微调阈值
+- 完成后重新回到布防状态
+
+### 关键字段说明
+
+**`config.mode` 模式说明：**
+- 预设模式（1-4）：官方验证的参数组合，即开即用
+- 自定义模式（9）：需要用户手动调整阈值，适合特殊场景
+
+**`configHash` 用途：**
+- 网关每次下发配置后计算哈希值
+- 设备上报时包含 `configHash`
+- 用于检测配置是否已同步，避免重复下发
+
+**`armingCountdown` 机制：**
+- 从网关取下后开始 60 秒倒计时
+- 在此期间忽略所有震动，避免误报
+- 倒计时结束后进入 `armed` 状态，真正开始监控
+
+## 版本历史
+
+| 版本 | 发布日期 | 变更说明 |
+|------|---------|----------|
+| 1.0  | 2024-01 | 初始版本，支持完整工作流程 |
+
+## 相关文档
+
+- [Shadow Schema 使用指南](/shadow-schema-guide)
+- [子设备与网关通信架构](/gateway-subdevice-communication)
+- [设备与 IoT 通信实现指南](/iot-heartbeat-implementation)
