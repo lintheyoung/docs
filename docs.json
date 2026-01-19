@@ -182,7 +182,6 @@
             "pages": [
               "gateway-subdevice-communication",
               "shadow-schema-guide",
-              "supabase-simulator-communication",
               "iot-heartbeat-implementation"
             ]
           }
