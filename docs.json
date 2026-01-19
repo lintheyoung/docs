@@ -180,6 +180,8 @@
           {
             "group": "通信架构",
             "pages": [
+              "gateway-subdevice-communication",
+              "shadow-schema-guide",
               "supabase-simulator-communication",
               "iot-heartbeat-implementation"
             ]

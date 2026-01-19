@@ -1,0 +1,654 @@
+---
+title: "Shadow Schema 使用指南"
+description: "设备如何获取和使用 Shadow Schema，以及后端如何管理 Shadow 状态"
+---
+
+# Shadow Schema 使用指南
+
+## 概述
+
+Shadow Schema 是一个中心化的设备 Shadow 字段规范管理系统。所有设备类型的 Shadow 字段定义都由后端统一管理，设备根据自身的固件版本查询并使用对应的 Schema 来构建 Shadow 数据。
+
+### 核心概念
+
+- **后端定义**：所有设备的 Shadow 字段规范由后端数据库统一定义和管理
+- **固件-Schema 绑定**：设备固件版本对应 Schema 版本，自动映射到正确的字段规范
+- **类型安全**：明确的字段类型定义和约束条件，确保数据一致性
+- **版本控制**：支持 Schema 演进和多版本共存
+
+### 架构示意
+
+```
+┌─────────────────────┐
+│  设备（固件 1.2.0）  │
+│  • 启动时查询 Schema │
+│  • 根据 Schema 构建  │
+│    Shadow 数据      │
+└──────────┬──────────┘
+           │
+           │ ① GET /shadow-schema
+           │    ?device_type=vibration_sensor
+           │    &firmware_version=1.2.0
+           ↓
+┌─────────────────────┐
+│  Edge Function      │
+│  • 提取固件版本     │
+│    major.minor (1.2)│
+│  • 查询对应 Schema  │
+└──────────┬──────────┘
+           │
+           │ ② 返回 Schema v1.2
+           ↓
+┌─────────────────────┐
+│  设备               │
+│  • 缓存 Schema      │
+│  • 按规范构建       │
+│    Shadow Payload   │
+│  • 发送到 AWS IoT   │
+└─────────────────────┘
+```
+
+## 固件版本与 Schema 版本
+
+### 版本映射规则
+
+设备固件版本采用语义化版本 `major.minor.patch`（如 `1.2.5`），Schema 版本使用 `major.minor` 格式（如 `1.2`）。
+
+**映射关系：**
+- 固件 `1.0.0`、`1.0.1`、`1.0.9` → Schema `1.0`
+- 固件 `1.2.0`、`1.2.3`、`1.2.5` → Schema `1.2`
+- 固件 `2.0.0`、`2.0.1` → Schema `2.0`
+
+**版本规则：**
+- **Minor 版本**（如 1.0 → 1.1）：只能添加可选字段，不能删除字段或修改类型
+- **Major 版本**（如 1.x → 2.0）：可以进行不兼容的变更，如删除字段、修改类型
+
+### Schema 生命周期
+
+Schema 有三种状态：
+
+| 状态 | 说明 | 设备使用 |
+|------|------|----------|
+| **active** | 活跃状态，正常使用 | ✅ 可以使用 |
+| **deprecated** | 已弃用，但仍可用 | ⚠️ 可以使用，但会收到弃用警告 |
+| **obsolete** | 已过时，不再支持 | ❌ 不应使用，会记录错误日志 |
+
+## 设备使用流程
+
+### 步骤1：设备初始化
+
+设备启动时需要完成以下操作：
+
+#### 1.1 读取设备信息
+
+设备从固件配置中读取：
+- 设备类型（device_type）：如 `vibration_sensor`、`smart_trap`
+- 固件版本（firmware_version）：如 `1.2.0`
+
+固件版本在编译时硬编码到固件中，格式必须符合语义化版本规范。
+
+#### 1.2 查询 Shadow Schema
+
+设备通过 Edge Function API 查询对应的 Schema：
+
+**API 端点：**
+```
+GET /functions/v1/shadow-schema
+```
+
+**查询参数：**
+- `device_type`（必填）：设备类型
+- `firmware_version`（推荐）：设备固件版本
+
+**请求示例：**
+```http
+GET /functions/v1/shadow-schema?device_type=vibration_sensor&firmware_version=1.2.0
+```
+
+**响应示例：**
+```json
+{
+  "success": true,
+  "data": {
+    "device_type": "vibration_sensor",
+    "version": "1.2",
+    "status": "active",
+    "required_fields": [
+      "connected",
+      "deviceId",
+      "gatewayId",
+      "battery",
+      "status",
+      "timestamp"
+    ],
+    "optional_fields": [
+      "vibrationDetected",
+      "vibrationLevel",
+      "threshold",
+      "sensitivity"
+    ],
+    "field_types": {
+      "connected": "boolean",
+      "deviceId": "string",
+      "battery": "number",
+      "vibrationDetected": "boolean",
+      "vibrationLevel": "number"
+    },
+    "field_constraints": {
+      "battery": {
+        "minimum": 0,
+        "maximum": 100
+      },
+      "sensitivity": {
+        "enum": ["low", "medium", "high"]
+      }
+    }
+  }
+}
+```
+
+**重要说明：**
+- 后端会自动将固件版本 `1.2.0` 映射到 Schema 版本 `1.2`
+- 如果该版本的 Schema 不存在，会返回错误
+- 设备应该缓存 Schema 定义，避免每次上报都查询
+
+#### 1.3 缓存 Schema
+
+设备将查询到的 Schema 定义缓存到本地内存，包括：
+- 必填字段列表（required_fields）
+- 可选字段列表（optional_fields）
+- 字段类型定义（field_types）
+- 字段约束条件（field_constraints）
+
+**缓存策略：**
+- 设备运行期间持续有效
+- 设备重启后重新查询
+- OTA 固件升级后，新固件查询新版本 Schema
+
+### 步骤2：构建 Shadow Payload
+
+设备根据缓存的 Schema 构建 Shadow 上报数据：
+
+#### 2.1 包含所有必填字段
+
+Schema 中定义的 `required_fields` 必须全部包含在 Payload 中。
+
+**示例：**
+```json
+{
+  "state": {
+    "reported": {
+      "connected": true,
+      "deviceId": "09aa8ad8-f23e-4e75-bcbe-332efeb431ce",
+      "gatewayId": "435204e6-21c9-447d-ab6f-888c99b91926",
+      "battery": 85,
+      "status": "ok",
+      "timestamp": 1704355200
+    }
+  }
+}
+```
+
+#### 2.2 根据实际情况包含可选字段
+
+`optional_fields` 可以根据设备实际状态选择性包含：
+
+**示例：**
+```json
+{
+  "state": {
+    "reported": {
+      // ... 必填字段 ...
+      "vibrationDetected": false,
+      "vibrationLevel": 2.3,
+      "threshold": 5.0,
+      "sensitivity": "high"
+    }
+  }
+}
+```
+
+#### 2.3 遵守字段类型和约束
+
+设备需要确保：
+- 字段类型符合 `field_types` 定义
+- 字段值满足 `field_constraints` 约束
+
+**类型检查：**
+- `boolean`：必须是 `true` 或 `false`
+- `number`：必须是数值类型
+- `string`：必须是字符串类型
+- `array`：必须是数组类型
+- `object`：必须是对象类型
+
+**约束检查：**
+- 数值范围：`battery` 必须在 0-100 之间
+- 枚举值：`sensitivity` 只能是 `"low"`、`"medium"` 或 `"high"`
+
+<Warning>
+如果设备上报的数据不符合 Schema 定义，Lambda Projector 会记录验证错误日志，但不会拒绝数据（避免影响设备正常运行）。
+</Warning>
+
+### 步骤3：发送到 AWS IoT Shadow
+
+设备将构建好的 Payload 发送到对应的 Shadow Topic。
+
+#### 网关设备（Classic Shadow）
+
+网关使用自己的 Classic Shadow：
+
+**Topic：**
+```
+$aws/things/{thingName}/shadow/update
+```
+
+**示例：**
+```
+$aws/things/IoT-Gateway-000011/shadow/update
+```
+
+#### 子设备（Named Shadow）
+
+子设备通过网关使用 Named Shadow：
+
+**Topic：**
+```
+$aws/things/{thingName}/shadow/name/{shadowName}/update
+```
+
+**示例：**
+```
+$aws/things/IoT-Gateway-000011/shadow/name/vibration-sensor-001/update
+```
+
+网关需要代理子设备发送 Shadow 更新。
+
+### 步骤4：接收命令（Delta）
+
+设备订阅 Shadow Delta 主题接收云端下发的命令：
+
+**网关 Delta Topic：**
+```
+$aws/things/{thingName}/shadow/update/delta
+```
+
+**子设备 Delta Topic：**
+```
+$aws/things/{thingName}/shadow/name/{shadowName}/update/delta
+```
+
+**Delta 消息示例：**
+```json
+{
+  "version": 43,
+  "timestamp": 1702900100,
+  "state": {
+    "action": "set_threshold",
+    "threshold": 3.0,
+    "_reqId": "cmd_1702900100_abc123"
+  }
+}
+```
+
+设备收到 Delta 后：
+1. 执行命令（如修改 threshold）
+2. 更新 Shadow reported 状态
+3. 包含 `lastAckedReqId` 确认命令已执行
+
+## 后端（App）使用流程
+
+### 后端如何更新 Shadow
+
+App 通过直接更新 AWS IoT Shadow 的 `desired` 状态来下发命令给设备。
+
+#### 命令下发流程
+
+```
+App → AWS IoT Shadow (desired) → Delta → 网关 → 子设备
+```
+
+#### 更新 Shadow Desired
+
+**Topic：**
+```
+$aws/things/{thingName}/shadow/name/{shadowName}/update
+```
+
+**Payload 格式：**
+```json
+{
+  "state": {
+    "desired": {
+      "action": "set_threshold",
+      "threshold": 3.0,
+      "_reqId": "cmd_1702900100_abc123"
+    }
+  }
+}
+```
+
+**关键字段：**
+- `action`：命令类型（如 `set_threshold`、`reboot` 等）
+- 命令参数：如 `threshold`、`sensitivity` 等
+- `_reqId`：请求 ID，用于追踪命令执行状态
+
+<Note>
+App 不需要查询 Shadow Schema，Schema 主要用于设备端和 Lambda 验证。App 只需要知道设备支持哪些命令和参数。
+</Note>
+
+#### 验证命令执行状态
+
+App 可以通过比较 `desired._reqId` 和 `reported.lastAckedReqId` 来判断命令是否已执行：
+
+```json
+{
+  "state": {
+    "desired": {
+      "_reqId": "cmd_1702900100_abc123"
+    },
+    "reported": {
+      "lastAckedReqId": "cmd_1702900100_abc123",
+      "threshold": 3.0
+    }
+  }
+}
+```
+
+如果 `desired._reqId` == `reported.lastAckedReqId`，说明命令已被设备执行。
+
+### 订阅 Shadow 更新
+
+App 通过订阅 Shadow documents 主题实时接收设备状态更新：
+
+**Topic：**
+```
+$aws/things/{thingName}/shadow/name/{shadowName}/update/documents
+```
+
+**消息示例：**
+```json
+{
+  "previous": {
+    "state": {
+      "reported": {
+        "battery": 85,
+        "vibrationLevel": 2.3
+      }
+    },
+    "version": 42
+  },
+  "current": {
+    "state": {
+      "reported": {
+        "battery": 84,
+        "vibrationLevel": 3.5
+      }
+    },
+    "version": 43
+  },
+  "timestamp": 1702900100
+}
+```
+
+App 可以根据 `current.state.reported` 更新 UI 显示。
+
+## 固件 OTA 升级
+
+### OTA 升级流程
+
+当设备通过 OTA 升级固件版本时：
+
+1. **下载新固件**：设备下载包含新版本号的固件（如从 `1.2.0` 升级到 `1.3.0`）
+2. **安装并重启**：设备安装新固件并重启
+3. **查询新 Schema**：设备启动后，根据新的固件版本查询对应的 Schema（`1.3`）
+4. **更新数据库**：设备或后端更新数据库中的 `firmware_version` 字段
+5. **使用新 Schema**：设备按新 Schema 构建和上报 Shadow 数据
+
+### 同步固件版本
+
+**方式1：设备主动上报**
+设备启动时将固件版本上报到后端 API，后端更新 `devices` 表的 `firmware_version` 字段。
+
+**方式2：OTA 系统触发**
+OTA 管理系统在完成固件升级后，自动更新数据库中的固件版本。
+
+<Warning>
+固件版本必须与数据库保持同步，否则 Lambda Projector 会使用错误的 Schema 版本进行验证。
+</Warning>
+
+## 离线和降级策略
+
+### 网络异常处理
+
+**场景1：首次启动无法查询 Schema**
+- 设备可以使用内置的默认 Schema（固件中预编译）
+- 记录错误日志，等待网络恢复后重新查询
+
+**场景2：运行中网络断开**
+- 设备继续使用已缓存的 Schema
+- 不影响设备正常运行和数据上报
+
+**场景3：Schema 版本不存在**
+- 后端返回错误，提示需要升级固件或创建对应的 Schema
+- 设备可以降级使用最近的可用版本（需谨慎）
+
+### 缓存策略
+
+- **内存缓存**：设备运行期间将 Schema 保存在内存中
+- **持久缓存**（可选）：设备可以将 Schema 保存到本地存储，重启后无需立即查询
+- **缓存有效期**：建议持久缓存有效期为 24 小时，过期后重新查询
+
+## 版本管理最佳实践
+
+### Schema 预发布流程
+
+当硬件制造商计划发布新固件时：
+
+1. **设计新 Schema**：根据新固件功能，在后端创建新版本的 Schema
+2. **创建 Schema**：管理员通过 Admin Portal 创建新的 Schema 版本，状态设为 `active`
+3. **开发固件**：制造商开发新固件，固件查询并使用新 Schema
+4. **测试验证**：在测试环境验证固件和 Schema 的兼容性
+5. **发布 OTA**：固件测试通过后，发布 OTA 更新
+6. **监控升级**：监控设备升级情况和 Shadow 数据质量
+
+### 向后兼容升级（Minor 版本）
+
+**适用场景：**
+- 添加新的可选字段
+- 放宽字段约束（如扩大数值范围）
+
+**示例：**
+```
+Schema 1.0 → Schema 1.1
+新增可选字段: temperature, humidity
+所有使用 1.0 的设备仍然兼容
+```
+
+**操作步骤：**
+1. 后端创建 Schema 1.1，包含新的可选字段
+2. 发布固件 1.1.0，支持上报新字段
+3. 旧固件 1.0.x 继续使用 Schema 1.0
+4. 新旧设备可以共存
+
+### 不兼容升级（Major 版本）
+
+**适用场景：**
+- 删除字段
+- 修改字段类型
+- 收紧约束条件
+- 重构 Schema 结构
+
+**示例：**
+```
+Schema 1.x → Schema 2.0
+删除字段: oldField
+重命名字段: battery → batteryLevel
+新增必填字段: deviceStatus
+```
+
+**操作步骤：**
+1. 后端创建 Schema 2.0
+2. 将 Schema 1.x 标记为 `deprecated`，设置迁移截止日期
+3. 发布固件 2.0.0，使用 Schema 2.0
+4. 通知用户升级设备固件
+5. 迁移期结束后，将 Schema 1.x 标记为 `obsolete`
+
+<Warning>
+大版本升级意味着不兼容变更，旧设备必须升级固件才能使用新 Schema。建议保留旧版本 Schema 至少 6 个月，给用户充足的迁移时间。
+</Warning>
+
+## 字段定义示例
+
+### 网关设备 Schema
+
+**设备类型：** `gateway`
+**Schema 版本：** `1.0`
+
+**必填字段：**
+- `connected` (boolean)：设备连接状态
+- `timestamp` (number)：Unix 时间戳
+- `gatewayId` (string)：网关设备 UUID
+- `thingName` (string)：AWS IoT Thing 名称
+- `status` (string)：网关状态（`online`、`offline`、`error`）
+
+**可选字段：**
+- `boundDevices` (array)：已绑定的子设备列表
+- `firmwareVersion` (string)：固件版本号
+- `uptime` (number)：设备运行时长（秒）
+
+### 振动传感器 Schema
+
+**设备类型：** `vibration_sensor`
+**Schema 版本：** `1.0`
+
+**必填字段：**
+- `connected` (boolean)：设备连接状态
+- `deviceId` (string)：设备 UUID
+- `gatewayId` (string)：所属网关 UUID
+- `battery` (number)：电量百分比（0-100）
+- `status` (string)：设备状态（`ok`、`warning`、`error`、`low_battery`）
+- `timestamp` (number)：Unix 时间戳
+
+**可选字段：**
+- `vibrationDetected` (boolean)：是否检测到振动
+- `vibrationLevel` (number)：振动强度（0-100）
+- `threshold` (number)：触发阈值
+- `sensitivity` (string)：灵敏度（`low`、`medium`、`high`）
+- `eventCount` (number)：触发次数
+- `lastTriggerTime` (number)：上次触发时间
+- `signalStrength` (number)：信号强度（-100 到 0 dBm）
+
+### 智能陷阱 Schema
+
+**设备类型：** `smart_trap`
+**Schema 版本：** `1.0`
+
+**必填字段：**
+- `connected` (boolean)：设备连接状态
+- `deviceId` (string)：设备 UUID
+- `gatewayId` (string)：所属网关 UUID
+- `battery` (number)：电量百分比（0-100）
+- `status` (string)：设备状态（`armed`、`triggered`、`maintenance`、`error`）
+- `timestamp` (number)：Unix 时间戳
+
+**可选字段：**
+- `trapState` (string)：陷阱状态（`empty`、`captured`、`needs_reset`）
+- `captureCount` (number)：捕获次数
+- `lastCaptureTime` (number)：上次捕获时间
+- `baitLevel` (number)：诱饵剩余量（0-100）
+- `signalStrength` (number)：信号强度（-100 到 0 dBm）
+
+## 常见问题
+
+<AccordionGroup>
+  <Accordion title="设备启动时无法查询 Schema 怎么办？">
+    设备可以使用以下策略：
+
+    1. **使用内置默认 Schema**：固件中预编译一个默认 Schema
+    2. **使用持久缓存**：读取上次缓存的 Schema（如果有）
+    3. **延迟上报**：等待网络恢复后再查询 Schema 和上报数据
+
+    建议在固件中内置默认 Schema 作为后备方案。
+  </Accordion>
+
+  <Accordion title="设备固件版本和 Schema 版本不匹配怎么办？">
+    如果后端没有对应版本的 Schema，API 会返回错误。设备可以：
+
+    1. **降级使用**：查询最新可用的 Schema 版本（谨慎使用）
+    2. **拒绝上报**：记录错误日志，等待固件升级或后端创建 Schema
+    3. **使用默认 Schema**：使用固件内置的默认 Schema
+
+    推荐方案是后端提前创建好对应版本的 Schema，避免设备无法正常工作。
+  </Accordion>
+
+  <Accordion title="如何处理设备上报的数据不符合 Schema？">
+    Lambda Projector 会在处理 Shadow 更新时验证数据：
+
+    1. **检查必填字段**：缺少必填字段会记录错误日志
+    2. **检查字段类型**：类型不匹配会记录错误日志
+    3. **检查约束条件**：违反约束会记录错误日志
+
+    验证失败不会拒绝数据，避免影响设备正常运行。但会记录详细的错误日志，便于排查问题。
+  </Accordion>
+
+  <Accordion title="App 如何知道设备支持哪些命令？">
+    App 不直接使用 Shadow Schema，而是通过以下方式：
+
+    1. **设备类型定义**：后端维护每种设备类型支持的命令列表
+    2. **API 查询**：App 可以查询设备类型的命令定义
+    3. **固件文档**：硬件制造商提供设备支持的命令文档
+
+    Shadow Schema 主要用于设备端构建数据和 Lambda 验证，不用于 App 端命令构建。
+  </Accordion>
+
+  <Accordion title="如何测试新的 Schema 版本？">
+    建议遵循以下测试流程：
+
+    1. **测试环境创建 Schema**：在测试数据库中创建新版本
+    2. **固件开发和测试**：开发新固件，查询测试环境 Schema
+    3. **端到端测试**：测试设备查询、数据上报、命令下发全流程
+    4. **生产环境部署**：测试通过后，在生产环境创建 Schema
+    5. **发布固件**：通过 OTA 发布新固件
+
+    建议使用独立的测试设备和测试网关，避免影响生产设备。
+  </Accordion>
+
+  <Accordion title="Schema 版本可以删除吗？">
+    不建议删除 Schema 版本，而是通过状态管理：
+
+    1. **active**：正常使用的版本
+    2. **deprecated**：已弃用但仍可用，给设备时间迁移
+    3. **obsolete**：已过时，不再推荐使用但保留记录
+
+    保留历史版本有助于：
+    - 追溯设备数据变更历史
+    - 支持老设备继续运行
+    - 审计和合规要求
+
+    只有在确认没有任何设备使用时，才考虑物理删除。
+  </Accordion>
+</AccordionGroup>
+
+## 总结
+
+Shadow Schema 系统通过中心化管理设备 Shadow 字段规范，实现了：
+
+✅ **统一标准**：所有设备遵循后端定义的字段规范
+✅ **类型安全**：明确的字段类型和约束条件
+✅ **版本控制**：支持 Schema 演进和多版本共存
+✅ **固件绑定**：固件版本自动映射到对应的 Schema
+✅ **灵活升级**：支持向后兼容和不兼容升级
+
+**关键要点：**
+- 设备根据固件版本查询并使用对应的 Schema
+- 设备缓存 Schema 避免频繁查询
+- 后端 Lambda 验证设备上报数据的合法性
+- App 通过 Shadow desired 状态下发命令
+- OTA 升级后设备自动使用新版本 Schema
+
+## 参考文档
+
+- [子设备与网关通信架构](./gateway-subdevice-communication.md)
+- [设备与 IoT 通信实现指南](./iot-heartbeat-implementation.mdx)
+- [Supabase 后端与模拟器通信指南](./supabase-simulator-communication.mdx)
+- [AWS IoT Device Shadow](https://docs.aws.amazon.com/iot/latest/developerguide/iot-device-shadows.html)
