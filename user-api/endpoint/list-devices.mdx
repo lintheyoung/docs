@@ -63,6 +63,15 @@ openapi: 'GET /user-devices'
       AWS IoT Thing名称，例如: `IoT-Gateway-000001`
     </ResponseField>
 
+    <ResponseField name="shadow_name" type="string">
+      AWS IoT Shadow名称，例如: `smart-trap-001`
+
+      **说明**：
+      - 网关设备使用 Classic Shadow（无 shadow_name）
+      - 子设备使用 Named Shadow（有 shadow_name）
+      - shadow_name 用于订阅设备的 Shadow 主题
+    </ResponseField>
+
     <ResponseField name="device_type" type="string">
       设备类型: `gateway` | `vibration_sensor` | `smart_trap` | `temp_humidity_sensor` | `pir_sensor`
     </ResponseField>
@@ -366,6 +375,7 @@ for gateway in gateways:
         {
           "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
           "thing_name": "IoT-Trap-000100",
+          "shadow_name": "smart-trap-001",
           "device_type": "smart_trap",
           "device_nickname": "客厅捕鼠器",
           "online": true
@@ -373,6 +383,7 @@ for gateway in gateways:
         {
           "device_id": "b2c3d4e5-6f7g-8h9i-0j1k-2l3m4n5o6p7q",
           "thing_name": "IoT-VibSensor-000001",
+          "shadow_name": "vibration-sensor-001",
           "device_type": "vibration_sensor",
           "device_nickname": "厨房震动传感器",
           "online": true
@@ -380,6 +391,7 @@ for gateway in gateways:
         {
           "device_id": "c3d4e5f6-7g8h-9i0j-1k2l-3m4n5o6p7q8r",
           "thing_name": "IoT-TempSensor-000001",
+          "shadow_name": "temp-humidity-sensor-001",
           "device_type": "temp_humidity_sensor",
           "device_nickname": "卧室温湿度传感器",
           "online": false
@@ -401,6 +413,7 @@ for gateway in gateways:
     {
       "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
       "thing_name": "IoT-Trap-000100",
+      "shadow_name": "smart-trap-001",
       "device_type": "smart_trap",
       "model": "SmartTrap-v2",
       "device_nickname": "客厅捕鼠器",
@@ -465,6 +478,7 @@ for gateway in gateways:
         {
           "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
           "thing_name": "IoT-Trap-000100",
+          "shadow_name": "smart-trap-001",
           "device_type": "smart_trap",
           "device_nickname": "客厅捕鼠器",
           "online": true
@@ -505,6 +519,7 @@ for gateway in gateways:
     {
       "device_id": "a1b2c3d4-5e6f-7g8h-9i0j-1k2l3m4n5o6p",
       "thing_name": "IoT-Trap-000100",
+      "shadow_name": "smart-trap-001",
       "device_type": "smart_trap",
       "device_nickname": "客厅捕鼠器",
       "status": "active",
@@ -521,6 +536,7 @@ for gateway in gateways:
     {
       "device_id": "b2c3d4e5-6f7g-8h9i-0j1k-2l3m4n5o6p7q",
       "thing_name": "IoT-VibSensor-000001",
+      "shadow_name": "vibration-sensor-001",
       "device_type": "vibration_sensor",
       "device_nickname": "厨房震动传感器",
       "status": "active",
