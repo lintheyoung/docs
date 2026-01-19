@@ -1,0 +1,351 @@
+---
+title: '更新 Schema 状态'
+openapi: 'PATCH /functions/v1/shadow-schema/status'
+---
+
+更新 Shadow Schema 的生命周期状态。用于管理 Schema 版本的弃用和过时流程。
+
+<Note>
+此 API 仅供管理员使用，用于标记 Schema 的生命周期状态。设备端不调用此接口。
+</Note>
+
+## 请求体
+
+<ParamField body="device_type" type="string" required>
+  设备类型
+
+  **可选值：**
+  - `gateway`: 网关设备
+  - `vibration_sensor`: 振动检测器
+  - `smart_trap`: 智能陷阱
+</ParamField>
+
+<ParamField body="version" type="string" required>
+  Schema 版本号（`major.minor` 格式）
+
+  **示例：** `"1.0"`, `"1.2"`, `"2.0"`
+</ParamField>
+
+<ParamField body="status" type="string" required>
+  新的 Schema 状态
+
+  **可选值：**
+  - `active`: 活跃状态，正常使用
+  - `deprecated`: 已弃用，但仍可用
+  - `obsolete`: 已过时，不再支持
+
+  **状态转换规则：**
+  - `active` → `deprecated`: 计划淘汰，但给设备迁移时间
+  - `deprecated` → `obsolete`: 迁移期结束，不再推荐使用
+  - `obsolete` → `active`: ⚠️ 不建议，除非有特殊原因
+</ParamField>
+
+<ParamField body="deprecation_message" type="string">
+  弃用或过时消息（当 status 为 `deprecated` 或 `obsolete` 时建议提供）
+
+  **建议包含：**
+  - 弃用原因
+  - 推荐的升级版本
+  - 迁移截止日期
+
+  **示例：** `"This version is deprecated. Please upgrade to v2.0 by 2024-06-30."`
+</ParamField>
+
+<ParamField body="deprecation_date" type="string">
+  弃用日期（ISO 8601 格式，可选）
+
+  **示例：** `"2024-06-30T00:00:00Z"`
+</ParamField>
+
+## 响应
+
+<ResponseField name="success" type="boolean" required>
+  请求是否成功
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  更新后的 Schema 对象
+
+  <Expandable title="data 对象属性">
+    <ResponseField name="device_type" type="string" required>
+      设备类型
+    </ResponseField>
+
+    <ResponseField name="version" type="string" required>
+      Schema 版本号
+    </ResponseField>
+
+    <ResponseField name="status" type="string" required>
+      更新后的状态
+    </ResponseField>
+
+    <ResponseField name="deprecation_message" type="string">
+      弃用消息
+    </ResponseField>
+
+    <ResponseField name="deprecation_date" type="string">
+      弃用日期
+    </ResponseField>
+
+    <ResponseField name="updated_at" type="string" required>
+      更新时间（ISO 8601 格式）
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  错误消息（仅当 success 为 false 时返回）
+</ResponseField>
+
+## 使用场景
+
+### 场景1：标记 Schema 为 Deprecated
+
+发布新的 Major 版本后，将旧版本标记为弃用，给设备 6 个月的迁移时间：
+
+<RequestExample>
+```bash 标记 v1.0 为 deprecated
+curl -X PATCH \
+  'https://your-project.supabase.co/functions/v1/shadow-schema/status' \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_type": "vibration_sensor",
+    "version": "1.0",
+    "status": "deprecated",
+    "deprecation_message": "Schema v1.0 is deprecated. Please upgrade firmware to v2.0 by 2024-06-30.",
+    "deprecation_date": "2024-06-30T00:00:00Z"
+  }'
+```
+
+```json 成功响应
+{
+  "success": true,
+  "data": {
+    "device_type": "vibration_sensor",
+    "version": "1.0",
+    "status": "deprecated",
+    "deprecation_message": "Schema v1.0 is deprecated. Please upgrade firmware to v2.0 by 2024-06-30.",
+    "deprecation_date": "2024-06-30T00:00:00Z",
+    "updated_at": "2024-01-15T10:30:00Z"
+  }
+}
+```
+</RequestExample>
+
+**效果：**
+- 设备查询此 Schema 时仍能正常获取
+- API 响应会包含弃用警告信息
+- 后端日志会记录使用弃用 Schema 的设备
+- 管理员可以监控迁移进度
+
+### 场景2：标记 Schema 为 Obsolete
+
+迁移期结束后，将 Schema 标记为过时：
+
+<RequestExample>
+```bash 标记 v1.0 为 obsolete
+curl -X PATCH \
+  'https://your-project.supabase.co/functions/v1/shadow-schema/status' \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_type": "vibration_sensor",
+    "version": "1.0",
+    "status": "obsolete",
+    "deprecation_message": "Schema v1.0 is obsolete and no longer supported. Firmware must be upgraded to v2.0 or later."
+  }'
+```
+
+```json 成功响应
+{
+  "success": true,
+  "data": {
+    "device_type": "vibration_sensor",
+    "version": "1.0",
+    "status": "obsolete",
+    "deprecation_message": "Schema v1.0 is obsolete and no longer supported. Firmware must be upgraded to v2.0 or later.",
+    "updated_at": "2024-07-01T00:00:00Z"
+  }
+}
+```
+</RequestExample>
+
+**效果：**
+- 设备仍能查询此 Schema（避免设备完全无法工作）
+- API 响应会包含严重警告
+- 后端会记录错误级别日志
+- 管理员应通知用户强制升级固件
+
+### 场景3：重新激活 Schema（特殊情况）
+
+极少数情况下，需要重新激活已弃用的 Schema：
+
+<RequestExample>
+```bash 重新激活 v1.2
+curl -X PATCH \
+  'https://your-project.supabase.co/functions/v1/shadow-schema/status' \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_type": "vibration_sensor",
+    "version": "1.2",
+    "status": "active",
+    "deprecation_message": null
+  }'
+```
+
+```json 成功响应
+{
+  "success": true,
+  "data": {
+    "device_type": "vibration_sensor",
+    "version": "1.2",
+    "status": "active",
+    "deprecation_message": null,
+    "updated_at": "2024-01-16T14:20:00Z"
+  }
+}
+```
+</RequestExample>
+
+<Warning>
+不建议将 `obsolete` 状态的 Schema 重新激活。如果确实需要，应考虑创建新的 Minor 版本。
+</Warning>
+
+## 错误处理
+
+<ResponseExample>
+```json Schema 不存在
+{
+  "success": false,
+  "error": "Schema version 1.5 not found for device type vibration_sensor"
+}
+```
+
+```json 无效状态值
+{
+  "success": false,
+  "error": "Invalid status value: archived. Must be one of: active, deprecated, obsolete"
+}
+```
+
+```json 无效的状态转换
+{
+  "success": false,
+  "error": "Cannot transition from obsolete to active. Please create a new version instead.",
+  "warning": "Reactivating obsolete schemas is not recommended."
+}
+```
+</ResponseExample>
+
+## Schema 生命周期管理流程
+
+### 完整生命周期
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Schema 生命周期                          │
+└─────────────────────────────────────────────────────────────┘
+
+  创建              计划淘汰           迁移期结束
+   │                  │                  │
+   ↓                  ↓                  ↓
+active ────────→ deprecated ────────→ obsolete
+  │                  │                  │
+  │                  │                  │
+状态：正常使用      状态：仍可用        状态：不再支持
+行为：无警告        行为：返回警告      行为：返回错误日志
+推荐：所有设备      推荐：尽快迁移      推荐：强制升级
+```
+
+### 弃用流程时间线
+
+**T0 时刻：发布新版本**
+- 创建新的 Major 版本 Schema（如 v2.0）
+- 发布新固件（如 v2.0.0）
+- 旧版本 Schema（v1.x）保持 `active`
+
+**T0 + 1 个月：标记 Deprecated**
+```bash
+PATCH /shadow-schema/status
+{
+  "version": "1.0",
+  "status": "deprecated",
+  "deprecation_date": "T0 + 6 months"
+}
+```
+
+**T0 + 6 个月：标记 Obsolete**
+```bash
+PATCH /shadow-schema/status
+{
+  "version": "1.0",
+  "status": "obsolete"
+}
+```
+
+**T0 + 12 个月：考虑归档**
+- 评估是否还有设备使用 v1.0
+- 如果已无设备使用，可以物理删除（不推荐）
+- 建议永久保留用于审计和历史追溯
+
+## 监控和通知
+
+### 后端行为
+
+**当设备查询 deprecated Schema 时：**
+```json
+{
+  "success": true,
+  "data": {...},
+  "warning": "This schema version is deprecated. Please upgrade firmware to v2.0 by 2024-06-30."
+}
+```
+
+**当设备查询 obsolete Schema 时：**
+```json
+{
+  "success": true,
+  "data": {...},
+  "error": "This schema version is obsolete and no longer supported. Firmware must be upgraded immediately.",
+  "severity": "critical"
+}
+```
+
+### 监控指标
+
+管理员应监控以下指标：
+- 使用 deprecated Schema 的设备数量
+- 使用 obsolete Schema 的设备数量
+- Schema 版本分布统计
+- 固件升级进度
+
+## 最佳实践
+
+### 弃用策略
+
+1. **提前通知**：在标记为 deprecated 前，提前通过 App 通知用户
+2. **充足时间**：给设备至少 6 个月的迁移时间
+3. **渐进式**：先 deprecated，再 obsolete，不要直接跳到 obsolete
+4. **清晰消息**：提供明确的升级指引和截止日期
+
+### 版本管理
+
+1. **保留历史**：不要删除 obsolete 状态的 Schema
+2. **审计记录**：记录所有状态变更和时间戳
+3. **文档同步**：更新文档说明 Schema 版本的支持状态
+4. **通知机制**：建立设备端和 App 端的弃用通知机制
+
+### 安全建议
+
+1. **权限控制**：此 API 应使用管理员 API Key
+2. **变更审批**：重要 Schema 的状态变更应经过审批流程
+3. **回滚计划**：准备应急回滚方案（虽然不推荐）
+4. **影响评估**：标记前评估影响的设备数量
+
+## 相关文档
+
+- [Shadow Schema 使用指南](/shadow-schema-guide)
+- [获取 Shadow Schema API](/iot-api/endpoint/get-shadow-schema)
+- [管理 Shadow Schema API](/iot-api/endpoint/manage-shadow-schema)

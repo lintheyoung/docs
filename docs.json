@@ -186,6 +186,14 @@
             ]
           },
           {
+            "group": "Schema 管理 API",
+            "pages": [
+              "iot-api/endpoint/get-shadow-schema",
+              "iot-api/endpoint/manage-shadow-schema",
+              "iot-api/endpoint/update-schema-status"
+            ]
+          },
+          {
             "group": "Shadow Schemas",
             "pages": [
               "iot-api/shadow-schemas/gateway-v1.0",

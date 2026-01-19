@@ -1,0 +1,405 @@
+---
+title: '管理 Shadow Schema'
+description: '创建或更新设备 Shadow Schema 定义（管理员操作）'
+---
+
+# 创建 Shadow Schema
+
+<Note>
+此 API 仅供管理员使用，用于创建新的设备 Shadow Schema 版本。设备端不调用此接口。
+</Note>
+
+## POST /functions/v1/shadow-schema
+
+创建新的 Shadow Schema 版本。在发布新固件前，需要先创建对应版本的 Schema。
+
+### 请求体
+
+<ParamField body="device_type" type="string" required>
+  设备类型
+
+  **可选值：**
+  - `gateway`: 网关设备
+  - `vibration_sensor`: 振动检测器
+  - `smart_trap`: 智能陷阱
+</ParamField>
+
+<ParamField body="version" type="string" required>
+  Schema 版本号（`major.minor` 格式）
+
+  **版本规则：**
+  - Minor 版本升级（如 1.0 → 1.1）：只能添加可选字段
+  - Major 版本升级（如 1.x → 2.0）：可以进行不兼容变更
+
+  **示例：** `"1.0"`, `"1.2"`, `"2.0"`
+</ParamField>
+
+<ParamField body="status" type="string" default="active">
+  Schema 状态
+
+  **可选值：**
+  - `active`: 活跃状态（默认）
+  - `deprecated`: 已弃用
+  - `obsolete`: 已过时
+</ParamField>
+
+<ParamField body="required_fields" type="array" required>
+  必填字段列表
+
+  **示例：** `["connected", "deviceId", "timestamp"]`
+</ParamField>
+
+<ParamField body="optional_fields" type="array" required>
+  可选字段列表
+
+  **示例：** `["battery", "firmwareVersion", "lastHeartbeat"]`
+</ParamField>
+
+<ParamField body="field_types" type="object" required>
+  字段类型定义（字段名 → 类型名映射）
+
+  **支持的类型：**
+  - `boolean`: 布尔值
+  - `number`: 数值
+  - `string`: 字符串
+  - `array`: 数组
+  - `object`: 对象
+
+  **示例：**
+  ```json
+  {
+    "connected": "boolean",
+    "deviceId": "string",
+    "timestamp": "number",
+    "battery": "object"
+  }
+  ```
+</ParamField>
+
+<ParamField body="field_constraints" type="object">
+  字段约束条件（可选）
+
+  **约束类型：**
+  - `minimum`, `maximum`: 数值范围
+  - `enum`: 枚举值列表
+  - `minLength`, `maxLength`: 字符串长度
+  - `required_properties`: 对象必须包含的属性
+
+  **示例：**
+  ```json
+  {
+    "status": {
+      "enum": ["idle", "docked", "armed"]
+    },
+    "battery": {
+      "required_properties": ["level", "voltage"]
+    }
+  }
+  ```
+</ParamField>
+
+<ParamField body="deprecation_message" type="string">
+  弃用消息（当 status 为 `deprecated` 时建议提供）
+</ParamField>
+
+### 响应
+
+<ResponseField name="success" type="boolean" required>
+  请求是否成功
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  创建的 Schema 对象（包含所有提交的字段）
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  错误消息（仅当 success 为 false 时返回）
+</ResponseField>
+
+### 请求示例
+
+<RequestExample>
+```bash 创建振动检测器 v1.2 Schema
+curl -X POST \
+  'https://your-project.supabase.co/functions/v1/shadow-schema' \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_type": "vibration_sensor",
+    "version": "1.2",
+    "status": "active",
+    "required_fields": [
+      "connected",
+      "deviceId",
+      "gatewayId",
+      "timestamp",
+      "status",
+      "battery"
+    ],
+    "optional_fields": [
+      "isDocked",
+      "config",
+      "armingCountdown",
+      "lastTrigger",
+      "firmwareVersion"
+    ],
+    "field_types": {
+      "connected": "boolean",
+      "deviceId": "string",
+      "gatewayId": "string",
+      "timestamp": "number",
+      "status": "string",
+      "battery": "object",
+      "config": "object"
+    },
+    "field_constraints": {
+      "status": {
+        "enum": ["idle", "docked", "arming", "armed", "triggered"]
+      },
+      "battery": {
+        "required_properties": ["level", "voltage", "charging"]
+      }
+    }
+  }'
+```
+
+```json 成功响应
+{
+  "success": true,
+  "data": {
+    "device_type": "vibration_sensor",
+    "version": "1.2",
+    "status": "active",
+    "required_fields": [...],
+    "optional_fields": [...],
+    "field_types": {...},
+    "field_constraints": {...},
+    "created_at": "2024-01-15T10:30:00Z"
+  }
+}
+```
+
+```json 版本已存在错误
+{
+  "success": false,
+  "error": "Schema version 1.2 already exists for device type vibration_sensor"
+}
+```
+</RequestExample>
+
+---
+
+# 更新 Shadow Schema
+
+## PUT /functions/v1/shadow-schema
+
+更新已存在的 Shadow Schema。可以修改字段定义、约束条件或状态。
+
+<Warning>
+修改 Schema 时需要注意向后兼容性：
+- Minor 版本只能添加可选字段，不能删除字段或修改类型
+- 如果需要不兼容变更，应创建新的 Major 版本
+</Warning>
+
+### 请求体
+
+<ParamField body="device_type" type="string" required>
+  设备类型
+</ParamField>
+
+<ParamField body="version" type="string" required>
+  要更新的 Schema 版本号
+</ParamField>
+
+<ParamField body="required_fields" type="array">
+  更新后的必填字段列表
+</ParamField>
+
+<ParamField body="optional_fields" type="array">
+  更新后的可选字段列表
+</ParamField>
+
+<ParamField body="field_types" type="object">
+  更新后的字段类型定义
+</ParamField>
+
+<ParamField body="field_constraints" type="object">
+  更新后的字段约束条件
+</ParamField>
+
+### 响应
+
+<ResponseField name="success" type="boolean" required>
+  请求是否成功
+</ResponseField>
+
+<ResponseField name="data" type="object">
+  更新后的 Schema 对象
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  错误消息（仅当 success 为 false 时返回）
+</ResponseField>
+
+### 请求示例
+
+<RequestExample>
+```bash 添加新的可选字段
+curl -X PUT \
+  'https://your-project.supabase.co/functions/v1/shadow-schema' \
+  -H "Authorization: Bearer YOUR_ADMIN_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "device_type": "vibration_sensor",
+    "version": "1.2",
+    "optional_fields": [
+      "isDocked",
+      "config",
+      "armingCountdown",
+      "lastTrigger",
+      "firmwareVersion",
+      "temperature"
+    ],
+    "field_types": {
+      "temperature": "number"
+    },
+    "field_constraints": {
+      "temperature": {
+        "minimum": -40,
+        "maximum": 85
+      }
+    }
+  }'
+```
+
+```json 成功响应
+{
+  "success": true,
+  "data": {
+    "device_type": "vibration_sensor",
+    "version": "1.2",
+    "status": "active",
+    "optional_fields": [..., "temperature"],
+    "field_types": {..., "temperature": "number"},
+    "field_constraints": {...},
+    "updated_at": "2024-01-16T14:20:00Z"
+  }
+}
+```
+
+```json Schema 不存在错误
+{
+  "success": false,
+  "error": "Schema version 1.5 not found for device type vibration_sensor"
+}
+```
+</RequestExample>
+
+---
+
+## 使用场景
+
+### 场景1：发布新固件前创建 Schema
+
+硬件制造商计划发布固件 `1.2.0`，新增温度监测功能：
+
+1. **开发阶段**：设计新的 Schema v1.2，添加 `temperature` 可选字段
+2. **测试环境**：调用 POST API 在测试数据库创建 Schema v1.2
+3. **固件开发**：开发固件 v1.2.0，查询测试环境 Schema
+4. **端到端测试**：验证固件与 Schema 的兼容性
+5. **生产部署**：调用 POST API 在生产环境创建 Schema v1.2
+6. **发布 OTA**：发布固件 v1.2.0 更新
+
+### 场景2：向后兼容升级（Minor 版本）
+
+从 Schema v1.0 升级到 v1.1，添加新的可选字段：
+
+```bash
+# 创建新版本 v1.1
+curl -X POST .../shadow-schema \
+  -d '{
+    "device_type": "vibration_sensor",
+    "version": "1.1",
+    "required_fields": [...],  # 保持不变
+    "optional_fields": [..., "newField"],  # 添加新字段
+    ...
+  }'
+```
+
+- 固件 v1.0.x 继续使用 Schema v1.0
+- 固件 v1.1.x 使用 Schema v1.1，支持新字段
+- 新旧设备可以共存
+
+### 场景3：不兼容升级（Major 版本）
+
+从 Schema v1.x 升级到 v2.0，进行重大变更：
+
+```bash
+# 1. 创建新的 Major 版本
+curl -X POST .../shadow-schema \
+  -d '{
+    "device_type": "vibration_sensor",
+    "version": "2.0",
+    "required_fields": ["deviceId", "timestamp", "newRequiredField"],
+    ...
+  }'
+
+# 2. 将旧版本标记为 deprecated（通过 PATCH API）
+curl -X PATCH .../shadow-schema/status \
+  -d '{
+    "device_type": "vibration_sensor",
+    "version": "1.0",
+    "status": "deprecated",
+    "deprecation_message": "Please upgrade to v2.0 by 2024-06-30"
+  }'
+```
+
+<Warning>
+Major 版本升级意味着不兼容变更，旧设备必须升级固件。建议保留旧版本 Schema 至少 6 个月。
+</Warning>
+
+### 场景4：修复 Schema 定义错误
+
+发现 Schema 中的约束条件有误，需要更新：
+
+```bash
+curl -X PUT .../shadow-schema \
+  -d '{
+    "device_type": "vibration_sensor",
+    "version": "1.2",
+    "field_constraints": {
+      "battery": {
+        "required_properties": ["level", "voltage", "charging"]
+      }
+    }
+  }'
+```
+
+## 最佳实践
+
+### 版本管理
+
+1. **语义化版本**：遵循 `major.minor` 格式
+2. **向后兼容**：Minor 版本只添加可选字段
+3. **提前创建**：在固件发布前创建 Schema
+4. **测试验证**：在测试环境验证 Schema 与固件兼容性
+
+### 状态管理
+
+1. **active**：新创建的 Schema 默认为 active
+2. **deprecated**：通过 PATCH API 标记为弃用，给设备迁移时间
+3. **obsolete**：迁移期结束后标记为过时
+4. **保留历史**：不要物理删除 Schema，保留用于审计
+
+### 安全建议
+
+1. **权限控制**：此 API 应使用管理员 API Key，不暴露给设备端
+2. **输入验证**：后端应验证字段定义的合法性
+3. **版本冲突**：创建时检查版本是否已存在
+4. **变更审计**：记录所有 Schema 变更日志
+
+## 相关文档
+
+- [Shadow Schema 使用指南](/shadow-schema-guide)
+- [获取 Shadow Schema API](/iot-api/endpoint/get-shadow-schema)
+- [更新 Schema 状态 API](/iot-api/endpoint/update-schema-status)

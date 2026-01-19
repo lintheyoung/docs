@@ -1,0 +1,223 @@
+---
+title: '获取 Shadow Schema'
+openapi: 'GET /functions/v1/shadow-schema'
+---
+
+获取指定设备类型和固件版本对应的 Shadow Schema 定义。设备启动时调用此 API 查询对应的字段规范。
+
+## 查询参数
+
+<ParamField query="device_type" type="string" required>
+  设备类型
+
+  **可选值：**
+  - `gateway`: 网关设备
+  - `vibration_sensor`: 振动检测器
+  - `smart_trap`: 智能陷阱
+</ParamField>
+
+<ParamField query="firmware_version" type="string">
+  设备固件版本（语义化版本格式，如 `1.2.0`）
+
+  - 如果提供，后端会自动提取 `major.minor` 部分映射到 Schema 版本
+  - 如果不提供，返回该设备类型的最新 active 状态 Schema
+
+  **示例：**
+  - `1.2.0` → 映射到 Schema `1.2`
+  - `1.2.5` → 映射到 Schema `1.2`
+  - `2.0.1` → 映射到 Schema `2.0`
+</ParamField>
+
+## 响应
+
+<ResponseField name="success" type="boolean" required>
+  请求是否成功
+</ResponseField>
+
+<ResponseField name="data" type="object" required>
+  Schema 定义对象
+
+  <Expandable title="data 对象属性">
+    <ResponseField name="device_type" type="string" required>
+      设备类型
+    </ResponseField>
+
+    <ResponseField name="version" type="string" required>
+      Schema 版本号（`major.minor` 格式）
+    </ResponseField>
+
+    <ResponseField name="status" type="string" required>
+      Schema 状态
+
+      **可选值：**
+      - `active`: 活跃状态，正常使用
+      - `deprecated`: 已弃用，但仍可用（会返回警告信息）
+      - `obsolete`: 已过时，不再支持
+    </ResponseField>
+
+    <ResponseField name="required_fields" type="array" required>
+      必填字段列表
+    </ResponseField>
+
+    <ResponseField name="optional_fields" type="array" required>
+      可选字段列表
+    </ResponseField>
+
+    <ResponseField name="field_types" type="object" required>
+      字段类型定义（字段名 → 类型名映射）
+
+      **支持的类型：**
+      - `boolean`: 布尔值
+      - `number`: 数值
+      - `string`: 字符串
+      - `array`: 数组
+      - `object`: 对象
+    </ResponseField>
+
+    <ResponseField name="field_constraints" type="object">
+      字段约束条件（可选）
+
+      **约束类型：**
+      - `minimum`, `maximum`: 数值范围
+      - `enum`: 枚举值列表
+      - `minLength`, `maxLength`: 字符串长度
+    </ResponseField>
+
+    <ResponseField name="deprecation_message" type="string">
+      弃用消息（仅当 status 为 `deprecated` 时返回）
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="error" type="string">
+  错误消息（仅当 success 为 false 时返回）
+</ResponseField>
+
+## 使用场景
+
+### 设备启动时查询
+
+设备在启动初始化阶段，根据自身固件版本查询对应的 Schema：
+
+1. 从固件配置读取 `device_type` 和 `firmware_version`
+2. 调用此 API 查询对应的 Schema
+3. 缓存 Schema 定义到本地内存
+4. 根据 Schema 构建 Shadow 数据
+
+### 缓存策略
+
+- **内存缓存**：设备运行期间持续有效
+- **持久缓存**（可选）：保存到本地存储，建议有效期 24 小时
+- **重新查询时机**：
+  - 设备重启
+  - OTA 固件升级后
+  - 持久缓存过期
+
+## 错误处理
+
+<ResponseExample>
+```json 版本不存在
+{
+  "success": false,
+  "error": "Schema version 1.5 not found for device type vibration_sensor"
+}
+```
+
+```json 设备类型无效
+{
+  "success": false,
+  "error": "Invalid device type: unknown_device"
+}
+```
+
+```json Schema 已过时
+{
+  "success": true,
+  "data": {
+    "device_type": "vibration_sensor",
+    "version": "0.9",
+    "status": "obsolete",
+    "required_fields": [...],
+    "optional_fields": [...],
+    "field_types": {...}
+  },
+  "warning": "This schema version is obsolete and should not be used. Please upgrade firmware."
+}
+```
+</ResponseExample>
+
+<RequestExample>
+```bash 查询振动检测器 Schema（指定固件版本）
+curl -X GET \
+  'https://your-project.supabase.co/functions/v1/shadow-schema?device_type=vibration_sensor&firmware_version=1.2.0' \
+  -H "Authorization: Bearer YOUR_SUPABASE_ANON_KEY"
+```
+
+```bash 查询网关 Schema（最新版本）
+curl -X GET \
+  'https://your-project.supabase.co/functions/v1/shadow-schema?device_type=gateway' \
+  -H "Authorization: Bearer YOUR_SUPABASE_ANON_KEY"
+```
+
+```json 成功响应示例
+{
+  "success": true,
+  "data": {
+    "device_type": "vibration_sensor",
+    "version": "1.2",
+    "status": "active",
+    "required_fields": [
+      "connected",
+      "deviceId",
+      "gatewayId",
+      "timestamp",
+      "status",
+      "battery"
+    ],
+    "optional_fields": [
+      "isDocked",
+      "chargingContact",
+      "rssi",
+      "config",
+      "armingCountdown",
+      "deployedAt",
+      "lastTrigger",
+      "triggerCount",
+      "firmwareVersion",
+      "uptime",
+      "lastHeartbeat",
+      "lastAckedReqId"
+    ],
+    "field_types": {
+      "connected": "boolean",
+      "deviceId": "string",
+      "gatewayId": "string",
+      "timestamp": "number",
+      "status": "string",
+      "battery": "object",
+      "isDocked": "boolean",
+      "config": "object",
+      "armingCountdown": "number",
+      "lastTrigger": "object",
+      "triggerCount": "number",
+      "firmwareVersion": "string"
+    },
+    "field_constraints": {
+      "status": {
+        "enum": ["idle", "docked", "arming", "armed", "triggered", "low_battery", "error"]
+      },
+      "battery": {
+        "required_properties": ["level", "voltage", "charging"]
+      }
+    }
+  }
+}
+```
+</RequestExample>
+
+## 相关文档
+
+- [Shadow Schema 使用指南](/shadow-schema-guide)
+- [振动检测器 Shadow Schema v1.0](/iot-api/shadow-schemas/vibration-sensor-v1.0)
+- [网关设备 Shadow Schema v1.0](/iot-api/shadow-schemas/gateway-v1.0)
+- [智能陷阱 Shadow Schema v1.0](/iot-api/shadow-schemas/smart-trap-v1.0)
