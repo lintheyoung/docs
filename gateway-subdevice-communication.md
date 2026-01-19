@@ -96,15 +96,6 @@
        │                   │                   │                   │
 ```
 
-### 通信成本对比
-
-| 通信方式 | 原方案 | 优化后 |
-|---------|-------|--------|
-| App ↔ Supabase | 每次操作都调用 | 仅登录时调用 |
-| App ↔ AWS IoT | 无 | WebSocket 长连接 |
-| 实时数据延迟 | 1-3秒 (经 Supabase) | < 100ms (直连) |
-| 命令下发 | App → Supabase → Lambda → IoT | App → IoT (直接) |
-
 ## 通信链路
 
 ### 数据上报流程 (子设备 → App)
@@ -127,7 +118,6 @@ AWS IoT Core → IoT Rule → Lambda → Supabase
 
 ### 命令下发流程 (App → 子设备)
 
-**优化后** (直连):
 ```
 User App → WebSocket → AWS IoT Core → MQTT → 网关 → BLE → 子设备
 ```
