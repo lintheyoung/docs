@@ -154,32 +154,21 @@
             "pages": [
               "user-api/endpoint/user-device-bind",
               "user-api/endpoint/list-devices",
-              "user-api/endpoint/get-aws-credentials",
-              "user-api/endpoint/setup-sessions"
-            ]
-          },
-          {
-            "group": "设备控制",
-            "pages": [
-              "user-api/endpoint/user-device-control"
+              "user-api/endpoint/get-aws-credentials"
             ]
           },
           {
             "group": "多设备管理",
             "pages": [
               "user-api/endpoint/bind-child-to-gateway",
-              "user-api/endpoint/unbind-child-from-gateway",
-              "user-api/endpoint/send-device-command",
-              "user-api/endpoint/get-command-status",
-              "user-api/endpoint/get-pending-commands"
+              "user-api/endpoint/unbind-child-from-gateway"
             ]
           },
           {
             "group": "设备类型",
             "pages": [
               "user-api/endpoint/device-types",
-              "user-api/endpoint/device-type-bindings",
-              "user-api/endpoint/generate-device-sdk"
+              "user-api/endpoint/device-type-bindings"
             ]
           },
           {
