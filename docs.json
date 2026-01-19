@@ -165,13 +165,6 @@
             ]
           },
           {
-            "group": "设备类型",
-            "pages": [
-              "user-api/endpoint/device-types",
-              "user-api/endpoint/device-type-bindings"
-            ]
-          },
-          {
             "group": "设备共享与转移",
             "pages": [
               "user-api/endpoint/device-share",
